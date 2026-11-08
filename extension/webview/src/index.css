@@ -1,0 +1,137 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * shadcn tokens mapped onto the user's own VS Code / Cursor theme. Every color comes from the
+ * editor's theme variables (injected into webviews), so the UI follows any theme, light, dark or
+ * high contrast, and updates live when the theme changes. Fallbacks are only for browser dev.
+ */
+:root {
+  --background: var(--vscode-editor-background, #09090b);
+  --foreground: var(--vscode-foreground, var(--vscode-editor-foreground, #e4e4e7));
+  --card: var(--vscode-sideBar-background, var(--vscode-editorWidget-background, #111114));
+  --card-foreground: var(--vscode-sideBar-foreground, var(--foreground));
+  --popover: var(--vscode-quickInput-background, var(--vscode-editorWidget-background, #18181b));
+  --popover-foreground: var(--vscode-quickInput-foreground, var(--foreground));
+  --muted: var(--vscode-textCodeBlock-background, var(--vscode-editorWidget-background, #18181b));
+  --muted-foreground: var(--vscode-descriptionForeground, #a1a1aa);
+  --primary: var(--vscode-button-background, #fafafa);
+  --primary-foreground: var(--vscode-button-foreground, #18181b);
+  --secondary: var(--vscode-button-secondaryBackground, #27272a);
+  --secondary-foreground: var(--vscode-button-secondaryForeground, #fafafa);
+  --accent: var(--vscode-list-hoverBackground, #1c1c20);
+  --accent-foreground: var(--vscode-list-hoverForeground, var(--foreground));
+  --border: var(--vscode-widget-border, var(--vscode-panel-border, #27272a));
+  --input: var(--vscode-input-background, #18181b);
+  --ring: var(--vscode-focusBorder, #52525b);
+  --radius: 0.5rem;
+
+  --added: var(--vscode-gitDecoration-addedResourceForeground, #4ade80);
+  --removed: var(--vscode-gitDecoration-deletedResourceForeground, #f87171);
+  --working: var(--vscode-charts-blue, #60a5fa);
+  --recent: var(--vscode-charts-green, #4ade80);
+  --warn: var(--vscode-charts-orange, #fb923c);
+  --agent: var(--vscode-charts-purple, #c084fc);
+  --diff-add: var(--vscode-diffEditor-insertedLineBackground, rgba(34, 197, 94, 0.13));
+  --diff-del: var(--vscode-diffEditor-removedLineBackground, rgba(239, 68, 68, 0.13));
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-added: var(--added);
+  --color-removed: var(--removed);
+  --color-working: var(--working);
+  --color-recent: var(--recent);
+  --color-warn: var(--warn);
+  --color-agent: var(--agent);
+  --color-diff-add: var(--diff-add);
+  --color-diff-del: var(--diff-del);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--vscode-font-family, 'Inter', ui-sans-serif, system-ui, sans-serif);
+  --font-mono: var(--vscode-editor-font-family, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 13px;
+    margin: 0;
+    padding: 0;
+  }
+  ::selection {
+    background: var(--vscode-editor-selectionBackground, rgba(96, 165, 250, 0.35));
+  }
+}
+
+/* ---- follow the editor's theme kind (VS Code puts these classes on <body>) */
+body.vscode-light {
+  color-scheme: light;
+}
+body.vscode-dark {
+  color-scheme: dark;
+}
+/* high contrast themes: use the theme's contrast border everywhere instead of soft borders */
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --border: var(--vscode-contrastBorder, currentColor);
+  --ring: var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));
+}
+/* the editor's font size and family, not hard-coded ones */
+html,
+body {
+  font-size: var(--vscode-font-size, 13px) !important;
+}
+code,
+pre,
+.font-mono {
+  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
+  font-feature-settings: var(--vscode-editor-font-feature-settings, normal);
+}
+/* scrollbars from the theme */
+* {
+  scrollbar-color: var(--vscode-scrollbarSlider-background, #3f3f46) transparent;
+}
+
+/* ---- xyflow (graph) themed with the same tokens */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-edge-stroke: var(--border);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--accent);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-node-boxshadow-selected: 0 0 0 1.5px var(--ring);
+}
+.react-flow__controls {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: none;
+}
+.react-flow__node.selected > div {
+  border-color: var(--ring);
+}

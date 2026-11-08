@@ -1,0 +1,637 @@
+{
+  "name": "agentlens",
+  "displayName": "AgentLens",
+  "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
+  "version": "0.4.2",
+  "publisher": "victorcesae",
+  "license": "UNLICENSED",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/victorcesae/pwview"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "agents",
+    "ai",
+    "code review",
+    "diff"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentlens",
+          "title": "%container.agentlens%",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "agentlens": [
+        {
+          "id": "agentlens.sessions",
+          "name": "%view.sessions%"
+        },
+        {
+          "id": "agentlens.prompts",
+          "name": "%view.prompts%"
+        },
+        {
+          "id": "agentlens.skills",
+          "name": "%view.skills%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "agentlens.refresh",
+        "title": "%cmd.refresh%",
+        "category": "AgentLens",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agentlens.dashboard",
+        "title": "%cmd.open.dashboard%",
+        "category": "AgentLens",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "agentlens.openSession",
+        "title": "%cmd.open.session%",
+        "category": "AgentLens",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "agentlens.openChange",
+        "title": "%cmd.open.change.diff%",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.resumeSession",
+        "title": "%cmd.open.in.chat%",
+        "category": "AgentLens",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "agentlens.newSession",
+        "title": "%cmd.new.agent.session%",
+        "category": "AgentLens",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agentlens.messageSession",
+        "title": "%cmd.send.message.to.agent%",
+        "category": "AgentLens",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "agentlens.installHooks",
+        "title": "%cmd.enable.comment.delivery.install.claude.code.hooks%",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.newPrompt",
+        "title": "%cmd.new.prompt%",
+        "category": "AgentLens",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agentlens.runPrompt",
+        "title": "%cmd.run.prompt%",
+        "category": "AgentLens",
+        "icon": "$(play)"
+      },
+      {
+        "command": "agentlens.newSkill",
+        "title": "%cmd.new.skill%",
+        "category": "AgentLens",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agentlens.openFile",
+        "title": "%cmd.open%",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.starterPrompts",
+        "title": "%cmd.add.starter.prompts%",
+        "category": "AgentLens",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "agentlens.skillAdd",
+        "title": "%cmd.add.skill.npx.skills%",
+        "category": "AgentLens",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "agentlens.skillFind",
+        "title": "%cmd.find.skills.on.skills.sh%",
+        "category": "AgentLens",
+        "icon": "$(search)"
+      },
+      {
+        "command": "agentlens.skillUpdate",
+        "title": "%cmd.update.skills%",
+        "category": "AgentLens",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "agentlens.skillsRefresh",
+        "title": "%cmd.refresh.skills%",
+        "category": "AgentLens",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agentlens.skillEnable",
+        "title": "%cmd.enable.for.more.agents%",
+        "category": "AgentLens",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agentlens.skillRemove",
+        "title": "%cmd.remove.skill%",
+        "category": "AgentLens",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agentlens.pasteImage",
+        "title": "%cmd.paste.image.for.the.agent%",
+        "category": "AgentLens",
+        "icon": "$(file-media)"
+      },
+      {
+        "command": "agentlens.savePrompt",
+        "title": "%cmd.save.as.prompt%",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.steer",
+        "title": "%cmd.steer.agent%",
+        "category": "AgentLens",
+        "icon": "$(debug-step-into)"
+      },
+      {
+        "command": "agentlens.queue",
+        "title": "%cmd.queue.message%",
+        "category": "AgentLens",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "agentlens.sendNow",
+        "title": "%cmd.send.now.interrupt%",
+        "category": "AgentLens",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "agentlens.comment.send",
+        "title": "%cmd.send.to.agent%",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.comment.queue",
+        "title": "%cmd.queue%",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.comment.now",
+        "title": "%cmd.send.now%",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.newChat",
+        "title": "%cmd.new.chat%",
+        "category": "AgentLens",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "agentlens.resumeInTerminal",
+        "title": "%cmd.resume.in.terminal%",
+        "category": "AgentLens",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "agentlens.linkSession",
+        "title": "%cmd.link.another.session%",
+        "category": "AgentLens",
+        "icon": "$(link)"
+      },
+      {
+        "command": "agentlens.doctor",
+        "title": "%cmd.check.setup%",
+        "category": "AgentLens",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "agentlens.installClaude",
+        "title": "%cmd.install.claude.code%",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.login",
+        "title": "%cmd.log.in.to.claude.code%",
+        "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.walkthrough",
+        "title": "%cmd.get.started.step.by.step%",
+        "category": "AgentLens",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "agentlens.addAccount",
+        "title": "%cmd.add.claude.account%",
+        "category": "AgentLens",
+        "icon": "$(person-add)"
+      },
+      {
+        "command": "agentlens.accounts",
+        "title": "%cmd.claude.accounts%",
+        "category": "AgentLens",
+        "icon": "$(account)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "agentlens.newChat",
+          "when": "view == agentlens.sessions",
+          "group": "navigation@0"
+        },
+        {
+          "command": "agentlens.newSession",
+          "when": "view == agentlens.sessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agentlens.dashboard",
+          "when": "view == agentlens.sessions",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agentlens.refresh",
+          "when": "view == agentlens.sessions",
+          "group": "navigation@3"
+        },
+        {
+          "command": "agentlens.newPrompt",
+          "when": "view == agentlens.prompts",
+          "group": "navigation"
+        },
+        {
+          "command": "agentlens.skillAdd",
+          "when": "view == agentlens.skills",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agentlens.newSkill",
+          "when": "view == agentlens.skills",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agentlens.skillFind",
+          "when": "view == agentlens.skills",
+          "group": "navigation@3"
+        },
+        {
+          "command": "agentlens.skillUpdate",
+          "when": "view == agentlens.skills",
+          "group": "1_more"
+        },
+        {
+          "command": "agentlens.skillsRefresh",
+          "when": "view == agentlens.skills",
+          "group": "1_more"
+        },
+        {
+          "command": "agentlens.starterPrompts",
+          "when": "view == agentlens.prompts",
+          "group": "1_more"
+        },
+        {
+          "command": "agentlens.pasteImage",
+          "when": "view == agentlens.sessions",
+          "group": "1_more"
+        },
+        {
+          "command": "agentlens.doctor",
+          "when": "view == agentlens.sessions",
+          "group": "1_more@0"
+        },
+        {
+          "command": "agentlens.walkthrough",
+          "when": "view == agentlens.sessions",
+          "group": "1_more@0"
+        },
+        {
+          "command": "agentlens.accounts",
+          "when": "view == agentlens.sessions",
+          "group": "1_more@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "agentlens.messageSession",
+          "when": "view == agentlens.sessions && viewItem == session",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentlens.steer",
+          "when": "view == agentlens.sessions && viewItem == session",
+          "group": "1_send@1"
+        },
+        {
+          "command": "agentlens.queue",
+          "when": "view == agentlens.sessions && viewItem == session",
+          "group": "1_send@2"
+        },
+        {
+          "command": "agentlens.sendNow",
+          "when": "view == agentlens.sessions && viewItem == session",
+          "group": "1_send@3"
+        },
+        {
+          "command": "agentlens.resumeSession",
+          "when": "view == agentlens.sessions && viewItem == session",
+          "group": "inline@2"
+        },
+        {
+          "command": "agentlens.runPrompt",
+          "when": "view == agentlens.prompts && viewItem == prompt",
+          "group": "inline"
+        },
+        {
+          "command": "agentlens.skillEnable",
+          "when": "view == agentlens.skills && viewItem == skill",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentlens.skillRemove",
+          "when": "view == agentlens.skills && viewItem == skill",
+          "group": "inline@2"
+        },
+        {
+          "command": "agentlens.linkSession",
+          "when": "view == agentlens.sessions && viewItem == session",
+          "group": "2_more@1"
+        },
+        {
+          "command": "agentlens.resumeInTerminal",
+          "when": "view == agentlens.sessions && viewItem == session",
+          "group": "2_more@2"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "agentlens.comment.send",
+          "group": "inline@1",
+          "when": "commentController == agentlens"
+        },
+        {
+          "command": "agentlens.comment.queue",
+          "group": "inline@2",
+          "when": "commentController == agentlens"
+        },
+        {
+          "command": "agentlens.comment.now",
+          "group": "inline@3",
+          "when": "commentController == agentlens"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "agentlens.comment.send",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.openChange",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.openSession",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.openFile",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.runPrompt",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.skillEnable",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.skillRemove",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.savePrompt",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.comment.queue",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.comment.now",
+          "when": "false"
+        }
+      ],
+      "terminal/title/context": [
+        {
+          "command": "agentlens.pasteImage",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AgentLens",
+      "properties": {
+        "agentlens.days": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "description": "%setting.show.sessions.active.in.the.last.n.days%"
+        },
+        "agentlens.pollSeconds": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "description": "%setting.how.often.to.look.for.session.updates%"
+        },
+        "agentlens.agentCommand": {
+          "type": "string",
+          "default": "claude",
+          "description": "%setting.agent.cli.used.to.start.resume.and.run.prompts%"
+        },
+        "agentlens.agentArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "%setting.extra.arguments.for.every.agent.run.e.g.model.opus%"
+        },
+        "agentlens.defaultSurface": {
+          "type": "string",
+          "enum": [
+            "chat",
+            "terminal"
+          ],
+          "default": "chat",
+          "description": "%setting.where.new.and.resumed.sessions.open.the.agentlens.chat.or.a.%"
+        }
+      }
+    },
+    "viewsWelcome": [
+      {
+        "view": "agentlens.prompts",
+        "contents": "Prompts are reusable instructions you can run in one click, interactive or headless (claude -p), with ${file}, ${selection} and ${input:…} variables.\n[Add Starter Prompts](command:agentlens.starterPrompts)\n[New Prompt](command:agentlens.newPrompt)\nProject prompts live in .agentlens/prompts/ (commit them to share with the team)."
+      },
+      {
+        "view": "agentlens.skills",
+        "contents": "Skills teach agents how to do things in your project. One SKILL.md works in Claude Code, Cursor, Codex, Gemini CLI, Copilot and more. Each agent just looks in a different folder.\n[Add Skill from skills.sh](command:agentlens.skillAdd)\n[New Skill](command:agentlens.newSkill)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "agentlens.pasteImage",
+        "key": "ctrl+alt+v",
+        "mac": "cmd+alt+v",
+        "when": "terminalFocus"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "agentlens.start",
+        "title": "%walk.get.started.with.agentlens%",
+        "description": "%walk.two.minutes.claude.code.login.message.delivery.your.first.ch%",
+        "steps": [
+          {
+            "id": "claude",
+            "title": "%step.check.claude.code%",
+            "description": "%step.agentlens.drives.your.own.claude.code.and.its.login.check.se%",
+            "media": {
+              "markdown": "media/walkthrough/1-claude.md"
+            },
+            "completionEvents": [
+              "onContext:agentlens.claudeOk"
+            ]
+          },
+          {
+            "id": "login",
+            "title": "%step.log.in.once%",
+            "description": "%step.one.login.is.reused.by.every.chat.and.terminal.log.in%",
+            "media": {
+              "markdown": "media/walkthrough/2-login.md"
+            },
+            "completionEvents": [
+              "onContext:agentlens.loginOk"
+            ]
+          },
+          {
+            "id": "hooks",
+            "title": "%step.enable.messages.to.terminal.agents%",
+            "description": "%step.queue.steer.send.now.for.sessions.running.in.a.terminal.enab%",
+            "media": {
+              "markdown": "media/walkthrough/3-hooks.md"
+            },
+            "completionEvents": [
+              "onContext:agentlens.hooksOk"
+            ]
+          },
+          {
+            "id": "chat",
+            "title": "%step.start.your.first.chat%",
+            "description": "%step.claude.code.with.a.real.ui.plan.live.status.diffs.images.new%",
+            "media": {
+              "markdown": "media/walkthrough/4-chat.md"
+            },
+            "completionEvents": [
+              "onCommand:agentlens.newChat"
+            ]
+          },
+          {
+            "id": "dashboard",
+            "title": "%step.see.every.session.diff.and.link%",
+            "description": "%step.sessions.sub.agents.changes.and.the.graph.open.dashboard%",
+            "media": {
+              "markdown": "media/walkthrough/5-dashboard.md"
+            },
+            "completionEvents": [
+              "onCommand:agentlens.dashboard"
+            ]
+          },
+          {
+            "id": "skills",
+            "title": "%step.skills.for.every.agent%",
+            "description": "%step.one.skill.visible.to.claude.code.cursor.codex.and.more.add.a%",
+            "media": {
+              "markdown": "media/walkthrough/6-skills.md"
+            },
+            "completionEvents": [
+              "onCommand:agentlens.skillAdd",
+              "onView:agentlens.skills"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "build": "npm run build:ext && npm run build:webview",
+    "build:ext": "esbuild src/extension.ts src/hook.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --outdir=dist",
+    "build:webview": "vite build --config webview/vite.config.mts",
+    "dev:webview": "vite --config webview/vite.config.mts",
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
+    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs",
+    "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs",
+    "package": "vsce package --no-dependencies",
+    "test:editor": "npm run build && node test/editor/run.cjs"
+  },
+  "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.319",
+    "@dagrejs/dagre": "^3.1.3",
+    "@tailwindcss/vite": "4.1.8",
+    "@types/node": "22.15.29",
+    "@types/react": "19.1.6",
+    "@types/react-dom": "19.1.5",
+    "@types/vscode": "1.90.0",
+    "@vitejs/plugin-react": "4.5.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "3.4.2",
+    "@xyflow/react": "^12.12.1",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "esbuild": "0.25.5",
+    "lucide-react": "0.511.0",
+    "radix-ui": "1.4.2",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "tailwind-merge": "3.3.0",
+    "tailwindcss": "4.1.8",
+    "tw-animate-css": "1.3.4",
+    "typescript": "5.8.3",
+    "vite": "6.3.5"
+  },
+  "l10n": "./l10n"
+}

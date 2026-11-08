@@ -1,0 +1,150 @@
+// Realistic fake data so the dashboard can be designed in a normal browser (npm run dev:webview).
+import type { Change, Data, SessionInfo, TimelineEvent } from './types';
+
+const t = (minAgo: number) => new Date(Date.now() - minAgo * 60_000).toISOString();
+const P = '/home/victor/intranet-v5';
+
+const sessions: SessionInfo[] = [
+  {
+    id: 's1', project: P, title: 'Sales module: quotation flow', branch: 'feat/sales-quotes', model: 'claude-opus-5-5', state: 'working',
+    started: t(48), updated: t(0.2), edits: 14, tools: 63, pendingComments: 1, linked: ['s2'],
+    files: [`${P}/apps/api/src/sales/quote.service.ts`, `${P}/apps/web/app/sales/quotes/page.tsx`, `${P}/packages/db/schema.prisma`],
+    lastPrompt: 'Add the approval step before a quote is sent to the client',
+    agents: [
+      { id: 'a1', description: 'Write e2e tests for quote approval', agentType: 'general-purpose', parentToolUseId: 'x', state: 'working', updated: t(0.3), edits: 3, tools: 18 },
+      { id: 'a2', description: 'Research old intranet pricing rules', agentType: 'Explore', parentToolUseId: 'y', state: 'idle', updated: t(30), edits: 0, tools: 22 },
+    ],
+  },
+  {
+    id: 's2', project: P, title: 'Prisma: add approval columns', branch: 'feat/sales-quotes', model: 'claude-sonnet-5-5', state: 'recent',
+    started: t(70), updated: t(6), edits: 4, tools: 21, pendingComments: 0, linked: ['s1'], files: [`${P}/packages/db/schema.prisma`], agents: [],
+    lastPrompt: 'Add approvedBy/approvedAt to Quote and generate the migration',
+  },
+  {
+    id: 's3', project: '/home/victor/pwview', title: 'Playwright tests visibility over SSH', branch: 'main', model: 'claude-opus-5-5', state: 'idle',
+    started: t(400), updated: t(180), edits: 33, tools: 120, pendingComments: 0, linked: [], files: [], agents: [],
+  },
+];
+
+const changes: Change[] = [
+  {
+    id: 'c1', sessionId: 's1', timestamp: t(20), file: `${P}/apps/api/src/sales/quote.service.ts`, kind: 'edit', added: 9, removed: 2,
+    why: 'Quotes above the discount limit must wait for a manager. I gate `send()` on the new approval status and keep the old path for small discounts.',
+    hunks: [{ oldStart: 40, oldLines: 6, newStart: 40, newLines: 13, lines: [
+      '   async send(id: string) {', '     const quote = await this.repo.get(id);', '-    await this.mailer.sendQuote(quote);', '-    return quote;',
+      '+    if (quote.discount > DISCOUNT_LIMIT && quote.status !== "approved") {', '+      await this.repo.update(id, { status: "awaiting_approval" });',
+      '+      await this.notify.managers(quote);', '+      return { ...quote, status: "awaiting_approval" };', '+    }', '+    await this.mailer.sendQuote(quote);',
+      '+    return quote;', '   }', ' ',
+    ] }],
+  },
+  {
+    id: 'c2', sessionId: 's1', agentId: 'a1', timestamp: t(4), file: `${P}/apps/web/e2e/quote-approval.spec.ts`, kind: 'create', added: 42, removed: 0,
+    why: 'Covering both paths: small discount goes straight out, large discount waits for approval.', hunks: [],
+  },
+  {
+    id: 'c3', sessionId: 's1', timestamp: t(2), file: `${P}/apps/web/app/sales/quotes/page.tsx`, kind: 'edit', added: 6, removed: 1,
+    why: 'Show an "Awaiting approval" badge in the list.',
+    hunks: [{ oldStart: 88, oldLines: 3, newStart: 88, newLines: 8, lines: [
+      '   <TableCell>{q.client}</TableCell>', '-  <TableCell>{q.status}</TableCell>', '+  <TableCell>', '+    {q.status === "awaiting_approval"',
+      '+      ? <Badge variant="warn">Awaiting approval</Badge>', '+      : q.status}', '+  </TableCell>', '   <TableCell>{money(q.total)}</TableCell>',
+    ] }],
+  },
+];
+
+const events: TimelineEvent[] = [
+  { ts: t(48), kind: 'prompt', text: 'Add the approval step before a quote is sent to the client. Managers approve anything above the discount limit.' },
+  { ts: t(47), kind: 'text', text: "I'll look at how quotes are sent today, then add an approval gate." },
+  { ts: t(46), kind: 'tool', tool: 'Grep', text: 'sendQuote  apps/api' },
+  { ts: t(45), kind: 'tool', tool: 'Agent', text: 'Research old intranet pricing rules', refId: 'y' },
+  { ts: t(30), kind: 'tool', tool: 'WebFetch', text: 'https://github.com/NZero-Labs/intranet', agentId: 'a2' },
+  { ts: t(21), kind: 'tool', tool: 'Edit', text: `${P}/apps/api/src/sales/quote.service.ts`, refId: 'c1' },
+  { ts: t(20), kind: 'change', text: `${P}/apps/api/src/sales/quote.service.ts`, refId: 'c1' },
+  { ts: t(12), kind: 'tool', tool: 'Agent', text: 'Write e2e tests for quote approval', refId: 'x' },
+  { ts: t(8), kind: 'tool', tool: 'Bash', text: 'npx playwright test e2e/quote-approval.spec.ts', agentId: 'a1' },
+  { ts: t(4), kind: 'change', text: `${P}/apps/web/e2e/quote-approval.spec.ts`, refId: 'c2', agentId: 'a1' },
+  { ts: t(2), kind: 'change', text: `${P}/apps/web/app/sales/quotes/page.tsx`, refId: 'c3' },
+  { ts: t(1), kind: 'text', text: 'The gate works. Running the full sales suite before I hand it back.' },
+  { ts: t(0.3), kind: 'tool', tool: 'Bash', text: 'pnpm test --filter sales', agentId: 'a1' },
+];
+
+export const overview: Data = {
+  view: 'overview',
+  overview: { sessions, hot: [{ file: `${P}/packages/db/schema.prisma`, sessions: ['s1', 's2'], changes: 5, updated: t(6) }], hooks: false },
+};
+
+export function session(id: string, focusAgent?: string): Data {
+  const info = sessions.find((s) => s.id === id) ?? sessions[0];
+  return {
+    view: 'session',
+    focusAgent,
+    session: {
+      info,
+      events: info.id === 's1' ? events : [],
+      changes: info.id === 's1' ? changes : [],
+      terminal: info.id === 's1',
+      comments: info.id === 's1'
+        ? [
+            { id: 'k1', sessionId: 's1', file: changes[0].file, line: 42, mode: 'steer', text: 'Use the configured limit from settings, not the constant.', created: t(3), status: 'pending' },
+            { id: 'k2', sessionId: 's1', mode: 'queue', text: 'When you finish, also update the API docs for /quotes/:id/send.', created: t(2), status: 'pending' },
+            { id: 'k3', sessionId: 's1', mode: 'steer', text: 'Keep the old path for discounts under the limit.', created: t(15), status: 'delivered', deliveredAt: t(14), deliveredVia: 'step' },
+            { id: 'k4', sessionId: 's1', mode: 'now', text: 'Stop. Use pnpm, not npm.', created: t(25), status: 'delivered', deliveredAt: t(25), deliveredVia: 'terminal' },
+          ]
+        : [],
+      linkedTitles: { s2: 'Prisma: add approval columns', s1: 'Sales module: quotation flow' },
+    },
+  };
+}
+
+export const chat: Data = {
+  view: 'chat',
+  linked: [{ id: 's2', title: 'Prisma: add approval columns', state: 'recent', activity: 'Generated migration 20261108_quote_approval' }],
+  chat: {
+    key: 'k', sessionId: 's1', cwd: P, title: 'Sales module: quotation flow', model: 'claude-opus-5-5',
+    models: [{ value: 'default', displayName: 'Default (Opus 5.5)' }, { value: 'sonnet', displayName: 'Sonnet 5.5' }, { value: 'haiku', displayName: 'Haiku 5.5' }],
+    permissionMode: 'default', effort: 'high', fastMode: false, ultracode: true, status: 'working', activity: 'Searching for "sendQuote"…', costUsd: 0.42, account: { name: 'Work', email: 'victor@example.com', plan: 'max', organization: 'NZero Labs' }, slashCommands: ['compact', 'review', 'init', 'cost', 'model'],
+    todos: [
+      { content: 'Find how quotes are sent today', status: 'completed', activeForm: 'Finding how quotes are sent' },
+      { content: 'Add approval gate to QuoteService.send', status: 'completed', activeForm: 'Adding the approval gate' },
+      { content: 'Show "Awaiting approval" in the quotes list', status: 'in_progress', activeForm: 'Updating the quotes list' },
+      { content: 'Write e2e tests for both paths', status: 'pending', activeForm: 'Writing e2e tests' },
+    ],
+    queue: [{ id: 'q1', text: 'When you finish, also update the API docs for /quotes/:id/send', images: 0 }],
+    items: [
+      { kind: 'user', id: 'u1', text: 'Add the approval step before a quote is sent. Managers approve anything above the discount limit.', images: [], ts: t(10) },
+      { kind: 'assistant', id: 'a1', text: "I'll look at how quotes are sent today, then add an approval gate. Here's the plan:\n\n1. Find `sendQuote` callers\n2. Gate `send()` on **approval status**\n3. Update the list UI" },
+      { kind: 'tool', id: 'g1', name: 'Grep', summary: 'sendQuote  in apps/api', input: {}, status: 'done', result: 'apps/api/src/sales/quote.service.ts:42' },
+      { kind: 'tool', id: 'e1', name: 'Edit', summary: `${P}/apps/api/src/sales/quote.service.ts`, file: `${P}/apps/api/src/sales/quote.service.ts`, input: {}, status: 'done', patch: changes[0].hunks },
+      { kind: 'tool', id: 'ag', name: 'Agent', summary: 'Write e2e tests for quote approval', input: {}, status: 'running', elapsed: 42 },
+      { kind: 'tool', id: 'ag-b', name: 'Bash', summary: 'npx playwright test e2e/quote-approval.spec.ts', input: {}, status: 'running', parent: 'ag' },
+      { kind: 'permission', id: 'p1', tool: 'Bash', summary: 'pnpm prisma migrate dev --name quote_approval', input: {}, canAlways: true, status: 'pending' },
+      { kind: 'system', id: 's1x', text: 'Linked "Prisma: add approval columns"' },
+    ],
+  },
+};
+
+const schema = `${P}/packages/db/schema.prisma`;
+(overview as Extract<Data, { view: 'overview' }>).overview.graph = {
+  nodes: [
+    { id: 's:s1', type: 'session', data: { sessionId: 's1', title: 'Sales module: quotation flow', state: 'working', project: P, branch: 'feat/sales-quotes' } },
+    { id: 'p:s1:0', type: 'prompt', data: { sessionId: 's1', text: 'Add the approval step before a quote is sent to the client', ts: t(48), index: 1, edits: 9 } },
+    { id: 'p:s1:1', type: 'prompt', data: { sessionId: 's1', text: 'Also show an "Awaiting approval" badge in the quotes list', ts: t(5), index: 2, edits: 5 } },
+    { id: 'a:s1:a1', type: 'agent', data: { sessionId: 's1', agentId: 'a1', description: 'Write e2e tests for quote approval', state: 'working', edits: 3 } },
+    { id: 'a:s1:a2', type: 'agent', data: { sessionId: 's1', agentId: 'a2', description: 'Research old intranet pricing rules', state: 'idle', edits: 0 } },
+    { id: 's:s2', type: 'session', data: { sessionId: 's2', title: 'Prisma: add approval columns', state: 'recent', project: P, branch: 'feat/sales-quotes' } },
+    { id: 'p:s2:0', type: 'prompt', data: { sessionId: 's2', text: 'Add approvedBy/approvedAt to Quote and generate the migration', ts: t(60), index: 1, edits: 4 } },
+    { id: `f:${schema}`, type: 'file', data: { path: schema, sessions: 2, edits: 5 } },
+    { id: 's:s3', type: 'session', data: { sessionId: 's3', title: 'Playwright tests visibility over SSH', state: 'idle', project: '/home/victor/pwview', branch: 'main' } },
+    { id: 'p:s3:0', type: 'prompt', data: { sessionId: 's3', text: 'Make Playwright tests visible over SSH without using my RAM', ts: t(400), index: 1, edits: 33 } },
+  ],
+  edges: [
+    { id: 'e1', source: 's:s1', target: 'p:s1:0', kind: 'start' },
+    { id: 'e2', source: 'p:s1:0', target: 'p:s1:1', kind: 'next' },
+    { id: 'e3', source: 'p:s1:0', target: 'a:s1:a2', kind: 'spawned' },
+    { id: 'e4', source: 'p:s1:1', target: 'a:s1:a1', kind: 'spawned' },
+    { id: 'e5', source: 'p:s1:0', target: `f:${schema}`, kind: 'edited' },
+    { id: 'e6', source: 's:s2', target: 'p:s2:0', kind: 'start' },
+    { id: 'e7', source: 'p:s2:0', target: `f:${schema}`, kind: 'edited' },
+    { id: 'e8', source: 's:s1', target: 's:s2', kind: 'linked', label: 'linked' },
+    { id: 'e9', source: 's:s3', target: 'p:s3:0', kind: 'start' },
+  ],
+};

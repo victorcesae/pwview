@@ -1,0 +1,26 @@
+[package]
+name = "pwview"
+version = "0.1.0"
+edition = "2021"
+description = "Watch Playwright (and the AI driving it) from your browser, while everything runs on the host"
+license = "MIT"
+
+[[bin]]
+name = "pwview"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1

@@ -1,0 +1,107 @@
+// UI translations for the webviews. The extension puts the editor's display language on
+// <html lang="…">; anything without a translation stays in English.
+const PT: Record<string, string> = {
+  // chat: composer & header
+  Send: 'Enviar',
+  Stop: 'Parar',
+  Queue: 'Enfileirar',
+  Steer: 'Direcionar',
+  'Send now': 'Enviar agora',
+  Image: 'Imagem',
+  Fast: 'Rápido',
+  Ultracode: 'Ultracode',
+  'Effort: default': 'Esforço: padrão',
+  'Effort: {0}': 'Esforço: {0}',
+  'Link session': 'Vincular sessão',
+  'Linked:': 'Vinculadas:',
+  'Try again': 'Tentar novamente',
+  'Esc to stop': 'Esc para parar',
+  queued: 'na fila',
+  'What should we build?': 'O que vamos construir?',
+  'Ask, plan, or give a task…  (/ for commands, paste or drop images)': 'Pergunte, planeje ou dê uma tarefa…  (/ para comandos, cole ou solte imagens)',
+  'Message the agent while it works…  (Enter steers it, Ctrl+Enter sends now)': 'Fale com o agente enquanto ele trabalha…  (Enter direciona, Ctrl+Enter envia agora)',
+  'Sent when the current turn ends': 'Enviada quando o turno atual terminar',
+  'Picked up at its next step, without stopping': 'Recebida no próximo passo, sem parar',
+  'Sent immediately': 'Enviada imediatamente',
+  'Ask before acting': 'Perguntar antes de agir',
+  'Accept edits': 'Aceitar edições',
+  'Plan mode': 'Modo plano',
+  Auto: 'Automático',
+  'Bypass permissions': 'Ignorar permissões',
+  // chat: plan, tools, cards
+  Plan: 'Plano',
+  '{0}/{1} done': '{0}/{1} feitos',
+  'Sub-agent': 'Sub-agente',
+  Command: 'Comando',
+  Input: 'Entrada',
+  Output: 'Saída',
+  'Open file': 'Abrir arquivo',
+  'Open diff': 'Abrir diff',
+  'Allow {0}?': 'Permitir {0}?',
+  Allow: 'Permitir',
+  'Always allow': 'Sempre permitir',
+  Deny: 'Negar',
+  'or tell it what to do instead…': 'ou diga o que fazer em vez disso…',
+  'Proposed plan': 'Plano proposto',
+  'Approve and start': 'Aprovar e começar',
+  'Keep planning': 'Continuar planejando',
+  'What should change in the plan?': 'O que deve mudar no plano?',
+  'Other…': 'Outro…',
+  Answer: 'Responder',
+  // dashboard
+  'Agent sessions': 'Sessões de agentes',
+  'New session': 'Nova sessão',
+  List: 'Lista',
+  Graph: 'Grafo',
+  'Linked changes': 'Alterações vinculadas',
+  'Message / steer': 'Mensagem / direcionar',
+  Link: 'Vincular',
+  'Open in chat': 'Abrir no chat',
+  Activity: 'Atividade',
+  Changes: 'Alterações',
+  'Sub-agents': 'Sub-agentes',
+  Messages: 'Mensagens',
+  edits: 'edições',
+  'files changed': 'arquivos alterados',
+  'tool calls': 'chamadas de ferramenta',
+  'sub-agents': 'sub-agentes',
+  Working: 'Trabalhando',
+  Waiting: 'Aguardando',
+  Idle: 'Ocioso',
+  'Save as prompt': 'Salvar como prompt',
+  Cancel: 'Cancelar',
+  // questions
+  Collapse: 'Recolher',
+  'Choose one': 'Escolha uma opção',
+  'Choose one or more': 'Escolha uma ou mais opções',
+  // grouped tool calls
+  'read and edited {0}': 'leu e editou {0}',
+  'read {0}': 'leu {0}',
+  'read {0} files': 'leu {0} arquivos',
+  'edited {0}': 'editou {0}',
+  'edited {0} files': 'editou {0} arquivos',
+  'ran 1 command': 'executou 1 comando',
+  'ran {0} commands': 'executou {0} comandos',
+  'searched once': 'pesquisou 1 vez',
+  'searched {0} times': 'pesquisou {0} vezes',
+  'fetched 1 page': 'abriu 1 página',
+  'fetched {0} pages': 'abriu {0} páginas',
+  'used 1 tool': 'usou 1 ferramenta',
+  'used {0} tools': 'usou {0} ferramentas',
+  Read: 'Leu',
+  Edited: 'Editou',
+  Wrote: 'Criou',
+  Searched: 'Pesquisou',
+  Fetched: 'Abriu',
+};
+
+const TABLES: Record<string, Record<string, string>> = { pt: PT, 'pt-br': PT };
+
+const lang = (typeof document !== 'undefined' ? document.documentElement.lang : '').toLowerCase();
+const table = TABLES[lang] ?? TABLES[lang.split('-')[0]] ?? {};
+
+/** t('Allow {0}?', 'Bash') → translated (or English) text with {n} placeholders filled. */
+export function t(text: string, ...args: (string | number)[]): string {
+  const s = table[text] ?? text;
+  return args.length ? s.replace(/\{(\d+)\}/g, (_, i) => String(args[Number(i)] ?? '')) : s;
+}

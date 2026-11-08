@@ -1,0 +1,12 @@
+{
+  "Account \"{0}\" created. In its terminal type /login and sign in with that account.": "Conta \"{0}\" criada. No terminal dela, digite /login e entre com essa conta.",
+  "Add account…": "Adicionar conta…",
+  "Default Claude account for new sessions": "Conta Claude padrão para novas sessões",
+  "Log in again": "Entrar novamente",
+  "Name for the new Claude account": "Nome da nova conta Claude",
+  "Remove from AgentLens": "Remover do AgentLens",
+  "Use by default": "Usar como padrão",
+  "Which Claude account should this session use?": "Qual conta Claude esta sessão deve usar?",
+  "Work, Personal, Client X…": "Trabalho, Pessoal, Cliente X…",
+  "default": "padrão"
+}

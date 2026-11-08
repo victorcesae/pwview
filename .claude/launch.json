@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "agentlens-webview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "extension", "run", "dev:webview", "--", "--port", "5179", "--strictPort"],
+      "port": 5179
+    }
+  ]
+}
