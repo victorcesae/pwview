@@ -90,18 +90,43 @@ test('chat: Queue holds messages until the turn ends; Steer and Send now go stra
 
   c.send('steer this', [], 'next');
   c.send('do it now', [], 'now');
-  assert.deepEqual(queued(c).map((m) => m.priority), ['next', 'now']);
+  assert.deepEqual(queued(c).map((m) => m.priority), ['now'], 'send now goes in immediately; steer waits for the next step');
+  assert.deepEqual(c.state.queue.map((q) => q.priority), ['later', 'later', 'next']);
   c.input.q.length = 0;
 
   c.promote(c.state.queue[1].id, 'now');
   assert.deepEqual(queued(c).map((m) => [m.priority, m.content.at(-1).text]), [['now', 'queued two']], 'a queued message can be sent now');
   c.input.q.length = 0;
-  assert.equal(c.state.queue.length, 1);
 
-  h(c, { type: 'result', subtype: 'success', total_cost_usd: 0.01, duration_ms: 5 });
+  // the agent starts its next step: the steer is handed over, queue messages keep waiting
+  h(c, { type: 'assistant', message: { id: 'mx', content: [{ type: 'tool_use', id: 'tx', name: 'Read', input: { file_path: '/a' } }] } });
+  assert.deepEqual(queued(c).map((m) => [m.priority, m.content.at(-1).text]), [['next', 'steer this']]);
+  assert.deepEqual(c.state.queue.map((q) => q.priority), ['later']);
+  c.input.q.length = 0;
+
+  h(c, { type: 'result', subtype: 'success', total_cost_usd: 0.01, duration_ms: 5, usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100 } });
   assert.deepEqual(queued(c).map((m) => m.content.at(-1).text), ['queued one'], 'turn end delivers the next queued message');
   assert.equal(c.state.queue.length, 0);
   assert.equal(c.state.costUsd, 0.01);
+  assert.equal(c.state.tokens, 115);
+});
+
+test('chat: waiting messages can be edited and switched until they are handed over', () => {
+  const c = newChat();
+  c.state.status = 'working';
+  c.send('use npm', [], 'next');
+  const id = c.state.queue[0].id;
+  c.editQueued(id, 'use pnpm');
+  c.promote(id, 'later'); // switch Steer -> Queue
+  assert.deepEqual(c.state.queue.map((q) => [q.priority, q.text]), [['later', 'use pnpm']]);
+  h(c, { type: 'assistant', message: { id: 'm', content: [{ type: 'tool_use', id: 't', name: 'Bash', input: {} }] } });
+  assert.equal(c.input.q.length, 0, 'a queued (not steer) message is not handed over at a step');
+  c.promote(id, 'next'); // back to Steer
+  c.editQueued(id, 'use pnpm, not npm');
+  h(c, { type: 'result', subtype: 'success', duration_ms: 1 });
+  assert.deepEqual(queued(c).map((m) => m.content.at(-1).text), ['use pnpm, not npm'], 'a steer with no next step goes at turn end');
+  c.editQueued(id, 'too late');
+  assert.equal(c.input.q[0].message.content.at(-1).text, 'use pnpm, not npm', 'handed-over messages can no longer change');
 });
 
 test('chat: cancel removes a queued message; images become image blocks', () => {

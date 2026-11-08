@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { addComment, cancelComment, loadComments, Mode } from './comments';
+import { addComment, cancelComment, editComment, loadComments, Mode } from './comments';
 import { changeDetail, Engine, Session } from './engine';
 import { hooksStatus, installHooks, installHookScript } from './hooks';
 import { EXT, registerImagePaste, saveImage } from './imagePaste';
@@ -12,6 +12,7 @@ import { registerSkills } from './skills';
 import { registerDoctor, syncSetupContext } from './doctor';
 import { attachedSessions, resolveTerminals, terminalFor, typeInto } from './terminals';
 import { Chats } from './chatPanel';
+import { usageReport } from './usage';
 import { addLink, briefing } from './links';
 import { addAccount, listAccounts, preferredAccount, removeAccount, setPreferred, accountEnv, type Account } from './accounts';
 import { Node, SessionsTree } from './tree';
@@ -56,7 +57,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       handleDrop: (target, data) => dropOnSession(target, data),
     },
   });
-  const dashboard = new Dashboard(ctx, () => sessions, hooksOk, () => attachedSessions(), (m) => onWebview(m));
+  const dashboard = new Dashboard(ctx, () => sessions, hooksOk, () => attachedSessions(), (m) => onWebview(m), (days) => usageReport(engine.scan(Math.max(days, cfg().get<number>('days', 3))), days));
   const chats = new Chats(ctx, () => sessions, (id) => dashboard.show(id));
   const surface = () => cfg().get<string>('defaultSurface', 'chat');
   registerLibrary(ctx);
@@ -351,6 +352,11 @@ export function activate(ctx: vscode.ExtensionContext) {
       case 'cancelComment':
         cancelComment(m.commentId);
         return refresh(true);
+      case 'editComment':
+        editComment(m.commentId, m.text);
+        return refresh(true);
+      case 'usage':
+        return dashboard.showUsage(m.days);
       case 'promoteComment': {
         const c = loadComments().find((x) => x.id === m.commentId && x.status === 'pending');
         if (!c) return;

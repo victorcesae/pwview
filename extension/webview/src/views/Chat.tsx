@@ -1,4 +1,4 @@
-import { Ban, Bot, ChevronUp, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
+import { Ban, Bot, ChevronUp, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
 import { StateDot, ToolIcon } from '@/components/common';
@@ -786,6 +786,64 @@ export function groupTools(items: ChatItem[]): (ChatItem | ToolItem[])[] {
   return out;
 }
 
+/** A message waiting to be handed over: still editable, switchable and cancellable. */
+function QueuedRow({ q }: { q: ChatState['queue'][number] }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(q.text);
+  const steer = q.priority === 'next';
+  const Icon = steer ? Navigation : ListOrdered;
+  const startEdit = () => {
+    setText(q.text);
+    setEditing(true);
+  };
+  const save = () => {
+    if (text.trim() && text !== q.text) post({ type: 'editQueued', id: q.id, text });
+    setEditing(false);
+  };
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-dashed px-2.5 py-1 text-[12px]">
+      <span title={steer ? t('Steer: handed over when the agent starts its next step') : t('Queue: handed over when the turn ends')}>
+        <Icon className="text-muted-foreground size-3.5 shrink-0" />
+      </span>
+      {editing ? (
+        <input
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') save();
+            if (e.key === 'Escape') {
+              setText(q.text);
+              setEditing(false);
+            }
+          }}
+          onBlur={save}
+          className="bg-input min-w-0 flex-1 rounded border px-1.5 py-0.5 text-[12px] outline-none"
+        />
+      ) : (
+        <button className="min-w-0 flex-1 cursor-text truncate text-left" title={t('Click to edit')} onClick={startEdit}>
+          {q.text || t('{0} image(s)', q.images)}
+        </button>
+      )}
+      <span className="text-muted-foreground shrink-0 text-[11px]">{steer ? t('next step') : t('turn end')}</span>
+      <div className="flex shrink-0 gap-0.5">
+        <Button size="xs" variant="ghost" onClick={startEdit} title={t('Edit')} aria-label={t('Edit')}>
+          <Pencil />
+        </Button>
+        <Button size="xs" variant="ghost" onClick={() => post({ type: 'promote', id: q.id, priority: steer ? 'later' : 'next' })} title={steer ? t('Switch to Queue') : t('Switch to Steer')}>
+          {steer ? <ListOrdered /> : <Navigation />}
+        </Button>
+        <Button size="xs" variant="ghost" onClick={() => post({ type: 'promote', id: q.id, priority: 'now' })} title={t('Send now')} aria-label={t('Send now')}>
+          <Zap />
+        </Button>
+        <Button size="xs" variant="ghost" onClick={() => post({ type: 'cancelQueued', id: q.id })} title={t('Cancel')} aria-label={t('Cancel')}>
+          <X />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- page
 
 export function ChatView({ data }: { data: ChatData }) {
@@ -824,7 +882,11 @@ export function ChatView({ data }: { data: ChatData }) {
           <span className="truncate">{chat.account.email ?? chat.account.name}</span>
           {chat.account.plan && <span className="opacity-70">· {chat.account.plan}</span>}
         </span>
-        {chat.costUsd > 0 && <span className="text-muted-foreground text-[11px] tabular-nums">${chat.costUsd.toFixed(2)}</span>}
+        {chat.costUsd > 0 && (
+          <span className="text-muted-foreground text-[11px] tabular-nums" title={t('Tokens and API-equivalent cost of this chat')}>
+            {chat.tokens ? `${chat.tokens >= 1e6 ? (chat.tokens / 1e6).toFixed(1) + 'M' : (chat.tokens / 1e3).toFixed(1) + 'k'} ${t('tokens')} · ` : ''}${chat.costUsd.toFixed(2)}
+          </span>
+        )}
         <Button size="xs" variant="ghost" onClick={() => post({ type: 'link' })} title="Let this agent see what another session is doing">
           <Link2 /> {t('Link session')}
         </Button>
@@ -895,22 +957,7 @@ export function ChatView({ data }: { data: ChatData }) {
         {chat.queue.length > 0 && (
           <div className="flex flex-col gap-1">
             {chat.queue.map((q) => (
-              <div key={q.id} className="flex items-center gap-2 rounded-lg border border-dashed px-2.5 py-1.5 text-[12px]">
-                <ListOrdered className="text-muted-foreground size-3.5 shrink-0" />
-                <span className="truncate">{q.text || `${q.images} image(s)`}</span>
-                <span className="text-muted-foreground shrink-0 text-[11px]">{t('queued')}</span>
-                <div className="ml-auto flex shrink-0 gap-1">
-                  <Button size="xs" variant="ghost" onClick={() => post({ type: 'promote', id: q.id, priority: 'next' })} title={t('Steer')}>
-                    <Navigation />
-                  </Button>
-                  <Button size="xs" variant="secondary" onClick={() => post({ type: 'promote', id: q.id, priority: 'now' })} title={t('Send now')}>
-                    <Zap />
-                  </Button>
-                  <Button size="xs" variant="ghost" onClick={() => post({ type: 'cancelQueued', id: q.id })} aria-label="Remove from queue">
-                    <X />
-                  </Button>
-                </div>
-              </div>
+              <QueuedRow key={q.id} q={q} />
             ))}
           </div>
         )}

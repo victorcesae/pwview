@@ -1,0 +1,57 @@
+/** A message waiting to be handed over: still editable, switchable and cancellable. */
+function QueuedRow({ q }: { q: ChatState['queue'][number] }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(q.text);
+  const steer = q.priority === 'next';
+  const Icon = steer ? Navigation : ListOrdered;
+  const startEdit = () => {
+    setText(q.text);
+    setEditing(true);
+  };
+  const save = () => {
+    if (text.trim() && text !== q.text) post({ type: 'editQueued', id: q.id, text });
+    setEditing(false);
+  };
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-dashed px-2.5 py-1 text-[12px]">
+      <span title={steer ? t('Steer: handed over when the agent starts its next step') : t('Queue: handed over when the turn ends')}>
+        <Icon className="text-muted-foreground size-3.5 shrink-0" />
+      </span>
+      {editing ? (
+        <input
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') save();
+            if (e.key === 'Escape') {
+              setText(q.text);
+              setEditing(false);
+            }
+          }}
+          onBlur={save}
+          className="bg-input min-w-0 flex-1 rounded border px-1.5 py-0.5 text-[12px] outline-none"
+        />
+      ) : (
+        <button className="min-w-0 flex-1 cursor-text truncate text-left" title={t('Click to edit')} onClick={startEdit}>
+          {q.text || t('{0} image(s)', q.images)}
+        </button>
+      )}
+      <span className="text-muted-foreground shrink-0 text-[11px]">{steer ? t('next step') : t('turn end')}</span>
+      <div className="flex shrink-0 gap-0.5">
+        <Button size="xs" variant="ghost" onClick={startEdit} title={t('Edit')} aria-label={t('Edit')}>
+          <Pencil />
+        </Button>
+        <Button size="xs" variant="ghost" onClick={() => post({ type: 'promote', id: q.id, priority: steer ? 'later' : 'next' })} title={steer ? t('Switch to Queue') : t('Switch to Steer')}>
+          {steer ? <ListOrdered /> : <Navigation />}
+        </Button>
+        <Button size="xs" variant="ghost" onClick={() => post({ type: 'promote', id: q.id, priority: 'now' })} title={t('Send now')} aria-label={t('Send now')}>
+          <Zap />
+        </Button>
+        <Button size="xs" variant="ghost" onClick={() => post({ type: 'cancelQueued', id: q.id })} title={t('Cancel')} aria-label={t('Cancel')}>
+          <X />
+        </Button>
+      </div>
+    </div>
+  );
+}

@@ -6,6 +6,15 @@ import * as path from 'path';
 import { loadComments } from './comments';
 import { claudeDir, norm } from './paths';
 
+export interface UsageRow {
+  ts: string;
+  model: string;
+  input: number;
+  output: number;
+  cacheWrite: number;
+  cacheRead: number;
+}
+
 export type State = 'working' | 'recent' | 'idle';
 
 export interface Hunk {
@@ -36,6 +45,8 @@ export interface TimelineEvent {
   tool?: string;
   refId?: string;
   agentId?: string;
+  /** a message the developer sent while the agent was working (steer / queue) */
+  midTurn?: boolean;
 }
 
 export interface Transcript {
@@ -50,6 +61,7 @@ export interface Transcript {
   events: TimelineEvent[];
   changes: Change[];
   pending: Set<string>;
+  usage: UsageRow[];
   toolCount: number;
 }
 
@@ -183,8 +195,10 @@ function changeFrom(r: any, id: string, sid: string, aid: string | undefined, ts
 }
 
 export function parse(file: string, sid: string, aid?: string): Transcript {
-  const t: Transcript = { events: [], changes: [], pending: new Set(), toolCount: 0 };
+  const t: Transcript = { events: [], changes: [], pending: new Set(), toolCount: 0, usage: [] };
   const whyByTool = new Map<string, string>();
+  // one reply is written as several records that repeat the same usage: count each reply once
+  const usageById = new Map<string, UsageRow>();
   let lastText = '';
 
   for (const rec of records(file)) {
@@ -204,9 +218,35 @@ export function parse(file: string, sid: string, aid?: string): Transcript {
       case 'last-prompt':
         t.lastPrompt = str(rec.lastPrompt) || t.lastPrompt;
         break;
+      case 'attachment': {
+        // messages sent while the agent was working (steer / queue) are stored as queued commands
+        const a = rec.attachment;
+        if (a?.type === 'queued_command') {
+          const text = typeof a.prompt === 'string' ? a.prompt : (a.prompt ?? []).filter((p: any) => p?.type === 'text').map((p: any) => p.text).join('\n');
+          if (text.trim() && !isNoise(text)) t.events.push({ ts: ts || str(a.timestamp), kind: 'prompt', text: clip(text, 3000), agentId: aid, midTurn: true });
+        }
+        break;
+      }
       case 'assistant': {
         const model = str(rec.message?.model);
         if (model && !model.startsWith('<')) t.model = model;
+        const u = rec.message?.usage;
+        const mid = str(rec.message?.id);
+        if (u && mid && model && !model.startsWith('<')) {
+          const row: UsageRow = {
+            ts,
+            model,
+            input: u.input_tokens ?? 0,
+            output: u.output_tokens ?? 0,
+            cacheWrite: u.cache_creation_input_tokens ?? 0,
+            cacheRead: u.cache_read_input_tokens ?? 0,
+          };
+          const prev = usageById.get(mid);
+          if (!prev) {
+            usageById.set(mid, row);
+            t.usage.push(row);
+          } else prev.output = Math.max(prev.output, row.output); // a later record may carry the final count
+        }
         for (const c of rec.message?.content ?? []) {
           if (c.type === 'text' && str(c.text).trim()) {
             lastText = c.text;

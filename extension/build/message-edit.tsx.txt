@@ -1,0 +1,28 @@
+        {editing ? (
+          <div className="flex flex-col gap-1.5">
+            <Textarea value={text} onChange={(e) => setText(e.target.value)} autoFocus className="min-h-12" />
+            <div className="flex gap-1.5">
+              <Button
+                size="xs"
+                onClick={() => {
+                  post({ type: 'editComment', commentId: c.id, text });
+                  setEditing(false);
+                }}
+              >
+                {t('Save')}
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => {
+                  setText(c.text);
+                  setEditing(false);
+                }}
+              >
+                {t('Cancel')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="text-[13px] whitespace-pre-wrap">{c.text}</div>
+        )}

@@ -11,6 +11,7 @@ export type FromChat =
   | { type: 'send'; text: string; images: { data: string; mime: string }[]; priority: Priority }
   | { type: 'promote'; id: string; priority?: Priority }
   | { type: 'cancelQueued'; id: string }
+  | { type: 'editQueued'; id: string; text: string }
   | { type: 'interrupt' }
   | { type: 'retry' }
   | { type: 'respond'; id: string; decision: 'allow' | 'always' | 'deny'; message?: string; answers?: Record<string, string> }
@@ -128,6 +129,8 @@ export class Chats {
         return c.send(m.text, m.images, m.priority);
       case 'promote':
         return c.promote(m.id, m.priority);
+      case 'editQueued':
+        return c.editQueued(m.id, m.text);
       case 'cancelQueued':
         return c.cancelQueued(m.id);
       case 'retry':

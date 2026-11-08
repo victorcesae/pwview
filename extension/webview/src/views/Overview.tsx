@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ago, base, rel } from '@/lib/utils';
 import { useState } from 'react';
 import { GraphView } from './Graph';
-import type { GraphData, HotFile, SessionInfo } from '@/types';
+import { UsageView } from './Usage';
+import type { GraphData, HotFile, SessionInfo, UsageReport } from '@/types';
 import { t } from '@/i18n';
 
 function SessionRow({ s }: { s: SessionInfo }) {
@@ -82,9 +83,9 @@ function HotFiles({ hot, sessions }: { hot: HotFile[]; sessions: SessionInfo[] }
   );
 }
 
-export function Overview({ data }: { data: { sessions: SessionInfo[]; hot: HotFile[]; hooks: boolean; graph?: GraphData } }) {
+export function Overview({ data }: { data: { sessions: SessionInfo[]; hot: HotFile[]; hooks: boolean; graph?: GraphData; usage?: UsageReport } }) {
   const { sessions, hot, hooks } = data;
-  const [view, setView] = useState<'list' | 'graph'>('list');
+  const [view, setView] = useState<'list' | 'graph' | 'usage'>('list');
   const working = sessions.filter((s) => s.state === 'working');
   const byProject = new Map<string, SessionInfo[]>();
   for (const s of sessions) byProject.set(s.project, [...(byProject.get(s.project) ?? []), s]);
@@ -104,9 +105,9 @@ export function Overview({ data }: { data: { sessions: SessionInfo[]; hot: HotFi
           </div>
         </div>
         <div className="bg-muted ml-auto inline-flex rounded-lg p-[3px]">
-          {(['list', 'graph'] as const).map((v) => (
+          {(['list', 'graph', 'usage'] as const).map((v) => (
             <button key={v} onClick={() => setView(v)} className={`h-6 cursor-pointer rounded-md px-2.5 text-[12px] font-medium capitalize ${view === v ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              {v === 'list' ? t('List') : t('Graph')}
+              {v === 'list' ? t('List') : v === 'graph' ? t('Graph') : t('Usage')}
             </button>
           ))}
         </div>
@@ -116,6 +117,7 @@ export function Overview({ data }: { data: { sessions: SessionInfo[]; hot: HotFi
       </header>
 
       {view === 'graph' && data.graph && <GraphView graph={data.graph} />}
+      {view === 'usage' && data.usage && <UsageView report={data.usage} />}
       {view === 'list' && !hooks && (
         <Card className="border-warn/40 bg-warn/5">
           <CardContent className="flex flex-wrap items-center gap-3">

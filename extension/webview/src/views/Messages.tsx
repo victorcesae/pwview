@@ -1,6 +1,7 @@
-import { ImagePlus, ListOrdered, Navigation, SquareTerminal, X, Zap } from 'lucide-react';
+import { ImagePlus, ListOrdered, Navigation, Pencil, SquareTerminal, X, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { post } from '@/bridge';
+import { t } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -157,6 +158,8 @@ export function MessagesTab({ data }: { data: Data }) {
 }
 
 function MessageRow({ c, project }: { c: Comment; project: string }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(c.text);
   const m = MODE_INFO[c.mode ?? 'queue'];
   const where = { step: 'mid-task', terminal: 'to the terminal', 'turn-end': 'at turn end', prompt: 'with your prompt' }[c.deliveredVia ?? 'prompt'];
   const status =
@@ -176,6 +179,11 @@ function MessageRow({ c, project }: { c: Comment; project: string }) {
             </button>
           )}
           <span className="text-muted-foreground ml-auto">{ago(c.created)}</span>
+          {c.status === 'pending' && !editing && (
+            <Button size="xs" variant="ghost" onClick={() => setEditing(true)}>
+              <Pencil /> {t('Edit')}
+            </Button>
+          )}
           {c.status === 'pending' && (
             <Button size="xs" variant="secondary" onClick={() => post({ type: 'promoteComment', commentId: c.id })} title="Interrupt and send it now">
               <Zap /> Send now
@@ -187,7 +195,34 @@ function MessageRow({ c, project }: { c: Comment; project: string }) {
             </Button>
           )}
         </div>
-        <div className="text-[13px] whitespace-pre-wrap">{c.text}</div>
+        {editing ? (
+          <div className="flex flex-col gap-1.5">
+            <Textarea value={text} onChange={(e) => setText(e.target.value)} autoFocus className="min-h-12" />
+            <div className="flex gap-1.5">
+              <Button
+                size="xs"
+                onClick={() => {
+                  post({ type: 'editComment', commentId: c.id, text });
+                  setEditing(false);
+                }}
+              >
+                {t('Save')}
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => {
+                  setText(c.text);
+                  setEditing(false);
+                }}
+              >
+                {t('Cancel')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="text-[13px] whitespace-pre-wrap">{c.text}</div>
+        )}
         {c.snippet && <code className="bg-muted mt-1.5 block truncate rounded px-2 py-1 text-[11px]">{c.snippet.trim()}</code>}
       </div>
     </div>

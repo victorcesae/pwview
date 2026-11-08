@@ -57,6 +57,15 @@ export function addComment(c: Omit<Comment, 'id' | 'created' | 'status'> & Parti
   return full;
 }
 
+export function editComment(id: string, text: string) {
+  const all = loadComments();
+  const c = all.find((x) => x.id === id && x.status === 'pending');
+  if (c && text.trim()) {
+    c.text = text;
+    saveComments(all);
+  }
+}
+
 export function cancelComment(id: string) {
   const all = loadComments();
   const c = all.find((x) => x.id === id && x.status === 'pending');

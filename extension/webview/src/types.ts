@@ -14,7 +14,7 @@ export interface HotFile { file: string; sessions: string[]; changes: number; up
 
 export type Data =
   | ChatData
-  | { view: 'overview'; overview: { sessions: SessionInfo[]; hot: HotFile[]; hooks: boolean; graph?: GraphData } }
+  | { view: 'overview'; overview: { sessions: SessionInfo[]; hot: HotFile[]; hooks: boolean; graph?: GraphData; usage?: UsageReport } }
   | { view: 'session'; focusAgent?: string; session: { info: SessionInfo; events: TimelineEvent[]; changes: Change[]; comments: Comment[]; terminal?: boolean; linkedTitles: Record<string, string> } };
 
 export type ToExtension =
@@ -26,6 +26,8 @@ export type ToExtension =
   | { type: 'resume'; id: string }
   | { type: 'message'; id: string; text: string; mode?: Mode; images?: { data: string; mime: string }[] }
   | { type: 'cancelComment'; commentId: string }
+  | { type: 'editComment'; commentId: string; text: string }
+  | { type: 'usage'; days: number }
   | { type: 'promoteComment'; commentId: string }
   | { type: 'linkSession'; id: string }
   | { type: 'newSession' }
@@ -50,7 +52,7 @@ export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | '
 export interface ChatState {
   key: string; sessionId?: string; cwd: string; title: string; model?: string; models: { value: string; displayName: string }[];
   permissionMode: PermissionMode; effort?: Effort; fastMode: boolean; ultracode: boolean; status: 'starting' | 'idle' | 'working' | 'waiting' | 'closed' | 'error'; activity?: string;
-  todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number }[]; slashCommands: string[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string }; error?: string;
+  todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[]; tokens?: number; slashCommands: string[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string }; error?: string;
 }
 export type LinkedSession = { id: string; title: string; state: State; activity?: string };
 export type ChatData = { view: 'chat'; chat: ChatState; linked: LinkedSession[] };
@@ -59,6 +61,7 @@ export type ToChat =
   | { type: 'send'; text: string; images: { data: string; mime: string }[]; priority: Priority }
   | { type: 'promote'; id: string; priority?: Priority }
   | { type: 'cancelQueued'; id: string }
+  | { type: 'editQueued'; id: string; text: string }
   | { type: 'interrupt' }
   | { type: 'retry' }
   | { type: 'respond'; id: string; decision: 'allow' | 'always' | 'deny'; message?: string; answers?: Record<string, string> }
@@ -81,3 +84,14 @@ export type GNode =
   | { id: string; type: 'file'; data: { path: string; sessions: number; edits: number } };
 export type GEdge = { id: string; source: string; target: string; kind: 'next' | 'spawned' | 'edited' | 'linked' | 'start'; label?: string };
 export type GraphData = { nodes: GNode[]; edges: GEdge[] };
+
+// ---- usage (mirrors src/usage.ts)
+export type UsageBucket = { input: number; output: number; cacheWrite: number; cacheRead: number; cost: number; unpriced: number };
+export interface UsageReport {
+  days: number;
+  totals: UsageBucket;
+  byModel: (UsageBucket & { model: string; label: string })[];
+  byDay: { day: string; cost: number; tokens: number; byModel: Record<string, number> }[];
+  byProject: (UsageBucket & { project: string })[];
+  topSessions: (UsageBucket & { id: string; title: string; project: string })[];
+}

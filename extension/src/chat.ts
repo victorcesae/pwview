@@ -36,9 +36,11 @@ export interface ChatState {
   activity?: string;
   todos: Todo[];
   items: ChatItem[];
-  queue: { id: string; text: string; images: number }[];
+  queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[];
   slashCommands: string[];
   costUsd: number;
+  /** All tokens this chat used (input + output + cache), from each turn's usage. */
+  tokens?: number;
   /** Which Claude account this session runs on (name from AgentLens, details from Claude Code). */
   account: { name: string; email?: string; organization?: string; plan?: string; provider?: string };
   error?: string;
@@ -165,6 +167,16 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
     }
     if (rec.type === 'custom-title') title = rec.customTitle;
     if (rec.isSidechain || rec.isMeta) continue;
+    // messages sent while the agent was working are stored as queued commands, not user records
+    if (rec.type === 'attachment' && rec.attachment?.type === 'queued_command') {
+      const p = rec.attachment.prompt;
+      const blocks: any[] = typeof p === 'string' ? [{ type: 'text', text: p }] : p ?? [];
+      const text = blocks.filter((b) => b?.type === 'text').map((b) => b.text).join('\n').trim();
+      const images = blocks.filter((b) => b?.type === 'image' && b.source?.type === 'base64').map((b) => `data:${b.source.media_type};base64,${b.source.data}`);
+      if ((text && !NOISE.some((n) => text.startsWith(n))) || images.length)
+        items.push({ kind: 'user', id: rec.uuid ?? uid(), text, images, priority: 'next', ts: rec.timestamp ?? rec.attachment.timestamp ?? '' });
+      continue;
+    }
     const content = rec.message?.content;
     if (rec.type === 'user') {
       const texts: string[] = [];
@@ -213,7 +225,7 @@ export class ChatSession {
   readonly state: ChatState;
   private input = new Channel<SDKUserMessage>();
   private q?: Query;
-  private queued: { id: string; text: string; images: Img[] }[] = [];
+  private queued: { id: string; text: string; images: Img[]; priority: 'later' | 'next' }[] = [];
   private pending = new Map<string, (r: PermissionResult) => void>();
   private streaming = new Map<string, string>(); // `${parent}:${msgId}:${index}` → item id
   private currentMsg = new Map<string, string>(); // parent → message id being streamed
@@ -245,7 +257,7 @@ export class ChatSession {
   }
 
   private changed() {
-    this.state.queue = this.queued.map((m) => ({ id: m.id, text: m.text, images: m.images.length }));
+    this.state.queue = this.queued.map((m) => ({ id: m.id, text: m.text, images: m.images.length, priority: m.priority }));
     this.onChange(this.state);
   }
 
@@ -292,18 +304,35 @@ export class ChatSession {
   // ------------------------------------------------------------------ sending
 
   /**
-   * later: queued until the current turn ends (kept here, so it can still be edited,
-   *        cancelled or promoted); next: steer, picked up between steps; now: send now.
+   * While the agent works, Steer (next) and Queue (later) messages wait here, where they can still
+   * be edited, cancelled or switched. Steer is handed over when the agent starts its next step,
+   * Queue when the turn ends. Send now (now) goes in immediately.
    */
   send(text: string, images: Img[], priority: Priority) {
     if (!text.trim() && !images.length) return;
     const working = this.state.status === 'working' || this.state.status === 'waiting';
-    if (priority === 'later' && working) {
-      this.queued.push({ id: uid(), text, images });
+    if (working && priority !== 'now') {
+      this.queued.push({ id: uid(), text, images, priority });
       this.changed();
       return;
     }
     this.push(text, images, working ? priority : 'later');
+  }
+
+  /** Edit a message that hasn't been handed over yet. */
+  editQueued(id: string, text: string) {
+    const m = this.queued.find((x) => x.id === id);
+    if (!m || !text.trim()) return;
+    m.text = text;
+    this.changed();
+  }
+
+  /** Steer messages go in as the agent starts its next step (it picks them up right after it). */
+  private flushSteers() {
+    const steers = this.queued.filter((m) => m.priority === 'next');
+    if (!steers.length) return;
+    this.queued = this.queued.filter((m) => m.priority !== 'next');
+    for (const m of steers) this.push(m.text, m.images, 'next');
   }
 
   /** Re-send the last thing the user asked (text + images). */
@@ -314,11 +343,17 @@ export class ChatSession {
     this.send(last.text, images, 'later');
   }
 
+  /** Send a waiting message now, or switch it between Steer and Queue. */
   promote(id: string, priority: Priority = 'now') {
     const i = this.queued.findIndex((m) => m.id === id);
     if (i < 0) return;
+    if (priority !== 'now') {
+      this.queued[i].priority = priority;
+      this.changed();
+      return;
+    }
     const [m] = this.queued.splice(i, 1);
-    this.push(m.text, m.images, priority);
+    this.push(m.text, m.images, 'now');
   }
 
   cancelQueued(id: string) {
@@ -510,6 +545,7 @@ export class ChatSession {
         break;
       }
       case 'assistant': {
+        let startedStep = false;
         const key = parent ?? '';
         const msgId = (m.message as any).id;
         (m.message.content as any[]).forEach((c, index) => {
@@ -525,8 +561,10 @@ export class ChatSession {
             if (!this.tool(c.id))
               this.state.items.push({ kind: 'tool', id: c.id, name: c.name, summary: summary(c.name, c.input), input: c.input, status: 'running', parent, file: str(c.input?.file_path) || undefined });
             if (!parent || c.name === 'Agent') this.state.activity = describe(c.name, c.input);
+            if (!parent) startedStep = true;
           }
         });
+        if (startedStep) this.flushSteers();
         break;
       }
       case 'user': {
@@ -554,15 +592,19 @@ export class ChatSession {
         this.turns++;
         const r: any = m;
         this.state.costUsd += r.total_cost_usd ?? 0;
+        const u = r.usage ?? {};
+        this.state.tokens = (this.state.tokens ?? 0) + (u.input_tokens ?? 0) + (u.output_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
         if (r.subtype !== 'success' || r.is_error)
           this.state.items.push({ kind: 'result', id: uid(), text: str(r.result) || r.subtype, isError: true, durationMs: r.duration_ms });
         for (const it of this.state.items) if (it.kind === 'assistant') it.streaming = false;
         for (const it of this.state.items) if (it.kind === 'tool' && it.status === 'running' && !it.parent) it.status = 'done';
         this.state.status = 'idle';
         this.state.activity = undefined;
-        // the turn ended: hand over the next queued message
-        const next = this.queued.shift();
-        if (next) this.push(next.text, next.images, 'later');
+        // the turn ended: steers that never found a next step go first, then the next queued message
+        const steers = this.queued.filter((q) => q.priority === 'next');
+        const handover = steers.length ? steers : this.queued.slice(0, 1);
+        this.queued = this.queued.filter((q) => !handover.includes(q));
+        for (const q of handover) this.push(q.text, q.images, 'later');
         break;
       }
     }

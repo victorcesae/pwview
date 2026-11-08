@@ -108,7 +108,7 @@ export const chat: Data = {
       { content: 'Show "Awaiting approval" in the quotes list', status: 'in_progress', activeForm: 'Updating the quotes list' },
       { content: 'Write e2e tests for both paths', status: 'pending', activeForm: 'Writing e2e tests' },
     ],
-    queue: [{ id: 'q1', text: 'When you finish, also update the API docs for /quotes/:id/send', images: 0 }],
+    queue: [{ id: 'q1', text: 'Use the configured limit, not the constant', images: 0, priority: 'next' }, { id: 'q2', text: 'When you finish, also update the API docs for /quotes/:id/send', images: 0, priority: 'later' }],
     items: [
       { kind: 'user', id: 'u1', text: 'Add the approval step before a quote is sent. Managers approve anything above the discount limit.', images: [], ts: t(10) },
       { kind: 'assistant', id: 'a1', text: "I'll look at how quotes are sent today, then add an approval gate. Here's the plan:\n\n1. Find `sendQuote` callers\n2. Gate `send()` on **approval status**\n3. Update the list UI" },

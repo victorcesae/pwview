@@ -4,6 +4,7 @@ import { loadComments } from './comments';
 import { Engine, Session } from './engine';
 import { buildGraph } from './graph';
 import { loadLinks } from './links';
+import type { UsageReport } from './usage';
 
 export type FromWebview =
   | { type: 'ready' }
@@ -14,6 +15,8 @@ export type FromWebview =
   | { type: 'resume'; id: string }
   | { type: 'message'; id: string; text: string; mode?: 'steer' | 'queue' | 'now'; images?: { data: string; mime: string }[] }
   | { type: 'cancelComment'; commentId: string }
+  | { type: 'editComment'; commentId: string; text: string }
+  | { type: 'usage'; days: number }
   | { type: 'promoteComment'; commentId: string }
   | { type: 'linkSession'; id: string }
   | { type: 'newSession' }
@@ -31,7 +34,15 @@ export class Dashboard {
     private hooksOk: () => boolean,
     private attached: () => Set<string>,
     private onMessage: (m: FromWebview) => void,
+    private usageFor: (days: number) => UsageReport,
   ) {}
+
+  private usageDays = 7;
+
+  showUsage(days: number) {
+    this.usageDays = days;
+    this.post();
+  }
 
   show(sessionId?: string, agentId?: string) {
     this.sessionId = sessionId;
@@ -73,7 +84,7 @@ export class Dashboard {
     if (!s) {
       this.panel.webview.postMessage({
         type: 'data',
-        data: { view: 'overview', overview: { sessions: sessions.map((x) => x.info), hot: Engine.hotFiles(sessions), hooks: this.hooksOk(), graph: buildGraph(sessions, loadLinks()) } },
+        data: { view: 'overview', overview: { sessions: sessions.map((x) => x.info), hot: Engine.hotFiles(sessions), hooks: this.hooksOk(), graph: buildGraph(sessions, loadLinks()), usage: this.usageFor(this.usageDays) } },
       });
       return;
     }
