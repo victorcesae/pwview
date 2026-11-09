@@ -1,5 +1,31 @@
 // Small, safe markdown renderer for agent messages (no HTML injection: builds React nodes).
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
+import { Check, Copy } from 'lucide-react';
+import { t } from '@/i18n';
+
+/** A fenced code block: readable text, long lines wrap (no sideways scrolling), language and Copy. */
+function CodeBlock({ lang, code }: { lang?: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <div className="bg-muted my-2 overflow-hidden rounded-lg border" data-code-block>
+      <div className="text-muted-foreground flex items-center justify-between border-b px-3 py-1 text-[11px]">
+        <span className="font-mono">{lang || 'text'}</span>
+        <button className="hover:text-foreground inline-flex cursor-pointer items-center gap-1 rounded px-1 py-0.5" onClick={copy} aria-label={t('Copy')} data-copy-code>
+          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+          {copied ? t('Copied') : t('Copy')}
+        </button>
+      </div>
+      <pre className="text-foreground m-0 max-h-[28rem] overflow-y-auto px-3 py-2 font-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap">
+        <code className="text-foreground bg-transparent p-0 font-mono">{code}</code>
+      </pre>
+    </div>
+  );
+}
 import { cn } from '@/lib/utils';
 
 function inline(text: string, key: string): ReactNode[] {
@@ -38,9 +64,7 @@ export function Markdown({ text, className }: { text: string; className?: string
       while (i < lines.length && !lines[i].startsWith('```')) code.push(lines[i++]);
       i++;
       blocks.push(
-        <pre key={k++} className="bg-muted/70 my-2 overflow-x-auto rounded-md border px-3 py-2 font-mono text-[12px] leading-relaxed">
-          <code>{code.join('\n')}</code>
-        </pre>,
+        <CodeBlock key={k++} lang={fence[1]} code={code.join('\n')} />,
       );
       continue;
     }

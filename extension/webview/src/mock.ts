@@ -244,6 +244,26 @@ export function multiChat(): Data {
     { kind: 'tool', id: 'm-b3', name: 'Bash', summary: 'cd ../shared-ui && gh pr create --fill', input: { command: 'cd ../shared-ui && gh pr create --fill' }, status: 'done', result: 'https://github.com/nzero-labs/shared-ui/pull/57' },
     { kind: 'tool', id: 'm-b4', name: 'Bash', summary: 'gh pr create --fill', input: { command: 'gh pr create --fill' }, status: 'done', result: 'https://github.com/NZero-Labs/intranet-v5/pull/1288' },
     { kind: 'assistant', id: 'm-a2', text: 'Done. **7 files in 3 repos** now use `approvalStatus`:\n\n| Repo | Files | PR |\n|---|---|---|\n| api-gateway | 2 | [#214](https://github.com/nzero-labs/api-gateway/pull/214) |\n| shared-ui | 2 | [#57](https://github.com/nzero-labs/shared-ui/pull/57) |\n| intranet-v5 | 3 | [#1288](https://github.com/NZero-Labs/intranet-v5/pull/1288) |\n\nMerge them in that order: the web app needs the new badge and API field.' },
+    {
+      kind: 'assistant',
+      id: 'm-a3',
+      text: [
+        'Claim Evidence:',
+        '',
+        '```text',
+        'VS Code Marketplace publisher: https://marketplace.visualstudio.com/publishers/victorcesae',
+        'Extension: https://marketplace.visualstudio.com/items?itemName=victorcesae.steerhouse',
+        'The extension package.json repository is https://github.com/victorcesae/pwview, owned by my GitHub account @victorcesae.',
+        '```',
+        '',
+        'Then publish:',
+        '',
+        '```bash',
+        'cd extension',
+        'npx ovsx publish steerhouse-1.0.1.vsix',
+        '```',
+      ].join('\n'),
+    },
   ];
   // as right after a resume: Claude Code has not reported the model yet
   const prs = {

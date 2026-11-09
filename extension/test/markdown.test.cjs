@@ -33,7 +33,9 @@ test('markdown: rules, headings, lists, code', () => {
   assert.match(html, /font-semibold[^>]*>Title</);
   assert.match(html, /<ul[^>]*><li>one<\/li><li>two<\/li><\/ul>/);
   assert.match(html, /<ol/);
-  assert.match(html, /<pre[^>]*><code>const x = 1;<\/code><\/pre>/);
+  assert.match(html, /<pre[^>]*whitespace-pre-wrap[^>]*><code[^>]*text-foreground[^>]*>const x = 1;<\/code><\/pre>/, 'readable text, long lines wrap');
+  assert.match(html, /<span class="font-mono">ts<\/span>/, 'language shown');
+  assert.match(html, /data-copy-code/, 'Copy button');
   assert.doesNotMatch(html, /---/);
 });
 

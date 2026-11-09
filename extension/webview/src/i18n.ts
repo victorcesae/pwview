@@ -116,6 +116,7 @@ const PT: Record<string, string> = {
   Quote: 'Citar',
   'Quote this answer in your next message': 'Citar esta resposta na sua próxima mensagem',
   Copy: 'Copiar',
+  Copied: 'Copiado',
   'Runs the conversation again from here': 'Roda a conversa de novo a partir daqui',
   'Run again': 'Rodar de novo',
   'Edit this message and run the conversation again from here': 'Editar esta mensagem e rodar a conversa de novo a partir daqui',
