@@ -8,6 +8,7 @@ import { addWorktree, removeWorktree, repoRoot, slug, validBranch, worktreeInfo 
 import { lanAddress, RemoteServer } from './remote';
 import { migrateFromAgentLens } from './migrate';
 import { canTrash, registerFileActions, removePath } from './fileActions';
+import { registerCodeCompletion } from './codeCompletion';
 import { pickFolder } from './folders';
 import { Pwview } from './pwview';
 import { Scm, type ScmFile } from './scm';
@@ -181,6 +182,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   const dashboard = new Dashboard(ctx, () => sessions, hooksOk, () => attachedSessions(), (m) => onWebview(m), (days) => usageReport(engine.scan(Math.max(days, cfg().get<number>('days', 3))), days));
   const chats = new Chats(ctx, () => sessions, (id) => dashboard.show(id));
   ctx.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('steerhouse.tabCompletion') && chats.refresh()));
+  registerCodeCompletion(ctx);
   const pwview = new Pwview(ctx);
   chats.onStart = (cwd, chat) => void pwview.attach(cwd, chat);
   const browserFolder = (n?: { path?: string } | string) => (typeof n === 'string' ? n : n?.path) ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;

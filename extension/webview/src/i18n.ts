@@ -233,7 +233,7 @@ const PT: Record<string, string> = {
   Add: 'Adicionar',
   'Add files, commands, connectors': 'Adicionar arquivos, comandos, conectores',
   'Add images': 'Adicionar imagens',
-  'The output is no longer available: its temporary file was removed.': 'A saída não está mais disponível: o arquivo temporário foi removido.',
+  'The output is no longer available.': 'A saída não está mais disponível.',
   'Tab completes @files, /commands and the suggested prompt': 'Tab completa @arquivos, /comandos e o prompt sugerido',
   'Turn Tab completion on': 'Ativar conclusão com Tab',
   'Turn Tab completion off': 'Desativar conclusão com Tab',

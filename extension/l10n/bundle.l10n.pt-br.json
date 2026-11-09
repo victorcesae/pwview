@@ -1,4 +1,13 @@
 {
+  "Code completion is on ({0}). Click to turn it off.": "A conclusão de código está ativada ({0}). Clique para desativar.",
+  "Code completion is off. Click to turn it on.": "A conclusão de código está desativada. Clique para ativar.",
+  "Add a Provider": "Adicionar um provedor",
+  "Code completion needs a model provider (Ollama, OpenRouter…). Add one, then turn it on again.": "A conclusão de código precisa de um provedor de modelos (Ollama, OpenRouter…). Adicione um e ative novamente.",
+  "Code completion": "Conclusão de código",
+  "Which provider should suggest code?": "Qual provedor deve sugerir código?",
+  "Turn On": "Ativar",
+  "Send your code to {0}?": "Enviar seu código para {0}?",
+  "As you type, the code around your cursor goes to {0}, and each suggestion may cost money. Files like .env and private keys are never sent.": "Enquanto você digita, o código ao redor do cursor vai para {0}, e cada sugestão pode ter custo. Arquivos como .env e chaves privadas nunca são enviados.",
   "Rename…": "Renomear…",
   "Add a Cursor account…": "Adicionar uma conta do Cursor…",
   "Add a Cursor account": "Adicionar uma conta do Cursor",

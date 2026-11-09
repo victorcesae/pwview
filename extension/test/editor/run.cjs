@@ -29,6 +29,8 @@ async function main() {
       vscodeExecutablePath,
       extensionDevelopmentPath,
       extensionTestsPath,
+      // accounts and settings of the person running the tests stay untouched
+      extensionTestsEnv: { CLAUDE_CONFIG_DIR: fs.mkdtempSync(path.join(os.tmpdir(), `steerhouse-editor-claude-${locale}-`)) },
       launchArgs: [workspace, '--locale', locale, '--user-data-dir', userData, '--extensions-dir', extDir, '--disable-workspace-trust', '--skip-welcome'],
     });
   }

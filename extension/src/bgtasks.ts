@@ -3,6 +3,8 @@
 // <task-notification> when it ends. Steerhouse runs where the agent runs, so it can read that file
 // live, for chats it drives and for sessions running in a terminal alike.
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 export type BgStatus = 'running' | 'completed' | 'failed' | 'stopped' | 'unknown';
 
@@ -73,6 +75,15 @@ export class BgTaskTracker {
       t.outputFile ??= n.outputFile;
     }
   }
+}
+
+/**
+ * Where Claude Code keeps the output of a session's commands. The SDK only names the file when a
+ * command ends, and for a command the agent waits on it deletes the file at that moment.
+ */
+export function sessionTasksDir(cwd: string, sessionId: string, platform = process.platform, tmp = process.env.CLAUDE_CODE_TMPDIR || os.tmpdir(), uid = process.getuid?.()): string {
+  const p = platform === 'win32' ? path.win32 : path.posix;
+  return p.join(tmp, platform === 'win32' || uid === undefined ? 'claude' : `claude-${uid}`, cwd.replace(/[^a-zA-Z0-9]/g, '-'), sessionId, 'tasks');
 }
 
 /** The end of a task's output (default 16 KiB), as text without terminal colour codes. */

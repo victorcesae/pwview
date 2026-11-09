@@ -23,9 +23,9 @@ const ago = (iso?: string) => {
 
 /** Output of one task, asked from the extension every 1.5 s while it is open and running. */
 function useOutput(id: string, open: boolean, running: boolean) {
-  const [out, setOut] = useState<{ text: string; size: number; urls: string[]; missing?: boolean }>();
+  const [out, setOut] = useState<{ text: string; size: number; urls: string[]; missing?: boolean; hasFile?: boolean }>();
   useEffect(() => {
-    const on = (e: MessageEvent) => e.data?.type === 'taskOutputResult' && e.data.id === id && setOut({ text: e.data.text, size: e.data.size, urls: e.data.urls ?? [], missing: e.data.missing });
+    const on = (e: MessageEvent) => e.data?.type === 'taskOutputResult' && e.data.id === id && setOut({ text: e.data.text, size: e.data.size, urls: e.data.urls ?? [], missing: e.data.missing, hasFile: e.data.hasFile });
     window.addEventListener('message', on);
     return () => window.removeEventListener('message', on);
   }, [id]);
@@ -52,6 +52,7 @@ function TaskRow({ task, canStop }: { task: BgTaskView; canStop: boolean }) {
   const L = LOOK[task.status];
   // a finished command's temporary output file gets cleaned up; a running one may not have written yet
   const gone = !running && !!out?.missing;
+  const noFile = gone || (!!out && !out.hasFile);
   return (
     <li className="border-b last:border-b-0" data-task={task.id} data-status={task.status}>
       <button className="hover:bg-accent flex w-full cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-left text-[12px]" onClick={() => setOpen(!open)} aria-expanded={open}>
@@ -78,7 +79,7 @@ function TaskRow({ task, canStop }: { task: BgTaskView; canStop: boolean }) {
             </div>
           )}
           <pre ref={pre} className="bg-muted max-h-56 overflow-auto rounded-md p-2 font-mono text-[11px] leading-snug whitespace-pre-wrap" data-task-output>
-            {gone ? t('The output is no longer available: its temporary file was removed.') : out ? out.text || t('No output yet.') : t('Loading…')}
+            {gone ? t('The output is no longer available.') : out ? out.text || t('No output yet.') : t('Loading…')}
           </pre>
           <div className="flex flex-wrap items-center gap-1">
             {running && canStop && (
@@ -86,7 +87,7 @@ function TaskRow({ task, canStop }: { task: BgTaskView; canStop: boolean }) {
                 <Square className="size-3" /> {t('Stop')}
               </button>
             )}
-            {!gone && (
+            {!noFile && (
               <>
             <button className="hover:bg-accent inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-[11.5px]" onClick={() => post({ type: 'followTask', id: task.id })} title={t('Watch the output in a terminal as it is written')} data-task-follow>
               <TerminalSquare className="size-3" /> {t('Follow in terminal')}

@@ -75,3 +75,10 @@ test('model names: ids become friendly labels', () => {
   assert.strictEqual(prettyModel('claude-opus-4[1m]'), 'Opus 4 (1M)');
   assert.strictEqual(prettyModel('llama3.1:8b'), 'llama3.1:8b');
 });
+
+test('chat rows are not positioned with a transform (it pushes sticky titles over their own group)', () => {
+  const src = fs.readFileSync(path.join(root, 'webview/src/views/Chat.tsx'), 'utf8');
+  assert.match(src, /sticky top-0/, 'the titles are sticky');
+  assert.ok(!/translateY\(/.test(src), 'no transform on the rows');
+  assert.match(src, /style=\{\{ top: v\.start \}\}/);
+});

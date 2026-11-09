@@ -1,4 +1,9 @@
 {
+  "cmd.code.completion.toggle": "Ativar ou desativar a conclusão de código",
+  "setting.code.completion.enabled": "Sugestões de código em cinza no editor, aceitas com Tab. Envia o código ao redor do cursor para o provedor escolhido enquanto você digita.",
+  "setting.code.completion.provider": "Id do provedor de modelos que sugere código. Definido pelo comando que ativa a conclusão de código.",
+  "setting.code.completion.model": "Modelo para as sugestões, se não for o modelo de chat do provedor. Um modelo pequeno e rápido funciona melhor.",
+  "setting.code.completion.delay": "Pausa na digitação, em milissegundos, antes de pedir uma sugestão.",
   "setting.tab.completion": "Na caixa do chat, digite @ para encontrar arquivos e pressione Tab para completá-los, além de /comandos e do prompt sugerido.",
   "cmd.rename.account": "Renomear conta…",
   "cmd.add.cursor.account": "Adicionar uma conta do Cursor…",

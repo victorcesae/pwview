@@ -1,4 +1,9 @@
 {
+  "cmd.code.completion.toggle": "Turn Code Completion On or Off",
+  "setting.code.completion.enabled": "Gray code suggestions in the editor, accepted with Tab. Sends the code around the cursor to the chosen provider as you type.",
+  "setting.code.completion.provider": "Id of the model provider that suggests code. Set by the command that turns code completion on.",
+  "setting.code.completion.model": "Model for suggestions, if not the provider's chat model. A small, fast one works best.",
+  "setting.code.completion.delay": "Pause in typing, in milliseconds, before asking for a suggestion.",
   "setting.tab.completion": "In the chat box, type @ to find files, and press Tab to complete them, /commands and the suggested prompt.",
   "cmd.rename.account": "Rename Account…",
   "cmd.add.cursor.account": "Add a Cursor Account…",

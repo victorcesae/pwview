@@ -1,11 +1,16 @@
 # Changelog
 
+## 1.0.8
+- **Code completion in the editor**: gray suggestions, Tab to accept, from a model provider you added (Ollama, LM Studio, LiteLLM, OpenRouter, custom). Off by default; turn it on from the Tab item in the status bar. Files like `.env` and private keys are never sent.
+- Expanded command lists in a chat are no longer cut off with their title underneath (the "empty black bar").
+- Background commands: live output and Follow for commands the agent waits on too, and their result once finished (Claude Code deletes their output file at that moment).
+
 ## 1.0.7
 - **Much faster start**: only transcripts inside the day window are read at startup, instead of all of them (17 s and 843 MB down to 2.4 s and 276 MB on a 2.1 GB history).
 - No more "Webview is disposed" errors after closing a chat.
 - **New chats ask which folder**: when the workspace holds several repositories, pick one (last used first), or browse.
 - **Browser with no setup**: chats in web projects can drive a shared browser through pwview, downloaded when needed. It starts on the first browser action. **Open Live Browser** shows it in a tab. Off with `steerhouse.pwview.enabled`.
-- Background commands: no more phantom "running" commands when the agent merely read text about one, and a finished command whose temporary output file is gone says so instead of "No output yet".
+- Background commands: no more phantom "running" commands when the agent merely read text about one.
 - **Run a command from the chat box**: start a message with `!` to run it in your shell, in the chat's folder, with live output and Stop. The agent sees the result with your next message; it starts no turn by itself.
 - **Tab completion in the chat box**: type @ to find a file, Tab to complete it. Turn it off in the + menu or with `steerhouse.tabCompletion`.
 - **Rename any account**, including Default (the id and folder stay, so logins and sessions keep working).

@@ -130,3 +130,54 @@ test('background commands: reading text about one is not one; a removed output f
   assert.strictEqual(B.readTail(undefined).missing, true);
   assert.strictEqual(B.readTail(__filename).missing, undefined);
 });
+
+test('commands the agent waits on: live output from the session folder, then the result', () => {
+  const chatOut = path.join(os.tmpdir(), 'steerhouse-shell-task-build');
+  execSync(`npx esbuild src/chat.ts src/bgtasks.ts --bundle --platform=node --format=cjs --outdir="${chatOut}" --alias:vscode="${path.join(__dirname, 'vscode-stub.cjs')}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --log-level=error`, { cwd: root });
+  const B = require(path.join(chatOut, 'bgtasks.js'));
+  const { ChatSession } = require(path.join(chatOut, 'chat.js'));
+  assert.strictEqual(B.sessionTasksDir('/home/me/projects', 'abc', 'linux', '/tmp', 1001), '/tmp/claude-1001/-home-me-projects/abc/tasks');
+  assert.strictEqual(B.sessionTasksDir('C:\\w\\app', 'abc', 'win32', 'C:\\Temp'), 'C:\\Temp\\claude\\C--w-app\\abc\\tasks');
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-task-'));
+  const saved = process.env.CLAUDE_CODE_TMPDIR;
+  process.env.CLAUDE_CODE_TMPDIR = tmp;
+  try {
+    const chat = new ChatSession({ cwd: '/w/app' }, () => {});
+    chat.state.sessionId = 'sess';
+    chat.state.items.push({ kind: 'tool', id: 'tu1', name: 'Bash', summary: '', input: {}, status: 'running' });
+    chat.state.tasks.push({ id: 'b1', toolUseId: 'tu1', command: 'npm test', status: 'running' });
+    const file = path.join(B.sessionTasksDir('/w/app', 'sess', process.platform, tmp), 'b1.output');
+
+    // running, nothing written yet: can still be followed
+    let r = chat.taskOutput('b1');
+    assert.strictEqual(r.missing, true);
+    assert.strictEqual(r.file, file);
+    // running, writing
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, 'live line\n');
+    r = chat.taskOutput('b1');
+    assert.strictEqual(r.text, 'live line\n');
+    assert.strictEqual(r.file, file);
+    // finished: the file is deleted, the result stays, there is no file to follow
+    fs.rmSync(file);
+    chat.state.tasks[0].status = 'completed';
+    chat.state.items[0].result = 'final output';
+    r = chat.taskOutput('b1');
+    assert.strictEqual(r.text, 'final output');
+    assert.ok(!r.missing);
+    assert.strictEqual(r.file, undefined);
+    // a background notice is not output
+    chat.state.items[0].result = 'Command running in background with ID: b1. Output is being written to: /x/b1.output.';
+    r = chat.taskOutput('b1');
+    assert.strictEqual(r.missing, true);
+    assert.strictEqual(r.file, undefined);
+    // a file Claude Code named wins, and points at the folder for the others
+    chat.state.tasks.push({ id: 'b2', command: 'x', status: 'completed', outputFile: path.join(tmp, 'other', 'b2.output') });
+    assert.strictEqual(chat.taskFile(chat.state.tasks[0]), path.join(tmp, 'other', 'b1.output'));
+    assert.strictEqual(chat.taskOutput('nope').missing, true);
+  } finally {
+    if (saved === undefined) delete process.env.CLAUDE_CODE_TMPDIR;
+    else process.env.CLAUDE_CODE_TMPDIR = saved;
+  }
+});

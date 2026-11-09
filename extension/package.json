@@ -2,7 +2,7 @@
   "name": "steerhouse",
   "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -262,6 +262,11 @@
         "title": "%cmd.pwview.stop%",
         "category": "Steerhouse",
         "icon": "$(debug-stop)"
+      },
+      {
+        "command": "steerhouse.codeCompletion.toggle",
+        "title": "%cmd.code.completion.toggle%",
+        "category": "Steerhouse"
       },
       {
         "command": "steerhouse.renameAccount",
@@ -1149,6 +1154,27 @@
           "default": "chat",
           "description": "%setting.where.new.and.resumed.sessions.open.the.steerhouse.chat.or.a.%"
         },
+        "steerhouse.codeCompletion.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "%setting.code.completion.enabled%"
+        },
+        "steerhouse.codeCompletion.provider": {
+          "type": "string",
+          "default": "",
+          "description": "%setting.code.completion.provider%"
+        },
+        "steerhouse.codeCompletion.model": {
+          "type": "string",
+          "default": "",
+          "description": "%setting.code.completion.model%"
+        },
+        "steerhouse.codeCompletion.delayMs": {
+          "type": "number",
+          "default": 350,
+          "minimum": 0,
+          "description": "%setting.code.completion.delay%"
+        },
         "steerhouse.tabCompletion": {
           "type": "boolean",
           "default": true,
@@ -1299,7 +1325,7 @@
     "build:webview": "vite build --config webview/vite.config.mts",
     "dev:webview": "vite --config webview/vite.config.mts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
-    "test": "node --test test/shell.test.cjs test/pwview.test.cjs test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs test/scm.test.cjs",
+    "test": "node --test test/codeCompletion.test.cjs test/shell.test.cjs test/pwview.test.cjs test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs test/scm.test.cjs",
     "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs test/e2e-fork.test.cjs test/e2e-bg.test.cjs",
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs",

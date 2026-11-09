@@ -6,7 +6,7 @@ import { ChatSession, historyFromTranscript, Priority, type ChatPrefs } from './
 import { hostIcon } from './hostIcon';
 import { findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMethod } from './prs';
 import { openUrl } from './browser';
-import { findUrls, readTail } from './bgtasks';
+import { findUrls } from './bgtasks';
 import { completeFiles } from './folders';
 import { vendorOf } from './providers';
 import type { Session } from './engine';
@@ -442,19 +442,18 @@ export class Chats {
       case 'editPrompt':
         return this.editAndRerun(o, m.id, m.text);
       case 'taskOutput': {
-        const t = c.state.tasks.find((x) => x.id === m.id);
-        const r = readTail(t?.outputFile);
-        return this.send(o, { type: 'taskOutputResult', id: m.id, text: r.text, size: r.size, missing: r.missing, urls: findUrls(r.text) });
+        const r = c.taskOutput(m.id);
+        return this.send(o, { type: 'taskOutputResult', id: m.id, text: r.text, size: r.size, missing: r.missing, hasFile: !!r.file, urls: findUrls(r.text) });
       }
       case 'stopTask':
         return c.stopTask(m.id).catch((e) => vscode.window.showErrorMessage(vscode.l10n.t('Could not stop it: {0}', String(e?.message ?? e))));
       case 'followTask': {
         const t = c.state.tasks.find((x) => x.id === m.id);
-        return t && vscode.commands.executeCommand('steerhouse.followTask', t);
+        return t && vscode.commands.executeCommand('steerhouse.followTask', { ...t, outputFile: c.taskFile(t) });
       }
       case 'openTaskFile': {
-        const t = c.state.tasks.find((x) => x.id === m.id);
-        return t?.outputFile && vscode.window.showTextDocument(vscode.Uri.file(t.outputFile), { preview: true });
+        const file = c.taskOutput(m.id).file;
+        return file && vscode.window.showTextDocument(vscode.Uri.file(file), { preview: true });
       }
       case 'shell':
         return c.runShell(m.command);

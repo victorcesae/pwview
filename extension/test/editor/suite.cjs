@@ -107,6 +107,67 @@ async function run() {
     const found = await vscode.workspace.findFiles(new vscode.RelativePattern(vscode.Uri.file(dir), '**/*[mM][yY]_*'), undefined, 8);
     assert.deepStrictEqual(found.map((u) => pathx.basename(u.fsPath)), ['My_File.ts']);
   });
+  await check('code completion: a suggestion from the provider is accepted into the file', async () => {
+    const fsx = require('fs'), pathx = require('path'), osx = require('os'), http = require('http');
+    let asked = 0;
+    const server = http.createServer((req, res) => {
+      req.resume();
+      req.on('end', () => {
+        asked++;
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ content: [{ type: 'text', text: 'return 42;' }], stop_reason: 'end_turn' }));
+      });
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const config = vscode.workspace.getConfiguration('steerhouse.codeCompletion');
+    const dir = process.env.CLAUDE_CONFIG_DIR;
+    assert.ok(dir, 'tests run with their own config folder');
+    fsx.mkdirSync(pathx.join(dir, 'steerhouse'), { recursive: true });
+    const provider = { id: 'p-test', name: 'Test', preset: 'custom', baseUrl: `http://127.0.0.1:${server.address().port}`, model: 'm', hasKey: false };
+    fsx.writeFileSync(pathx.join(dir, 'steerhouse', 'accounts.json'), JSON.stringify({ accounts: [{ id: 'p-test', name: 'Test', configDir: dir, provider }] }));
+    const accept = async (start) => {
+      const file = pathx.join(fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'steerhouse-tab-')), 'a.js');
+      fsx.writeFileSync(file, start);
+      const off = await vscode.workspace.openTextDocument(file);
+      const editor = await vscode.window.showTextDocument(off);
+      const end = off.positionAt(off.getText().length);
+      editor.selection = new vscode.Selection(end, end);
+      // typing is what asks again: VS Code keeps its answer while the text and cursor stay the same
+      await vscode.commands.executeCommand('type', { text: ' ' });
+      for (let i = 0; i < 20 && !off.getText().includes('return 42;'); i++) {
+        await wait(500);
+        await vscode.commands.executeCommand('editor.action.inlineSuggest.commit');
+      }
+      return off;
+    };
+    try {
+      const first = pathx.join(fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'steerhouse-tab-')), 'off.js');
+      fsx.writeFileSync(first, 'let a =');
+      const offDoc = await vscode.workspace.openTextDocument(first);
+      const offEditor = await vscode.window.showTextDocument(offDoc);
+      offEditor.selection = new vscode.Selection(offDoc.positionAt(7), offDoc.positionAt(7));
+      await vscode.commands.executeCommand('type', { text: ' ' });
+      await wait(1200);
+      assert.strictEqual(asked, 0, 'off by default: nothing is sent');
+      await config.update('provider', 'p-test', vscode.ConfigurationTarget.Global);
+      await config.update('delayMs', 0, vscode.ConfigurationTarget.Global);
+      await config.update('enabled', true, vscode.ConfigurationTarget.Global);
+      const results = [];
+      for (const start of ['const answer =', 'function f() {\n  ']) {
+        const before = asked;
+        const d = await accept(start);
+        results.push(`${JSON.stringify(start)}: asked ${asked - before}x, accepted ${d.getText().endsWith('return 42;')}, text ${JSON.stringify(d.getText())}`);
+      }
+      console.log('COMPLETION ' + results.join(' | '));
+      assert.ok(results.every((r) => r.includes('accepted true')), results.join(' | '));
+    } finally {
+      await config.update('enabled', undefined, vscode.ConfigurationTarget.Global);
+      await config.update('provider', undefined, vscode.ConfigurationTarget.Global);
+      await config.update('delayMs', undefined, vscode.ConfigurationTarget.Global);
+      await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor').then(undefined, () => {});
+      server.close();
+    }
+  });
   await check('check setup runs', async () => {
     await vscode.commands.executeCommand('steerhouse.refresh');
   });

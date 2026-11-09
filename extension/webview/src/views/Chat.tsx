@@ -241,11 +241,18 @@ function ToolStep({ it, sessionId }: { it: ToolItem; sessionId?: string }) {
 
 function ToolGroup({ items, sessionId }: { items: ToolItem[]; sessionId?: string }) {
   const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  // opening one at the bottom of the chat would leave its list below the message box
+  useEffect(() => {
+    if (!open) return;
+    const frame = requestAnimationFrame(() => requestAnimationFrame(() => box.current?.scrollIntoView({ block: 'nearest' })));
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
   const running = items.some((i) => i.status === 'running');
   const failed = items.some((i) => i.status === 'error');
   const total = items.reduce((a, i) => ({ add: a.add + stat(i).add, del: a.del + stat(i).del }), { add: 0, del: 0 });
   return (
-    <div>
+    <div ref={box}>
       <button onClick={() => setOpen(!open)} className={cn('text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 text-left text-[13px]', open && 'bg-background sticky top-0 z-20 w-full py-1')}>
         {running && <span className="bg-working size-1.5 shrink-0 animate-pulse rounded-full" aria-label={t('Working…')} />}
         {failed && !running && <X className="text-removed size-3.5" />}
@@ -900,10 +907,11 @@ export function ChatView({ data }: { data: ChatData }) {
             </div>
           )}
           <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+            {/* positioned with top, not transform: sticky titles ignore transforms, and would jump to the end of their group */}
             {virtualizer.getVirtualItems().map((v) => {
               const g = rows[v.index];
               return (
-                <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className={cn('absolute top-0 left-0 w-full pb-3', matchSet.has(v.index) && 'search-hit', v.index === current && 'search-current')} style={{ transform: `translateY(${v.start}px)` }}>
+                <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className={cn('absolute left-0 w-full pb-3', matchSet.has(v.index) && 'search-hit', v.index === current && 'search-current')} style={{ top: v.start }}>
                   {Array.isArray(g) ? (
                     <ToolGroup items={g} sessionId={chat.sessionId} />
                   ) : (

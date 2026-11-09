@@ -2,7 +2,8 @@
 // Uses the user's own Claude Code CLI (and therefore its login: subscription, API key,
 // Bedrock/Vertex...). Messages carry a native priority: later = queue, next = steer
 // (picked up between steps), now = send now.
-import { BgTaskTracker, guessStatus, sdkStatus, textsOf, type BgTask } from './bgtasks';
+import { BgTaskTracker, guessStatus, parseStarted, readTail, sdkStatus, sessionTasksDir, textsOf, type BgTask } from './bgtasks';
+import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { ShellRun, shellContext, withoutShellContext } from './shell';
 import { query, type PermissionMode, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -532,6 +533,26 @@ export class ChatSession {
     }
     if (m.output_file) t.outputFile = m.output_file;
     this.changed();
+  }
+
+  /** A command's output file: the one Claude Code named, or where it writes while the command runs. */
+  taskFile(t: BgTask): string | undefined {
+    if (t.outputFile) return t.outputFile;
+    const named = this.state.tasks.find((x) => x.outputFile)?.outputFile;
+    const dir = named ? path.dirname(named) : this.state.sessionId ? sessionTasksDir(this.opts.cwd, this.state.sessionId) : undefined;
+    return dir && path.join(dir, `${t.id}.output`);
+  }
+
+  /** A command's output: live from its file; once that is gone, what the command returned to the agent. */
+  taskOutput(id: string): { text: string; size: number; missing?: boolean; file?: string } {
+    const t = this.state.tasks.find((x) => x.id === id);
+    if (!t) return { text: '', size: 0, missing: true };
+    const file = this.taskFile(t);
+    const r = readTail(file);
+    if (!r.missing) return { ...r, file };
+    const result = t.toolUseId ? this.tool(t.toolUseId)?.result : undefined;
+    // only a real result: "running in the background" is not the command's output
+    return result && !parseStarted(result) ? { text: result, size: Buffer.byteLength(result) } : { ...r, file: t.status === 'running' ? file : undefined };
   }
 
   /** Stops a background command the agent started in this chat. */
