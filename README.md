@@ -15,6 +15,10 @@ localhost:8080  UI mode      ◄──── npx playwright test --ui
                        Claude Code ──┘  .mcp.json → `pwview mcp` → Playwright MCP --cdp-endpoint
 ```
 
+> **Using Steerhouse?** You don't need any of the steps below: chats in web projects get the browser
+> automatically, and **Open Live Browser** shows it in a VS Code tab. Everything below is for using
+> pwview by itself, from a terminal.
+
 ## Install (each developer, once)
 
 **Linux / macOS**
@@ -41,8 +45,8 @@ git add pwview.toml .mcp.json .gitignore
 
 ```bash
 pwview setup            # once: Playwright's Chromium. Linux: `pwview setup --system` adds Xvfb/noVNC
-pwview up               # start the shared browser (+ live screen on Linux)
-claude                  # Claude now drives that browser through the Playwright MCP
+pwview up               # optional: start the shared browser (+ live screen on Linux)
+claude                  # Claude drives that browser through the Playwright MCP (started on first use)
 pwview status           # what's running + URLs
 pwview pages            # every open tab, each with its own DevTools link
 pwview ui               # Playwright UI mode: timeline, DOM snapshots, watch mode

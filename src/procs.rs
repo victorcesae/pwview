@@ -97,6 +97,28 @@ pub fn run_foreground(
     Ok(status.code().unwrap_or(1))
 }
 
+/// Runs to the end with its output off stdout (which may be the MCP protocol channel).
+pub fn run_quiet(root: &Path, program: &Path, args: &[String]) -> Result<i32> {
+    let status = Command::new(program)
+        .args(args)
+        .current_dir(root)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .status()
+        .with_context(|| format!("failed to run {}", program.display()))?;
+    Ok(status.code().unwrap_or(1))
+}
+
+/// Starts it with a stdin we write to; it shares our stdout and stderr.
+pub fn spawn_with_stdin(root: &Path, program: &Path, args: &[String]) -> Result<Child> {
+    Command::new(program)
+        .args(args)
+        .current_dir(root)
+        .stdin(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("failed to run {}", program.display()))
+}
+
 // ---------- unix ----------
 
 #[cfg(unix)]

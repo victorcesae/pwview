@@ -3,8 +3,9 @@ use crate::procs::{self, State};
 use crate::{http, sys};
 use anyhow::{bail, Context, Result};
 use std::fs;
+use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{ChildStdin, Command};
 use std::time::{Duration, Instant};
 
 pub struct Ctx {
@@ -175,22 +176,54 @@ fn chromium(ctx: &Ctx) -> Result<PathBuf> {
         .args(["-e", RESOLVE_CHROMIUM_JS])
         .current_dir(&ctx.root)
         .output()?;
-    if !out.status.success() {
-        // no Playwright here: use an installed Google Chrome rather than failing
-        if let Some(p) = installed_browser("chrome") {
-            return Ok(p);
-        }
-        bail!(
-            "Playwright is not installed in {} (npm i -D @playwright/test)",
-            ctx.root.display()
-        );
+    // the project's own Playwright browser, else an installed Chrome, else any downloaded Chromium
+    let project = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
+    if out.status.success() && project.is_file() {
+        return Ok(project);
     }
-    let p = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
-    if !p.is_file() {
-        bail!("Playwright's Chromium is not downloaded yet: run `pwview setup`");
-    }
-    Ok(p)
+    installed_browser("chrome")
+        .or_else(cached_chromium)
+        .context("no browser found: run `pwview setup` to download Playwright's Chromium")
 }
+
+/// Where Playwright keeps the browsers it downloads.
+fn playwright_cache() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("PLAYWRIGHT_BROWSERS_PATH").filter(|p| !p.is_empty() && p != "0") {
+        return Some(PathBuf::from(p));
+    }
+    if cfg!(windows) {
+        return std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("ms-playwright"));
+    }
+    let home = PathBuf::from(std::env::var_os("HOME")?);
+    Some(if cfg!(target_os = "macos") { home.join("Library/Caches/ms-playwright") } else { home.join(".cache/ms-playwright") })
+}
+
+/// The newest Chromium in Playwright's download folder, whichever project downloaded it.
+fn cached_chromium() -> Option<PathBuf> {
+    let mut builds: Vec<(u64, PathBuf)> = fs::read_dir(playwright_cache()?)
+        .ok()?
+        .flatten()
+        .filter_map(|e| Some((e.file_name().to_str()?.strip_prefix("chromium-")?.parse().ok()?, e.path())))
+        .collect();
+    builds.sort_by(|a, b| b.0.cmp(&a.0));
+    builds.iter().find_map(|(_, dir)| chromium_in(dir))
+}
+
+fn chromium_in(build: &Path) -> Option<PathBuf> {
+    const CANDIDATES: &[&str] = &[
+        "chrome-linux64/chrome",
+        "chrome-linux/chrome",
+        "chrome-win64/chrome.exe",
+        "chrome-win/chrome.exe",
+        "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+        "chrome-mac/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+        "chrome-mac/Chromium.app/Contents/MacOS/Chromium",
+    ];
+    CANDIDATES.iter().map(|c| build.join(c)).find(|p| p.is_file())
+}
+
+/// How long to wait for another process that is starting the browser (it may be downloading it).
+const UP_LOCK_MAX: Duration = Duration::from_secs(600);
 
 struct VncTools {
     xvfb: PathBuf,
@@ -354,7 +387,7 @@ pub fn setup(ctx: &Ctx, system: bool) -> Result<i32> {
             return Ok(code);
         }
     }
-    let mut args: Vec<String> = ["playwright", "install"].map(String::from).to_vec();
+    let mut args: Vec<String> = ["-y", "playwright", "install"].map(String::from).to_vec();
     if system && linux {
         args.push("--with-deps".into());
     }
@@ -369,6 +402,47 @@ fn run_argv(root: &Path, argv: &[String]) -> Result<i32> {
 }
 
 // ---------------------------------------------------------------- up / down
+
+/// Start the browser if it isn't running, downloading Chromium first when there is no browser.
+/// Holds a lock, so several chats asking at once start one browser.
+pub fn ensure_browser(ctx: &Ctx, mode: Option<Mode>) -> Result<()> {
+    if State::load(&ctx.root).is_running() {
+        return Ok(());
+    }
+    let dir = ctx.root.join(STATE_DIR);
+    fs::create_dir_all(&dir)?;
+    let lock = dir.join("up.lock");
+    let free = wait_until(UP_LOCK_MAX, || {
+        if fs::OpenOptions::new().write(true).create_new(true).open(&lock).is_ok() {
+            return Ok(true);
+        }
+        // left behind by a crash: nothing holds it this long
+        let stale = fs::metadata(&lock).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > UP_LOCK_MAX);
+        if stale {
+            let _ = fs::remove_file(&lock);
+        }
+        Ok(false)
+    })?;
+    if !free {
+        bail!("another pwview is still starting the browser ({} exists)", lock.display());
+    }
+    let result = (|| {
+        if State::load(&ctx.root).is_running() {
+            return Ok(()); // started while we waited for the lock
+        }
+        if ctx.cfg.browser.executable.is_none() && chromium(ctx).is_err() {
+            say!("  install Playwright's Chromium");
+            // stdout may be the MCP protocol channel: keep the installer's output off it
+            let args = ["-y", "playwright", "install", "chromium"].map(String::from);
+            if procs::run_quiet(&ctx.root, &npx()?, &args)? != 0 {
+                bail!("downloading Chromium failed (npx playwright install chromium)");
+            }
+        }
+        up(ctx, mode)
+    })();
+    let _ = fs::remove_file(&lock);
+    result
+}
 
 pub fn up(ctx: &Ctx, mode_override: Option<Mode>) -> Result<()> {
     let old = State::load(&ctx.root);
@@ -477,8 +551,24 @@ fn start_services(ctx: &Ctx, mode: Mode, browser: &Path, state: &mut State) -> R
     args.extend(c.browser.args.iter().cloned());
     args.push(c.browser.start_url.clone());
 
-    let mut chrome = start(ctx, state, "browser", browser, args, &env)?;
-    let port = c.ports.cdp;
+    let first = start_browser(ctx, state, browser, &args, &env);
+    if first.is_err() && !args.iter().any(|a| a == "--no-sandbox") && sandbox_blocked(ctx) {
+        // Ubuntu 23.10+ blocks unprivileged user namespaces, which Chromium's sandbox needs.
+        say!("  note    this system blocks Chromium's sandbox: starting it with --no-sandbox");
+        state.services.retain(|s| s.name != "browser");
+        args.insert(0, "--no-sandbox".into());
+        return start_browser(ctx, state, browser, &args, &env);
+    }
+    first
+}
+
+fn sandbox_blocked(ctx: &Ctx) -> bool {
+    fs::read_to_string(procs::log_path(&ctx.root, "browser")).is_ok_and(|log| log.contains("No usable sandbox"))
+}
+
+fn start_browser(ctx: &Ctx, state: &mut State, browser: &Path, args: &[String], env: &[(&str, String)]) -> Result<()> {
+    let mut chrome = start(ctx, state, "browser", browser, args.to_vec(), env)?;
+    let port = ctx.cfg.ports.cdp;
     let ready = wait_until(Duration::from_secs(30), || {
         died(&mut chrome, ctx, "browser")?;
         Ok(http::get(port, "/json/version").is_ok())
@@ -527,6 +617,20 @@ pub fn status(ctx: &Ctx) -> Result<()> {
     say!("  last report   `pwview report` -> http://localhost:{}", p.report);
     say!("\nClaude Code's Playwright MCP (`pwview mcp`) drives this same browser.");
     say!("Plain ssh: ssh -L {0}:localhost:{0} -L {1}:localhost:{1} -L {2}:localhost:{2} <host>", p.novnc, p.cdp, p.ui);
+    Ok(())
+}
+
+pub fn status_json(ctx: &Ctx) -> Result<()> {
+    let state = State::load(&ctx.root);
+    let running = state.is_running();
+    let doc = serde_json::json!({
+        "root": ctx.root,
+        "running": running,
+        "mode": if running { state.mode } else { None },
+        "ports": ctx.cfg.ports,
+        "display": ctx.cfg.display.number,
+    });
+    say!("{doc}");
     Ok(())
 }
 
@@ -586,10 +690,6 @@ pub fn run(ctx: &Ctx, command: &[String]) -> Result<i32> {
 }
 
 pub fn mcp(ctx: &Ctx) -> Result<i32> {
-    if !State::load(&ctx.root).is_running() {
-        say!("pwview: starting the shared browser for MCP...");
-        up(ctx, None)?;
-    }
     let out_dir = ctx.root.join(STATE_DIR).join("mcp-output");
     let mut args: Vec<String> = vec![
         "-y".into(),
@@ -600,5 +700,62 @@ pub fn mcp(ctx: &Ctx) -> Result<i32> {
         out_dir.display().to_string(),
     ];
     args.extend(ctx.cfg.mcp.args.iter().cloned());
-    procs::run_foreground(&ctx.root, &npx()?, &args, &[])
+    let mut child = procs::spawn_with_stdin(&ctx.root, &npx()?, &args)?;
+    let to_server = child.stdin.take().context("no stdin for the MCP server")?;
+    let owned = Ctx { root: ctx.root.clone(), cfg: ctx.cfg.clone() };
+    // when the server exits, so do we; this thread may still be blocked reading stdin
+    std::thread::spawn(move || forward_to_mcp(&owned, to_server));
+    Ok(child.wait()?.code().unwrap_or(1))
+}
+
+/// A JSON-RPC request for an MCP tool: its id, when this line is one.
+fn tool_call_id(line: &str) -> Option<serde_json::Value> {
+    let msg: serde_json::Value = serde_json::from_str(line).ok()?;
+    (msg["method"] == "tools/call").then(|| msg["id"].clone())
+}
+
+/// Passes the client's messages to the Playwright MCP server. Opening a chat costs nothing: the
+/// browser only starts when a tool is called. If it can't start, the agent gets the reason.
+fn forward_to_mcp(ctx: &Ctx, mut to_server: ChildStdin) {
+    for line in std::io::stdin().lock().lines() {
+        let Ok(line) = line else { break };
+        if let Some(id) = tool_call_id(&line) {
+            if let Err(e) = ensure_browser(ctx, None) {
+                let text = format!("pwview could not start the browser: {e:#}. On Linux, missing system libraries are installed by `pwview setup --system`.");
+                let reply = serde_json::json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": text }], "isError": true } });
+                let mut out = std::io::stdout().lock();
+                let _ = writeln!(out, "{reply}");
+                let _ = out.flush();
+                continue;
+            }
+        }
+        if writeln!(to_server, "{line}").and_then(|_| to_server.flush()).is_err() {
+            break;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_tool_calls_need_the_browser() {
+        assert_eq!(tool_call_id(r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"browser_navigate"}}"#), Some(serde_json::json!(7)));
+        assert_eq!(tool_call_id(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#), None);
+        assert_eq!(tool_call_id(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#), None);
+        assert_eq!(tool_call_id(r#"{"text":"tools/call"}"#), None);
+        assert_eq!(tool_call_id("not json"), None);
+    }
+
+    #[test]
+    fn finds_chromium_in_a_playwright_build() {
+        let dir = std::env::temp_dir().join(format!("pwview-test-{}", std::process::id()));
+        let exe = dir.join("chrome-linux64");
+        fs::create_dir_all(&exe).unwrap();
+        assert_eq!(chromium_in(&dir), None);
+        fs::write(exe.join("chrome"), "").unwrap();
+        assert_eq!(chromium_in(&dir), Some(exe.join("chrome")));
+        fs::remove_dir_all(&dir).unwrap();
+    }
 }

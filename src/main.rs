@@ -51,11 +51,18 @@ enum Cmd {
     Up {
         #[arg(long, value_enum)]
         mode: Option<config::Mode>,
+        /// Download Playwright's Chromium first if no browser is available
+        #[arg(long)]
+        install: bool,
     },
     /// Stop everything `up` started
     Down,
     /// Show what is running and where to watch it
-    Status,
+    Status {
+        /// Machine-readable: root, running, mode, ports, display
+        #[arg(long)]
+        json: bool,
+    },
     /// List the pages open in the shared browser, each with its own DevTools link
     Pages,
     /// Playwright UI mode (timeline, DOM snapshots, watch mode) served on localhost
@@ -73,7 +80,8 @@ enum Cmd {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
         command: Vec<String>,
     },
-    /// stdio MCP server for Claude Code: Playwright MCP attached to the shared browser
+    /// stdio MCP server for Claude Code: Playwright MCP attached to the shared browser, which
+    /// starts on the first tool call (downloading Chromium if there is no browser yet)
     Mcp,
 }
 
@@ -102,13 +110,18 @@ fn run(cli: Cli) -> Result<i32> {
         Cmd::Init { .. } => unreachable!(),
         Cmd::Doctor => commands::doctor(&ctx),
         Cmd::Setup { system } => commands::setup(&ctx, system),
-        Cmd::Up { mode } => {
-            commands::up(&ctx, mode)?;
+        Cmd::Up { mode, install } => {
+            if install {
+                commands::ensure_browser(&ctx, mode)?;
+            } else {
+                commands::up(&ctx, mode)?;
+            }
             commands::status(&ctx)?;
             Ok(0)
         }
         Cmd::Down => commands::down(&ctx).map(|_| 0),
-        Cmd::Status => commands::status(&ctx).map(|_| 0),
+        Cmd::Status { json: true } => commands::status_json(&ctx).map(|_| 0),
+        Cmd::Status { json: false } => commands::status(&ctx).map(|_| 0),
         Cmd::Pages => commands::pages(&ctx).map(|_| 0),
         Cmd::Ui { args } => commands::ui(&ctx, &args),
         Cmd::Report { args } => commands::report(&ctx, &args),
