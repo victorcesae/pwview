@@ -23,9 +23,9 @@ const ago = (iso?: string) => {
 
 /** Output of one task, asked from the extension every 1.5 s while it is open and running. */
 function useOutput(id: string, open: boolean, running: boolean) {
-  const [out, setOut] = useState<{ text: string; size: number; urls: string[] }>();
+  const [out, setOut] = useState<{ text: string; size: number; urls: string[]; missing?: boolean }>();
   useEffect(() => {
-    const on = (e: MessageEvent) => e.data?.type === 'taskOutputResult' && e.data.id === id && setOut({ text: e.data.text, size: e.data.size, urls: e.data.urls ?? [] });
+    const on = (e: MessageEvent) => e.data?.type === 'taskOutputResult' && e.data.id === id && setOut({ text: e.data.text, size: e.data.size, urls: e.data.urls ?? [], missing: e.data.missing });
     window.addEventListener('message', on);
     return () => window.removeEventListener('message', on);
   }, [id]);
@@ -50,6 +50,8 @@ function TaskRow({ task, canStop }: { task: BgTaskView; canStop: boolean }) {
     if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 40) el.scrollTop = el.scrollHeight;
   }, [out?.text]);
   const L = LOOK[task.status];
+  // a finished command's temporary output file gets cleaned up; a running one may not have written yet
+  const gone = !running && !!out?.missing;
   return (
     <li className="border-b last:border-b-0" data-task={task.id} data-status={task.status}>
       <button className="hover:bg-accent flex w-full cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-left text-[12px]" onClick={() => setOpen(!open)} aria-expanded={open}>
@@ -76,7 +78,7 @@ function TaskRow({ task, canStop }: { task: BgTaskView; canStop: boolean }) {
             </div>
           )}
           <pre ref={pre} className="bg-muted max-h-56 overflow-auto rounded-md p-2 font-mono text-[11px] leading-snug whitespace-pre-wrap" data-task-output>
-            {out ? out.text || t('No output yet.') : t('Loading…')}
+            {gone ? t('The output is no longer available: its temporary file was removed.') : out ? out.text || t('No output yet.') : t('Loading…')}
           </pre>
           <div className="flex flex-wrap items-center gap-1">
             {running && canStop && (
@@ -84,12 +86,16 @@ function TaskRow({ task, canStop }: { task: BgTaskView; canStop: boolean }) {
                 <Square className="size-3" /> {t('Stop')}
               </button>
             )}
+            {!gone && (
+              <>
             <button className="hover:bg-accent inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-[11.5px]" onClick={() => post({ type: 'followTask', id: task.id })} title={t('Watch the output in a terminal as it is written')} data-task-follow>
               <TerminalSquare className="size-3" /> {t('Follow in terminal')}
             </button>
             <button className="hover:bg-accent inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-[11.5px]" onClick={() => post({ type: 'openTaskFile', id: task.id })}>
               {t('Open output')}
             </button>
+              </>
+            )}
             {out && <span className="text-muted-foreground ml-auto text-[10.5px] tabular-nums">{out.size >= 1024 ? `${Math.round(out.size / 1024)} KB` : `${out.size} B`}</span>}
           </div>
         </div>

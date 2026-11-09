@@ -68,7 +68,7 @@ export async function listModels(preset: Preset, baseUrl: string, key?: string):
 }
 
 /** Provider of a model id, for icons and labels. */
-export type Vendor = 'anthropic' | 'openai' | 'google' | 'meta' | 'qwen' | 'deepseek' | 'mistral' | 'xai' | 'other';
+export type Vendor = 'cursor' | 'anthropic' | 'openai' | 'google' | 'meta' | 'qwen' | 'deepseek' | 'mistral' | 'xai' | 'other';
 export function vendorOf(model?: string): Vendor {
   const m = (model ?? '').toLowerCase();
   if (/claude|opus|sonnet|haiku|fable|mythos/.test(m)) return 'anthropic';

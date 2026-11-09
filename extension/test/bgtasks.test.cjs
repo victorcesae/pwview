@@ -53,7 +53,7 @@ test('bg: output tail starts at a whole line; a missing file reads as empty', ()
   assert.ok(r.text.startsWith('line '), r.text.slice(0, 20));
   assert.ok(r.text.endsWith('line 1999'));
   assert.ok(r.size > 100);
-  assert.deepStrictEqual(B.readTail(path.join(os.tmpdir(), 'nope.output')), { text: '', size: 0 });
+  assert.deepStrictEqual(B.readTail(path.join(os.tmpdir(), 'nope.output')), { text: '', size: 0, missing: true });
   assert.strictEqual(B.readTail(undefined).text, '');
 });
 

@@ -2,7 +2,7 @@
   "name": "steerhouse",
   "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -252,6 +252,39 @@
         "category": "Steerhouse"
       },
       {
+        "command": "steerhouse.pwview.open",
+        "title": "%cmd.pwview.open%",
+        "category": "Steerhouse",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "steerhouse.pwview.stop",
+        "title": "%cmd.pwview.stop%",
+        "category": "Steerhouse",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "steerhouse.renameAccount",
+        "title": "%cmd.rename.account%",
+        "category": "Steerhouse",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "steerhouse.addCursorAccount",
+        "title": "%cmd.add.cursor.account%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.loginCursorAccount",
+        "title": "%cmd.login.cursor.account%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.removeCursorAccount",
+        "title": "%cmd.remove.cursor.account%",
+        "category": "Steerhouse"
+      },
+      {
         "command": "steerhouse.walkthrough",
         "title": "%cmd.get.started.step.by.step%",
         "category": "Steerhouse",
@@ -487,6 +520,11 @@
           "group": "navigation@0"
         },
         {
+          "command": "steerhouse.walkthrough",
+          "when": "view == steerhouse.sessions",
+          "group": "navigation@9"
+        },
+        {
           "command": "steerhouse.newSession",
           "when": "view == steerhouse.sessions",
           "group": "navigation@1"
@@ -677,6 +715,36 @@
           "command": "steerhouse.deleteProjectChats",
           "when": "view == steerhouse.sessions && viewItem =~ /^project\\b/",
           "group": "9_delete@2"
+        },
+        {
+          "command": "steerhouse.renameAccount",
+          "when": "view == steerhouse.sessions && viewItem =~ /^account-/",
+          "group": "inline@9"
+        },
+        {
+          "command": "steerhouse.renameAccount",
+          "when": "view == steerhouse.sessions && viewItem =~ /^account-/",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "steerhouse.loginCursorAccount",
+          "when": "view == steerhouse.sessions && viewItem == account-cursor",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "steerhouse.removeCursorAccount",
+          "when": "view == steerhouse.sessions && viewItem == account-cursor",
+          "group": "9_delete@1"
+        },
+        {
+          "command": "steerhouse.pwview.open",
+          "when": "view == steerhouse.sessions && viewItem =~ /^project\\b/",
+          "group": "3_browser@1"
+        },
+        {
+          "command": "steerhouse.pwview.stop",
+          "when": "view == steerhouse.sessions && viewItem =~ /^project\\b/",
+          "group": "3_browser@2"
         },
         {
           "command": "steerhouse.openTerminalHere",
@@ -885,6 +953,18 @@
           "when": "false"
         },
         {
+          "command": "steerhouse.renameAccount",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.loginCursorAccount",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.removeCursorAccount",
+          "when": "false"
+        },
+        {
           "command": "steerhouse.removeWorktree",
           "when": "false"
         },
@@ -1069,6 +1149,21 @@
           "default": "chat",
           "description": "%setting.where.new.and.resumed.sessions.open.the.steerhouse.chat.or.a.%"
         },
+        "steerhouse.tabCompletion": {
+          "type": "boolean",
+          "default": true,
+          "description": "%setting.tab.completion%"
+        },
+        "steerhouse.pwview.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%setting.pwview.enabled%"
+        },
+        "steerhouse.pwview.path": {
+          "type": "string",
+          "default": "",
+          "description": "%setting.pwview.path%"
+        },
         "steerhouse.hideTempSessions": {
           "type": "boolean",
           "default": true,
@@ -1182,6 +1277,17 @@
               "onCommand:steerhouse.skillAdd",
               "onView:steerhouse.skills"
             ]
+          },
+          {
+            "id": "browser",
+            "title": "%step.watch.browser%",
+            "description": "%step.watch.browser.description%",
+            "media": {
+              "markdown": "media/walkthrough/7-browser.md"
+            },
+            "completionEvents": [
+              "onCommand:steerhouse.pwview.open"
+            ]
           }
         ]
       }
@@ -1189,11 +1295,11 @@
   },
   "scripts": {
     "build": "npm run build:ext && npm run build:webview",
-    "build:ext": "esbuild src/extension.ts src/hook.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --outdir=dist",
+    "build:ext": "esbuild src/extension.ts src/hook.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --external:bufferutil --external:utf-8-validate --outdir=dist",
     "build:webview": "vite build --config webview/vite.config.mts",
     "dev:webview": "vite --config webview/vite.config.mts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
-    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs test/scm.test.cjs",
+    "test": "node --test test/shell.test.cjs test/pwview.test.cjs test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs test/scm.test.cjs",
     "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs test/e2e-fork.test.cjs test/e2e-bg.test.cjs",
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs",
@@ -1214,6 +1320,7 @@
     "@types/react": "19.1.6",
     "@types/react-dom": "19.1.5",
     "@types/vscode": "1.90.0",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "4.5.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "3.4.2",
@@ -1230,7 +1337,8 @@
     "tiptap-markdown": "^0.9.0",
     "tw-animate-css": "1.3.4",
     "typescript": "5.8.3",
-    "vite": "6.3.5"
+    "vite": "6.3.5",
+    "ws": "^8.22.2"
   },
   "l10n": "./l10n",
   "icon": "media/steerhouse.png",

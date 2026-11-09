@@ -53,9 +53,12 @@ export class BgTaskTracker {
 
   /** A tool result: the "running in background" answer gives the task id and output file. */
   toolResult(toolUseId: string, text: string, ts?: string) {
+    const call = this.calls.get(toolUseId);
+    // Any tool can return these words (reading this very file does). Only a background call counts,
+    // or a result that is that notice (a command moved to the background while it ran).
+    if (!call && !/^\s*Command running in (?:the )?background/i.test(text)) return;
     const s = parseStarted(text);
     if (!s || this.tasks.some((t) => t.id === s.id)) return;
-    const call = this.calls.get(toolUseId);
     this.tasks.push({ id: s.id, toolUseId, command: call?.command ?? '', description: call?.description, outputFile: s.outputFile, status: 'running', started: call?.ts ?? ts, agentId: call?.agentId });
   }
 
@@ -73,8 +76,8 @@ export class BgTaskTracker {
 }
 
 /** The end of a task's output (default 16 KiB), as text without terminal colour codes. */
-export function readTail(file: string | undefined, bytes = 16 * 1024): { text: string; size: number; mtime?: number } {
-  if (!file) return { text: '', size: 0 };
+export function readTail(file: string | undefined, bytes = 16 * 1024): { text: string; size: number; mtime?: number; missing?: boolean } {
+  if (!file) return { text: '', size: 0, missing: true };
   try {
     const st = fs.statSync(file);
     const fd = fs.openSync(file, 'r');
@@ -89,7 +92,7 @@ export function readTail(file: string | undefined, bytes = 16 * 1024): { text: s
       fs.closeSync(fd);
     }
   } catch {
-    return { text: '', size: 0 };
+    return { text: '', size: 0, missing: true };
   }
 }
 

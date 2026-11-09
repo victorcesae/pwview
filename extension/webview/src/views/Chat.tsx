@@ -1,4 +1,4 @@
-import { Ban, Bot, ChevronUp, Copy, SquareTerminal, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
+import { Ban, Bot, Globe, ChevronUp, Copy, SquareTerminal, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
@@ -288,6 +288,29 @@ function ToolInput({ it }: { it: Extract<ChatItem, { kind: 'tool' }> }) {
   );
 }
 
+/** A command the user ran with !. Its output stays visible: they asked to see it. */
+function ShellRow({ it }: { it: Extract<ChatItem, { kind: 'shell' }> }) {
+  const failed = it.status === 'error';
+  return (
+    <div className="bg-card overflow-hidden rounded-lg border" data-shell>
+      <div className={cn('flex items-center gap-2 px-3 py-1.5 font-mono text-[12px]', (it.output || it.error) && 'border-b')}>
+        <span className="text-muted-foreground select-none">$</span>
+        <span className="min-w-0 flex-1 break-words whitespace-pre-wrap">{it.command}</span>
+        {it.status === 'running' && (
+          <>
+            <Loader2 className="text-working size-3.5 shrink-0 animate-spin" />
+            <Button size="xs" variant="ghost" onClick={() => post({ type: 'stopShell', id: it.id })} title={t('Stop')} aria-label={t('Stop')}>
+              <Square />
+            </Button>
+          </>
+        )}
+        {failed && <span className="text-removed shrink-0 text-[11px]">{it.exitCode == null ? t('stopped') : t('exit {0}', it.exitCode)}</span>}
+      </div>
+      {(it.output || it.error) && <pre className="text-foreground/85 max-h-72 overflow-auto px-3 py-2 font-mono text-[11.5px] whitespace-pre-wrap">{it.output || it.error}</pre>}
+    </div>
+  );
+}
+
 function PermissionCard({ it }: { it: Extract<ChatItem, { kind: 'permission' }> }) {
   const [reason, setReason] = useState('');
   const pending = it.status === 'pending';
@@ -542,6 +565,8 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
           {children}
         </ToolRow>
       );
+    case 'shell':
+      return <ShellRow it={it} />;
     case 'permission':
       return <PermissionCard it={it} />;
     case 'plan':
@@ -627,6 +652,8 @@ function rowText(g: ChatItem | ToolItem[]): string {
     case 'system':
     case 'result':
       return g.text;
+    case 'shell':
+      return `${g.command} ${g.output}`;
     case 'tool':
       return `${g.name} ${g.summary} ${g.result ?? ''}`;
     case 'permission':
@@ -773,6 +800,9 @@ export function ChatView({ data }: { data: ChatData }) {
         )}
         <Button size="xs" variant="ghost" onClick={() => (setSearchOpen((o) => !o), requestAnimationFrame(() => searchInput.current?.focus()))} title={t('Search (Ctrl+F)')} aria-label={t('Search')}>
           <Search />
+        </Button>
+        <Button size="xs" variant="ghost" onClick={() => post({ type: 'openBrowser' })} title={t('Watch the browser this agent drives')} aria-label={t('Open live browser')}>
+          <Globe />
         </Button>
         <Button size="xs" variant="ghost" onClick={() => post({ type: 'openTerminal' })} title={t('Open a terminal in this folder')} aria-label={t('Open terminal')} data-open-terminal>
           <SquareTerminal />

@@ -48,6 +48,9 @@ async function run() {
   });
   await check('chat panel opens', async () => {
     await vscode.commands.executeCommand('steerhouse.newChat');
+    // agents installed on this machine (Cursor Agent, Codex…) bring up a picker: take the first
+    await wait(800);
+    await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem').then(undefined, () => {});
     await wait(2500);
     const tabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs).map((t) => t.label);
     assert.ok(vscode.window.tabGroups.all.flatMap((g) => g.tabs).some((t) => t.input?.viewType?.endsWith('steerhouse.chat')), `tabs: ${tabs.join(', ')}`);
@@ -95,6 +98,14 @@ async function run() {
     assert.ok(names.includes('a.txt') && names.includes('new.txt'), names.join(','));
     assert.strictEqual(typeof api.toGitUri, 'function');
     assert.ok(Array.isArray(s.indexChanges) && Array.isArray(s.mergeChanges));
+  });
+  await check('file search works in a folder outside the workspace (@ completion)', async () => {
+    const fsx = require('fs'), pathx = require('path'), osx = require('os');
+    const dir = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'steerhouse-at-'));
+    fsx.writeFileSync(pathx.join(dir, 'My_File.ts'), '');
+    fsx.writeFileSync(pathx.join(dir, 'other.ts'), '');
+    const found = await vscode.workspace.findFiles(new vscode.RelativePattern(vscode.Uri.file(dir), '**/*[mM][yY]_*'), undefined, 8);
+    assert.deepStrictEqual(found.map((u) => pathx.basename(u.fsPath)), ['My_File.ts']);
   });
   await check('check setup runs', async () => {
     await vscode.commands.executeCommand('steerhouse.refresh');

@@ -7,7 +7,7 @@ import { projectRules, userRules, type RuleFile } from './rules';
 import { worktreeInfo } from './worktree';
 import { scmFiles, scmSummary, type Scm, type ScmFile } from './scm';
 import { guessStatus, type BgTask } from './bgtasks';
-import { accountIdentity, listAccounts, preferredAccount, type Account } from './accounts';
+import { accountIdentity, listAccounts, preferredAccount, type Account, listCursorAccounts, type CursorAccount } from './accounts';
 import { modelLabel } from './pricing';
 import { vendorOf } from './providers';
 import { ago, clip, rel } from './util';
@@ -29,6 +29,7 @@ export type Node =
   | { kind: 'scmfile'; root: string; file: ScmFile }
   | { kind: 'accounts' }
   | { kind: 'account'; a: Account }
+  | { kind: 'cursorAccount'; c: CursorAccount; a: CursorAccount }
   | { kind: 'rules'; scope: 'user' | 'project'; root?: string }
   | { kind: 'rule'; scope: 'user' | 'project'; r: RuleFile }
   | { kind: 'files'; root: string; s?: Session; sessions: Session[]; via?: string }
@@ -96,6 +97,12 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
     private marks: () => { pinned: string[]; archived: string[] } = () => ({ pinned: [], archived: [] }),
   ) {}
 
+  private needsSetup = false;
+  setNeedsSetup(on: boolean) {
+    this.needsSetup = on;
+    this.refresh();
+  }
+
   private scm?: Scm;
   /** Source control (VS Code's Git) for the "Source control" node of each project. */
   setScm(scm: Scm) {
@@ -119,6 +126,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         out.push({ kind: 'hint', text: h === 'some' ? 'Update hooks to enable steering & send now' : 'Enable messages to agents (steer, queue, send now)', command: 'steerhouse.installHooks', icon: 'warning' });
       const hot = Engine.hotFiles(sessions);
       if (hot.length) out.push({ kind: 'hot', files: hot });
+      if (this.needsSetup) out.unshift({ kind: 'hint', text: vscode.l10n.t('Finish setting up: Get Started'), command: 'steerhouse.walkthrough', icon: 'rocket' });
       out.push({ kind: 'accounts' }, { kind: 'rules', scope: 'user' });
       const roots = this.workspaceRoots();
       const byProject = new Map<string, Session[]>();
@@ -168,7 +176,9 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
       case 'accounts':
         return [
           ...listAccounts().map((a): Node => ({ kind: 'account', a })),
+          ...listCursorAccounts().map((c): Node => ({ kind: 'cursorAccount', c, a: c })),
           { kind: 'hint', text: vscode.l10n.t('Add a Claude account…'), command: 'steerhouse.addAccount', icon: 'add' },
+          { kind: 'hint', text: vscode.l10n.t('Add a Cursor account…'), command: 'steerhouse.addCursorAccount', icon: 'add' },
           { kind: 'hint', text: vscode.l10n.t('Add a model provider (Ollama, OpenRouter…)…'), command: 'steerhouse.addProvider', icon: 'server' },
         ];
       case 'rules': {
@@ -361,6 +371,15 @@ $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
         it.tooltip = [a.name, a.provider ? a.provider.baseUrl : a.configDir, who?.email].filter(Boolean).join('\n');
         it.contextValue = a.provider ? 'account-provider' : who ? 'account-claude' : 'account-signedout';
         if (!a.provider && !who) it.command = { command: 'steerhouse.login', title: 'Log in' };
+        return it;
+      }
+      case 'cursorAccount': {
+        const it = new vscode.TreeItem(node.c.name, C.None);
+        it.id = 'account:' + node.c.id;
+        it.iconPath = mediaRoot ? vscode.Uri.joinPath(mediaRoot, 'vendors', 'cursor.svg') : new vscode.ThemeIcon('account');
+        it.description = 'Cursor Agent';
+        it.tooltip = [node.c.name, node.c.dir].join('\n');
+        it.contextValue = 'account-cursor';
         return it;
       }
       case 'rules': {

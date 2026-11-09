@@ -322,6 +322,53 @@ function stateOf(mtimeMs: number, pending: boolean): State {
   return 'idle';
 }
 
+const modifiedSince = (file: string, cutoff: number) => {
+  try {
+    return fs.statSync(file).mtimeMs >= cutoff;
+  } catch {
+    return false;
+  }
+};
+
+/** The folder a transcript ran in (its first `cwd`), from the start of the file only. */
+export function transcriptCwd(file: string, bytes = 256 * 1024): string | undefined {
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(bytes);
+    const text = buf.toString('utf8', 0, fs.readSync(fd, buf, 0, bytes, 0));
+    const m = /"cwd":("(?:[^"\\]|\\.)*")/.exec(text);
+    return m ? JSON.parse(m[1]) : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+/**
+ * Every transcript of a project in these transcript folders, also those too old to be listed,
+ * without parsing them. Checks each file's folder: two projects can share a transcript folder,
+ * because its name flattens the path (a/b and a-b).
+ */
+export function projectTranscripts(project: string, dirs: string[]): { id: string; path: string }[] {
+  const out: { id: string; path: string }[] = [];
+  for (const dir of new Set(dirs)) {
+    let names: string[] = [];
+    try {
+      names = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const n of names) {
+      if (!n.endsWith('.jsonl')) continue;
+      const file = path.join(dir, n);
+      if (transcriptCwd(file) === project) out.push({ id: n.slice(0, -'.jsonl'.length), path: file });
+    }
+  }
+  return out;
+}
+
 export class Engine {
   private cache = new Map<string, { key: string; t: Transcript }>();
 
@@ -361,8 +408,10 @@ export class Engine {
         if (!f.isFile() || !f.name.endsWith('.jsonl')) continue;
         const file = path.join(pdir, f.name);
         const sid = f.name.slice(0, -'.jsonl'.length);
+        // the date comes first: parsing every old transcript takes a minute and gigabytes of memory
+        if (!modifiedSince(file, cutoff)) continue;
         const loaded = this.load(file, sid);
-        if (!loaded || loaded.mtime < cutoff || !loaded.t.events.length) continue;
+        if (!loaded || !loaded.t.events.length) continue;
         const { t } = loaded;
 
         const agents: Session['agents'] = [];

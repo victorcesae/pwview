@@ -17,6 +17,11 @@ line and the agent picks it up. Works in VS Code, Cursor, Windsurf and VSCodium,
   permission-mode pickers, slash commands, and **Steer (default) / Queue / Send now** while it works. A queued
   message can still be sent now or cancelled. **Link session** lets the agent see what another session is
   doing, and you can jump to that session.
+- **Browser with no setup:** chats in web projects (with a `package.json`) can drive a real browser. It
+  starts on the first browser action, downloading Chromium if there is none. **Open Live Browser** shows it
+  in a tab (view only). Git never sees its files: `.pwview/` and, if ports had to change, `pwview.local.toml`
+  are listed in `.git/info/exclude`. On systems that block Chromium's sandbox (Ubuntu 23.10+), it runs with
+  `--no-sandbox`. Turn it off with `steerhouse.pwview.enabled`.
 - **Graph:** sessions → prompts → sub-agents → files, drawn with xyflow. Prompts from different sessions
   that touched the same file are connected, and sessions you linked show a dashed edge.
 - **Follows your theme:** colors, fonts and light / dark / high contrast come from your VS Code or Cursor theme.

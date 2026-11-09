@@ -4,6 +4,7 @@
 // (picked up between steps), now = send now.
 import { BgTaskTracker, guessStatus, sdkStatus, textsOf, type BgTask } from './bgtasks';
 import { randomUUID } from 'crypto';
+import { ShellRun, shellContext, withoutShellContext } from './shell';
 import { query, type PermissionMode, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -15,6 +16,7 @@ export type ChatItem =
   | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string }
   | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string }
   | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
+  | { kind: 'shell'; id: string; command: string; output: string; status: 'running' | 'done' | 'error'; exitCode?: number | null; error?: string }
   | { kind: 'permission'; id: string; tool: string; summary: string; input: unknown; canAlways: boolean; status: 'pending' | 'allowed' | 'denied'; reason?: string }
   | { kind: 'plan'; id: string; plan: string; status: 'pending' | 'approved' | 'rejected' }
   | { kind: 'question'; id: string; questions: Question[]; status: 'pending' | 'answered'; answers?: Record<string, string> }
@@ -251,7 +253,7 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
     if (rec.type === 'attachment' && rec.attachment?.type === 'queued_command') {
       const p = rec.attachment.prompt;
       const blocks: any[] = typeof p === 'string' ? [{ type: 'text', text: p }] : p ?? [];
-      const text = blocks.filter((b) => b?.type === 'text').map((b) => b.text).join('\n').trim();
+      const text = withoutShellContext(blocks.filter((b) => b?.type === 'text').map((b) => b.text).join('\n')).trim();
       const images = blocks.filter((b) => b?.type === 'image' && b.source?.type === 'base64').map((b) => `data:${b.source.media_type};base64,${b.source.data}`);
       if ((text && !NOISE.some((n) => text.startsWith(n))) || images.length)
         items.push({ kind: 'user', id: rec.uuid ?? uid(), text, images, priority: 'next', ts: rec.timestamp ?? rec.attachment.timestamp ?? '' });
@@ -263,7 +265,7 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
       const texts: string[] = [];
       const images: string[] = [];
       for (const c of typeof content === 'string' ? [{ type: 'text', text: content }] : content ?? []) {
-        if (c.type === 'text' && !NOISE.some((n) => String(c.text).trimStart().startsWith(n))) texts.push(c.text);
+        if (c.type === 'text' && !NOISE.some((n) => String(c.text).trimStart().startsWith(n))) texts.push(withoutShellContext(c.text));
         else if (c.type === 'image' && c.source?.type === 'base64') images.push(`data:${c.source.media_type};base64,${c.source.data}`);
         else if (c.type === 'tool_result') {
           bg.toolResult(c.tool_use_id, textsOf(c.content), rec.timestamp);
@@ -609,7 +611,9 @@ export class ChatSession {
       type: 'image',
       source: { type: 'base64', media_type: img.mime, data: img.data.replace(/^data:[^;]+;base64,/, '') },
     }));
-    if (text.trim()) content.push({ type: 'text', text });
+    // commands the user ran since their last message: the agent reads them now, the bubble stays as written
+    const forAgent = [text, ...this.shellNotes.splice(0)].filter((t) => t.trim()).join('\n\n');
+    if (forAgent) content.push({ type: 'text', text: forAgent });
     // the message's own uuid (so files can be rewound to it) and the entry before it (to fork there)
     const uuid = randomUUID();
     this.state.items.push({ kind: 'user', id: uuid, text, images: images.map((i) => i.data), priority, ts: new Date().toISOString(), forkAt: this.lastUuid });
@@ -619,6 +623,39 @@ export class ChatSession {
     this.state.activity = priority === 'now' ? 'Switching to your message…' : this.state.activity ?? 'Thinking…';
     this.input.push({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, priority, uuid } as SDKUserMessage);
     this.changed();
+  }
+
+  private shells = new Map<string, ShellRun>();
+  private shellNotes: string[] = [];
+
+  /** Runs what the user typed after ! in their own shell. It costs nothing: the agent reads the result with the next message. */
+  runShell(command: string) {
+    const id = uid();
+    const item: Extract<ChatItem, { kind: 'shell' }> = { kind: 'shell', id, command, output: '', status: 'running' };
+    this.state.items.push(item);
+    this.changed();
+    const run = new ShellRun(
+      command,
+      { cwd: this.opts.cwd, env: { ...process.env, ...(this.opts.account?.env ?? {}) } },
+      () => {
+        item.output = run.output;
+        this.changed();
+      },
+      ({ exitCode, error }) => {
+        this.shells.delete(id);
+        item.output = run.output;
+        item.exitCode = exitCode;
+        item.error = error;
+        item.status = exitCode === 0 ? 'done' : 'error';
+        this.shellNotes.push(shellContext(command, error ?? run.output, exitCode));
+        this.changed();
+      },
+    );
+    this.shells.set(id, run);
+  }
+
+  stopShell(id: string) {
+    this.shells.get(id)?.stop();
   }
 
   /** Give the agent context (e.g. a linked session): shown as a system note, delivered between steps. */
@@ -711,6 +748,7 @@ export class ChatSession {
   }
 
   close() {
+    for (const run of this.shells.values()) run.stop();
     this.input.close();
     this.abort.abort();
     this.state.status = 'closed';

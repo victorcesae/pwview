@@ -1,10 +1,11 @@
 // The prompt area: rich-text input, images, Steer/Queue/Send now, model / effort / mode pickers,
 // a context-usage ring, and a neutral look that follows the editor theme.
-import { Archive, ArchiveRestore, Blocks, Bot, ListOrdered, Navigation, Paperclip, Plus, Send, ShieldCheck, Sparkles, Square, SquareSlash, Zap, Gauge, X } from 'lucide-react';
+import { SquareTerminal, CornerDownRight, Archive, ArchiveRestore, Blocks, Bot, ListOrdered, Navigation, Paperclip, Plus, Send, ShieldCheck, Sparkles, Square, SquareSlash, Zap, Gauge, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger, Switch } from '@/components/ui/dropdown-menu';
 import { Zoomable } from '@/components/Lightbox';
 import { UsagePanel } from '@/components/UsagePanel';
 import { prettyModel } from '@/views/toolSummary';
+import { atQuery, shellCommand, withFile } from '@/views/completion';
 import { useEffect, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
 import { RichInput, type RichInputHandle } from '@/components/RichInput';
@@ -94,6 +95,9 @@ function PlusMenu({ chat, onFiles, onSlash }: { chat: ChatState; onFiles: () => 
         <DropdownMenuItem onSelect={onFiles}>
           <Paperclip /> {t('Add images')}
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => post({ type: 'setTabCompletion', on: chat.tabCompletion === false })} title={t('Tab completes @files, /commands and the suggested prompt')}>
+          <CornerDownRight /> {chat.tabCompletion === false ? t('Turn Tab completion on') : t('Turn Tab completion off')}
+        </DropdownMenuItem>
         {chat.slashCommands.length > 0 && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
@@ -156,6 +160,29 @@ export function Composer({ chat }: { chat: ChatState }) {
 
   const slash = text.startsWith('/') && !/\s/.test(text) ? chat.slashCommands.filter((c) => `/${c}`.startsWith(text.trim())).slice(0, 8) : [];
 
+  // ---- Tab completion (can be turned off): @ finds files in the chat's folder
+  const tabOn = chat.tabCompletion !== false;
+  const isShell = text.startsWith('!'); // backticks from completing a file would mean something else in a shell
+  const query = tabOn && !isShell ? atQuery(text) : undefined;
+  const [foundFiles, setFoundFiles] = useState<{ query: string; files: string[] }>({ query: '', files: [] });
+  const files = query !== undefined && foundFiles.query === query ? foundFiles.files : [];
+  useEffect(() => {
+    if (query === undefined) return;
+    const timer = setTimeout(() => post({ type: 'completeFiles', query }), 120);
+    return () => clearTimeout(timer);
+  }, [query]);
+  useEffect(() => {
+    const on = (e: MessageEvent) => e.data?.type === 'fileCompletions' && setFoundFiles({ query: e.data.query, files: e.data.files });
+    window.addEventListener('message', on);
+    return () => window.removeEventListener('message', on);
+  }, []);
+  const pickFile = (file: string) => {
+    const next = withFile(text, file);
+    input.current?.setMarkdown(next);
+    setText(next);
+    input.current?.focus();
+  };
+
   const addFiles = async (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'));
     if (imgs.length) {
@@ -164,6 +191,14 @@ export function Composer({ chat }: { chat: ChatState }) {
     }
   };
   const send = (p: Priority = priority) => {
+    // ! runs in the user's shell, from the text as typed (Markdown would escape my_file and *.ts)
+    const command = shellCommand(input.current?.getText() ?? '');
+    if (command) {
+      post({ type: 'shell', command });
+      input.current?.clear();
+      setText('');
+      return;
+    }
     const md = input.current?.getMarkdown() ?? '';
     if (!md.trim() && !images.length) return;
     post({ type: 'send', text: md, images, priority: working ? p : 'later' });
@@ -182,7 +217,7 @@ export function Composer({ chat }: { chat: ChatState }) {
   }, []);
 
   // ---- Up / Down: walk through the prompts you sent in this chat (when the box is empty or showing one)
-  const sent = chat.items.filter((it): it is Extract<typeof it, { kind: 'user' }> => it.kind === 'user' && !!it.text.trim()).map((it) => it.text);
+  const sent = chat.items.flatMap((it) => (it.kind === 'user' && it.text.trim() ? [it.text] : it.kind === 'shell' ? [`!${it.command}`] : []));
   const recall = useRef<{ i: number; shown: string } | null>(null);
   const showRecalled = (i: number) => {
     const v = sent[i];
@@ -276,6 +311,28 @@ export function Composer({ chat }: { chat: ChatState }) {
         addFiles([...e.dataTransfer.files]);
       }}
     >
+      {isShell && (
+        <div className="text-muted-foreground flex items-center gap-1.5 px-1 text-[11.5px]">
+          <SquareTerminal className="size-3.5 shrink-0" />
+          {t('Runs now in your shell, in {0}. The agent sees the output with your next message.', chat.cwd.split(/[\\/]/).pop() || chat.cwd)}
+        </div>
+      )}
+      {files.length > 0 && (
+        <div className="flex flex-col overflow-hidden rounded-md border">
+          {files.map((f, i) => (
+            <button
+              key={f}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pickFile(f);
+              }}
+              className={cn('cursor-pointer truncate px-2.5 py-1 text-left font-mono text-[12px]', i === sel ? 'bg-accent' : 'hover:bg-accent')}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      )}
       {slash.length > 0 && (
         <div className="flex flex-col overflow-hidden rounded-md border">
           {slash.map((c, i) => (
@@ -313,12 +370,12 @@ export function Composer({ chat }: { chat: ChatState }) {
         <button className="text-muted-foreground hover:text-foreground hover:bg-accent -mb-0.5 flex max-w-full cursor-pointer items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-left text-[12px]" onClick={useSuggestion} title={t('Use this suggestion (Tab)')} data-suggestion>
           <Sparkles className="size-3.5 shrink-0" />
           <span className="truncate">{chat.suggestion}</span>
-          <kbd className="bg-muted rounded px-1 text-[10px]">Tab</kbd>
+          {tabOn && <kbd className="bg-muted rounded px-1 text-[10px]">Tab</kbd>}
         </button>
       )}
       <RichInput
         ref={input}
-        placeholder={working ? t('Message the agent while it works…') : t('Ask, plan, or give a task…  (/ for commands)')}
+        placeholder={working ? t('Message the agent while it works…') : t('Ask, plan, or give a task…  (/ for commands, ! to run in your shell)')}
         onChange={(m) => {
           setText(m);
           setSel(0);
@@ -327,17 +384,28 @@ export function Composer({ chat }: { chat: ChatState }) {
         onEscape={() => working && post({ type: 'interrupt' })}
         onSubmit={({ ctrl }) => send(ctrl ? 'now' : priority)}
         onKey={(e) => {
-          if (showSuggestion && e.key === 'Tab' && !e.shiftKey) {
+          if (tabOn && showSuggestion && e.key === 'Tab' && !e.shiftKey) {
             e.preventDefault();
             useSuggestion();
             return true;
+          }
+          if (files.length) {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+              setSel((s) => (s + (e.key === 'ArrowDown' ? 1 : files.length - 1)) % files.length);
+              return true;
+            }
+            if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+              e.preventDefault();
+              pickFile(files[Math.min(sel, files.length - 1)]);
+              return true;
+            }
           }
           if (!slash.length) return recallKey(e);
           if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             setSel((s) => (s + (e.key === 'ArrowDown' ? 1 : slash.length - 1)) % slash.length);
             return true;
           }
-          if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+          if ((tabOn && e.key === 'Tab') || (e.key === 'Enter' && !e.shiftKey)) {
             pickSlash(slash[sel]);
             return true;
           }

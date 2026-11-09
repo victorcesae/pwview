@@ -2,7 +2,7 @@
 // monograms in each vendor's color, not the companies' logos (those are trademarks).
 import { cn } from '@/lib/utils';
 
-export type Vendor = 'anthropic' | 'openai' | 'google' | 'meta' | 'qwen' | 'deepseek' | 'mistral' | 'xai' | 'other';
+export type Vendor = 'cursor' | 'anthropic' | 'openai' | 'google' | 'meta' | 'qwen' | 'deepseek' | 'mistral' | 'xai' | 'other';
 
 export function vendorOf(model?: string): Vendor {
   const m = (model ?? '').toLowerCase();
@@ -18,6 +18,7 @@ export function vendorOf(model?: string): Vendor {
 }
 
 const V: Record<Vendor, { name: string; bg: string; fg: string; text?: string }> = {
+  cursor: { name: 'Cursor', bg: '#2B2B2B', fg: '#fff', text: 'C' },
   anthropic: { name: 'Claude', bg: '#D97757', fg: '#fff' },
   openai: { name: 'GPT', bg: '#10A37F', fg: '#fff', text: 'GPT' },
   google: { name: 'Gemini', bg: '#4285F4', fg: '#fff' },

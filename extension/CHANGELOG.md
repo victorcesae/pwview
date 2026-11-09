@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.7
+- **Much faster start**: only transcripts inside the day window are read at startup, instead of all of them (17 s and 843 MB down to 2.4 s and 276 MB on a 2.1 GB history).
+- No more "Webview is disposed" errors after closing a chat.
+- **New chats ask which folder**: when the workspace holds several repositories, pick one (last used first), or browse.
+- **Browser with no setup**: chats in web projects can drive a shared browser through pwview, downloaded when needed. It starts on the first browser action. **Open Live Browser** shows it in a tab. Off with `steerhouse.pwview.enabled`.
+- Background commands: no more phantom "running" commands when the agent merely read text about one, and a finished command whose temporary output file is gone says so instead of "No output yet".
+- **Run a command from the chat box**: start a message with `!` to run it in your shell, in the chat's folder, with live output and Stop. The agent sees the result with your next message; it starts no turn by itself.
+- **Tab completion in the chat box**: type @ to find a file, Tab to complete it. Turn it off in the + menu or with `steerhouse.tabCompletion`.
+- **Rename any account**, including Default (the id and folder stay, so logins and sessions keep working).
+- **Several Cursor accounts**: add one, log in, and pick it for a new chat. Cursor Agent has its own icon.
+- **Get Started** is always one click away: a rocket button on the Sessions view, and a row at the top of the tree until Claude Code is set up.
+
 ## 1.0.6
 - Deleting works over Remote-SSH, WSL and containers: they have no trash, so the confirmation says the delete is permanent. Files in the Sessions tree too.
 - **Delete All Chats…** on a project (also older chats not listed); the project folder and its files are not touched.

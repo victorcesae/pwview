@@ -7,11 +7,14 @@ import { hostIcon } from './hostIcon';
 import { findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMethod } from './prs';
 import { openUrl } from './browser';
 import { findUrls, readTail } from './bgtasks';
+import { completeFiles } from './folders';
 import { vendorOf } from './providers';
 import type { Session } from './engine';
 import { addLink, briefing, loadLinks, removeLink, sameConnection } from './links';
 import { agentExecutable } from './util';
 import { accountEnv, type Account } from './accounts';
+
+const tabCompletion = () => vscode.workspace.getConfiguration('steerhouse').get<boolean>('tabCompletion', true);
 
 export type FromChat =
   | { type: 'ready' }
@@ -25,6 +28,11 @@ export type FromChat =
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
   | { type: 'openTerminal' }
+  | { type: 'openBrowser' }
+  | { type: 'completeFiles'; query: string }
+  | { type: 'shell'; command: string }
+  | { type: 'stopShell'; id: string }
+  | { type: 'setTabCompletion'; on: boolean }
   | { type: 'taskOutput'; id: string }
   | { type: 'stopTask'; id: string }
   | { type: 'followTask'; id: string }
@@ -87,9 +95,17 @@ export class Chats {
     private openSession: (id: string) => void,
   ) {}
 
+  /** Called with every chat that starts. */
+  onStart?: (cwd: string, chat: ChatSession) => void;
+
+  /** To the chat's page, unless it was closed meanwhile (posting then throws "Webview is disposed"). */
+  private send(o: Open, message: unknown) {
+    return this.open.includes(o) ? o.panel.webview.postMessage(message) : undefined;
+  }
+
   /** Repaint soon (at most every 40 ms). */
   private schedule(o: Open) {
-    if (o.timer) return;
+    if (o.timer || !this.open.includes(o)) return;
     o.timer = setTimeout(() => {
       o.timer = undefined;
       this.post(o);
@@ -255,10 +271,12 @@ export class Chats {
     panel.webview.html = html(panel.webview, root);
     panel.webview.onDidReceiveMessage((m: FromChat) => this.onMessage(entry, m));
     panel.onDidDispose(() => {
+      this.open = this.open.filter((o) => o !== entry); // first: closing the chat repaints it
+      clearTimeout(entry.timer);
       entry.chat.close();
-      this.open = this.open.filter((o) => o !== entry);
     });
     chat.start();
+    this.onStart?.(opts.cwd, chat);
     if (opts.prompt) chat.send(opts.prompt, [], 'later');
   }
 
@@ -303,7 +321,7 @@ export class Chats {
     if (!o.sent) {
       // first paint: the whole conversation once
       o.sent = { items: new Map(items.map((it) => [it.id, JSON.stringify(it)])), order: items.map((it) => it.id) };
-      o.panel.webview.postMessage({ type: 'data', data: { view: 'chat', chat: { ...s, prs: prsOf(items), stash: this.stash() }, linked: linkedInfo } });
+      this.send(o, { type: 'data', data: { view: 'chat', chat: { ...s, prs: prsOf(items), stash: this.stash(), tabCompletion: tabCompletion() }, linked: linkedInfo } });
       return;
     }
     // afterwards only items that are new or changed. Old finished items don't change, so only the
@@ -321,7 +339,7 @@ export class Chats {
     const order = items.map((it) => it.id);
     const orderChanged = order.length !== o.sent.order.length || order.some((id, i) => id !== o.sent!.order[i]);
     if (orderChanged) o.sent.order = order;
-    o.panel.webview.postMessage({ type: 'chatPatch', chat: { ...rest, prs: prsOf(upserts), stash: this.stash() }, upserts, order: orderChanged ? order : undefined, linked: linkedInfo });
+    this.send(o, { type: 'chatPatch', chat: { ...rest, prs: prsOf(upserts), stash: this.stash(), tabCompletion: tabCompletion() }, upserts, order: orderChanged ? order : undefined, linked: linkedInfo });
   }
 
   private async onMessage(o: Open, m: FromChat) {
@@ -366,13 +384,13 @@ export class Chats {
         return c.setPermissionMode(m.mode);
       case 'prFiles': {
         const r = await prFiles(m.url);
-        return o.panel.webview.postMessage({ type: 'prFilesResult', url: m.url, ...r });
+        return this.send(o, { type: 'prFilesResult', url: m.url, ...r });
       }
       case 'prViewed': {
         const r = await setFileViewed(m.prId, m.path, m.viewed);
         if (!r.ok) vscode.window.showErrorMessage(vscode.l10n.t('Could not update the viewed mark: {0}', r.error ?? ''));
         const files = await prFiles(m.url);
-        return o.panel.webview.postMessage({ type: 'prFilesResult', url: m.url, ...files });
+        return this.send(o, { type: 'prFilesResult', url: m.url, ...files });
       }
       case 'prOpenFile': {
         // the local copy when this chat's folder has it, else the file on GitHub
@@ -426,7 +444,7 @@ export class Chats {
       case 'taskOutput': {
         const t = c.state.tasks.find((x) => x.id === m.id);
         const r = readTail(t?.outputFile);
-        return o.panel.webview.postMessage({ type: 'taskOutputResult', id: m.id, text: r.text, size: r.size, urls: findUrls(r.text) });
+        return this.send(o, { type: 'taskOutputResult', id: m.id, text: r.text, size: r.size, missing: r.missing, urls: findUrls(r.text) });
       }
       case 'stopTask':
         return c.stopTask(m.id).catch((e) => vscode.window.showErrorMessage(vscode.l10n.t('Could not stop it: {0}', String(e?.message ?? e))));
@@ -438,6 +456,18 @@ export class Chats {
         const t = c.state.tasks.find((x) => x.id === m.id);
         return t?.outputFile && vscode.window.showTextDocument(vscode.Uri.file(t.outputFile), { preview: true });
       }
+      case 'shell':
+        return c.runShell(m.command);
+      case 'stopShell':
+        return c.stopShell(m.id);
+      case 'completeFiles': {
+        const files = await completeFiles(c.state.cwd, m.query).catch(() => []);
+        return this.send(o, { type: 'fileCompletions', query: m.query, files });
+      }
+      case 'setTabCompletion':
+        return vscode.workspace.getConfiguration('steerhouse').update('tabCompletion', m.on, vscode.ConfigurationTarget.Global);
+      case 'openBrowser':
+        return vscode.commands.executeCommand('steerhouse.pwview.open', c.state.cwd);
       case 'openTerminal':
         return vscode.commands.executeCommand('steerhouse.openTerminalHere', c.state.cwd);
       case 'deleteSession':

@@ -8,12 +8,14 @@ import { addWorktree, removeWorktree, repoRoot, slug, validBranch, worktreeInfo 
 import { lanAddress, RemoteServer } from './remote';
 import { migrateFromAgentLens } from './migrate';
 import { canTrash, registerFileActions, removePath } from './fileActions';
+import { pickFolder } from './folders';
+import { Pwview } from './pwview';
 import { Scm, type ScmFile } from './scm';
 import { followCommand } from './bgtasks';
 import { claudeDir } from './paths';
 import { MCP_PRESETS, mcpAddArgs, runClaude, sdkConfig, splitCommand, validName, type McpPreset, type McpScope, type McpServer } from './mcp';
 import { addComment, cancelComment, editComment, loadComments, Mode } from './comments';
-import { changeDetail, Engine, Session } from './engine';
+import { changeDetail, Engine, projectTranscripts, Session } from './engine';
 import { hooksStatus, installHooks, installHookScript } from './hooks';
 import { EXT, registerImagePaste, saveImage } from './imagePaste';
 import { registerLibrary } from './library';
@@ -26,7 +28,7 @@ import { Chats } from './chatPanel';
 import { usageReport } from './usage';
 import { addLink, briefing, sameConnection } from './links';
 import { PRESETS, listModels, secretKey, vendorOf } from './providers';
-import { addAccount, addProvider, listAccounts, preferredAccount, removeAccount, setPreferred, accountEnv, type Account } from './accounts';
+import { addAccount, addProvider, listAccounts, preferredAccount, removeAccount, setPreferred, accountEnv, type Account, addCursorAccount, cursorAccountEnv, listCursorAccounts, removeCursorAccount, renameAccount, type CursorAccount } from './accounts';
 import { Node, SessionsTree, setMediaRoot } from './tree';
 import { agentExecutable, ago, clip, runAgent } from './util';
 
@@ -104,7 +106,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     const clis = installedAgents();
     if (all.length === 1 && !clis.length) return all[0];
     const last = ctx.globalState.get<string>('steerhouse.lastAgent') ?? preferredAccount().id;
-    type Item = vscode.QuickPickItem & { a?: Account; cli?: (typeof clis)[number]; add?: string };
+    type Item = vscode.QuickPickItem & { a?: Account; cli?: (typeof clis)[number]; cursor?: CursorAccount; add?: string };
     const media = vscode.Uri.joinPath(ctx.extensionUri, 'media', 'vendors');
     const items: Item[] = [
       ...all.map((a): Item => ({
@@ -113,12 +115,16 @@ export function activate(ctx: vscode.ExtensionContext) {
         iconPath: vscode.Uri.joinPath(media, `${a.provider ? vendorOf(a.provider.model) : 'anthropic'}.svg`),
         a,
       })),
-      ...clis.map((c): Item => ({ label: c.name, description: vscode.l10n.t('opens in a terminal'), detail: c.exe, iconPath: vscode.Uri.joinPath(media, `${c.vendor}.svg`), cli: c })),
+      ...clis.flatMap((c): Item[] => {
+        const row = (cursor?: CursorAccount): Item => ({ label: cursor ? `${c.name} · ${cursor.name}` : c.name, description: vscode.l10n.t('opens in a terminal'), detail: c.exe, iconPath: vscode.Uri.joinPath(media, `${c.vendor}.svg`), cli: c, cursor });
+        return [row(), ...(c.id === 'cursor' ? listCursorAccounts().map(row) : [])];
+      }),
       { label: '', kind: vscode.QuickPickItemKind.Separator },
       { label: '$(add) ' + vscode.l10n.t('Add a Claude account…'), add: 'steerhouse.addAccount' },
+      { label: '$(add) ' + vscode.l10n.t('Add a Cursor account…'), add: 'steerhouse.addCursorAccount' },
       { label: '$(server) ' + vscode.l10n.t('Add a model provider (Ollama, OpenRouter…)…'), add: 'steerhouse.addProvider' },
     ];
-    const key = (i: Item) => i.a?.id ?? (i.cli ? 'cli:' + i.cli.id : '');
+    const key = (i: Item) => i.a?.id ?? (i.cli ? 'cli:' + (i.cursor?.id ?? i.cli.id) : '');
     items.sort((x, y) => Number(key(y) === last) - Number(key(x) === last));
     const pick = await vscode.window.showQuickPick(items, { title: vscode.l10n.t('New chat in {0}', path.basename(cwd)), placeHolder: vscode.l10n.t('Which agent should work here?') });
     if (!pick) return undefined;
@@ -128,7 +134,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
     ctx.globalState.update('steerhouse.lastAgent', key(pick));
     if (pick.cli) {
-      runCliAgent(pick.cli, cwd, vscode.Uri.joinPath(ctx.extensionUri, 'media'));
+      runCliAgent(pick.cli, cwd, vscode.Uri.joinPath(ctx.extensionUri, 'media'), pick.cursor ? { env: cursorAccountEnv(pick.cursor), label: `${pick.cli.name} · ${pick.cursor.name}` } : {});
       return undefined;
     }
     setPreferred(pick.a!.id);
@@ -174,6 +180,10 @@ export function activate(ctx: vscode.ExtensionContext) {
   });
   const dashboard = new Dashboard(ctx, () => sessions, hooksOk, () => attachedSessions(), (m) => onWebview(m), (days) => usageReport(engine.scan(Math.max(days, cfg().get<number>('days', 3))), days));
   const chats = new Chats(ctx, () => sessions, (id) => dashboard.show(id));
+  ctx.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('steerhouse.tabCompletion') && chats.refresh()));
+  const pwview = new Pwview(ctx);
+  chats.onStart = (cwd, chat) => void pwview.attach(cwd, chat);
+  const browserFolder = (n?: { path?: string } | string) => (typeof n === 'string' ? n : n?.path) ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const surface = () => cfg().get<string>('defaultSurface', 'chat');
   registerLibrary(ctx);
   registerSkills(ctx);
@@ -416,15 +426,16 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
 
   // ------------------------------------------------------------ commands
+  /** Cursor's login in a terminal, as this account. Over SSH it prints the link instead of opening a browser on the server. */
+  function loginCursor(cursor: ReturnType<typeof installedAgents>[number], account: CursorAccount) {
+    const env = { ...cursorAccountEnv(account), ...(vscode.env.remoteName ? { NO_OPEN_BROWSER: '1' } : {}) };
+    const home = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? require('os').homedir();
+    runCliAgent(cursor, home, vscode.Uri.joinPath(ctx.extensionUri, 'media'), { env, args: ['login'], label: `Cursor login · ${account.name}` });
+  }
+
   async function newSession() {
-    const folders = vscode.workspace.workspaceFolders ?? [];
-    let cwd = folders[0]?.uri.fsPath;
-    if (folders.length > 1) {
-      const pick = await vscode.window.showWorkspaceFolderPick({ placeHolder: vscode.l10n.t('Project for the new agent session') });
-      if (!pick) return;
-      cwd = pick.uri.fsPath;
-    }
-    if (!cwd) return vscode.window.showWarningMessage('Open a folder first.');
+    const cwd = await pickFolder(ctx);
+    if (!cwd) return;
     const prompt = await vscode.window.showInputBox({ prompt: vscode.l10n.t('What should the agent do?'), placeHolder: vscode.l10n.t('Leave empty to just open a session') });
     if (prompt === undefined) return;
     const account = await pickAgent(cwd);
@@ -510,16 +521,23 @@ export function activate(ctx: vscode.ExtensionContext) {
   const deleteChats = async (x: unknown, selected?: unknown[]) => {
     const picked: unknown[] = selected?.length ? selected : x !== undefined ? [x] : [...treeView.selection];
     const projects = [...new Set((picked as ({ kind?: string; path?: string } | undefined)[]).filter((n) => n?.kind === 'project' && n.path).map((n) => n!.path!))];
-    const list = new Map<string, Session>();
+    type Target = { id: string; path: string; title?: string; working?: boolean };
+    const list = new Map<string, Target>();
+    const add = (t: Target) => list.set(t.id, { ...list.get(t.id), ...t });
+    const target = (s: Session): Target => ({ id: s.info.id, path: s.path, title: s.info.title, working: s.info.state === 'working' });
+    for (const p of projects) {
+      const shown = sessions.filter((s) => s.info.project === p);
+      for (const t of projectTranscripts(p, shown.map((s) => path.dirname(s.path)))) add(t);
+      for (const s of shown) add(target(s));
+    }
     for (const n of picked) {
       const s = find(sessionArg(n) ?? '');
-      if (s) list.set(s.info.id, s);
+      if (s) add(target(s));
     }
-    if (projects.length) for (const s of engine.scan(Infinity)) if (projects.includes(s.info.project)) list.set(s.info.id, s);
     if (!list.size) return;
     const items = [...list.values()];
-    const what = items.length === 1 ? `"${clip(items[0].info.title, 60)}"` : vscode.l10n.t('{0} sessions', items.length);
-    const working = items.filter((s) => s.info.state === 'working').length;
+    const what = items.length === 1 ? `"${clip(items[0].title ?? items[0].id, 60)}"` : vscode.l10n.t('{0} sessions', items.length);
+    const working = items.filter((s) => s.working).length;
     const detail = [
       projects.length ? vscode.l10n.t('All chats of {0}, including older ones not listed here. The project folder and its files are not touched.', projects.map((p) => path.basename(p) || p).join(', ')) : '',
       canTrash()
@@ -536,7 +554,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     let failed = 0;
     let firstError = '';
     for (const s of items) {
-      chats.closeSession(s.info.id);
+      chats.closeSession(s.id);
       try {
         for (const p of [s.path, s.path.replace(/\.jsonl$/, '')]) if (fs.existsSync(p)) await removePath(p);
       } catch (e) {
@@ -729,10 +747,21 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!cwd) return vscode.commands.executeCommand('steerhouse.newChat');
       pickAgent(cwd).then(async (account) => account && chats.start({ cwd, account, env: await envFor(account) }));
     }),
+    // not awaited: the command returns while its pickers wait for an answer
     vscode.commands.registerCommand('steerhouse.newChat', () => {
-      const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!cwd) return vscode.window.showWarningMessage(vscode.l10n.t('Open a folder first.'));
-      pickAgent(cwd).then(async (account) => account && chats.start({ cwd, account, env: await envFor(account) }));
+      void (async () => {
+        const cwd = await pickFolder(ctx);
+        const account = cwd && (await pickAgent(cwd));
+        if (cwd && account) chats.start({ cwd, account, env: await envFor(account) });
+      })();
+    }),
+    vscode.commands.registerCommand('steerhouse.pwview.open', async (n?: { path?: string } | string) => {
+      const cwd = browserFolder(n) ?? (await pickFolder(ctx));
+      if (cwd) await pwview.open(cwd);
+    }),
+    vscode.commands.registerCommand('steerhouse.pwview.stop', async (n?: { path?: string } | string) => {
+      const cwd = browserFolder(n);
+      if (cwd) await pwview.stop(cwd);
     }),
     // Connectors: add an MCP server (popular or your own) for the team, just you here, or everywhere
     vscode.commands.registerCommand('steerhouse.manageConnectors', async (cwd?: string) => {
@@ -826,6 +855,34 @@ export function activate(ctx: vscode.ExtensionContext) {
       vscode.window.showInformationMessage(vscode.l10n.t('Account "{0}" created. In its terminal type /login and sign in with that account.', a.name));
       refresh(true);
     }),
+    vscode.commands.registerCommand('steerhouse.renameAccount', async (n?: { a?: { id: string; name: string } }) => {
+      const a = n?.a;
+      if (!a) return;
+      const name = await vscode.window.showInputBox({ title: vscode.l10n.t('Rename {0}', a.name), value: a.name, validateInput: (v) => (v.trim() ? undefined : vscode.l10n.t('Enter a name')) });
+      if (!name || name.trim() === a.name) return;
+      renameAccount(a.id, name);
+      tree.refresh();
+      refresh(true);
+    }),
+    vscode.commands.registerCommand('steerhouse.addCursorAccount', async () => {
+      const cursor = installedAgents().find((c) => c.id === 'cursor');
+      if (!cursor) return vscode.window.showWarningMessage(vscode.l10n.t('Cursor Agent is not installed on this machine. Install it, then add the account: {0}', 'https://cursor.com/cli'));
+      const name = await vscode.window.showInputBox({ title: vscode.l10n.t('Add a Cursor account'), prompt: vscode.l10n.t('A name for this account, e.g. Work'), validateInput: (v) => (v.trim() ? undefined : vscode.l10n.t('Enter a name')) });
+      if (!name) return;
+      loginCursor(cursor, addCursorAccount(name));
+      tree.refresh();
+    }),
+    vscode.commands.registerCommand('steerhouse.loginCursorAccount', (n?: { c?: CursorAccount }) => {
+      const cursor = installedAgents().find((c) => c.id === 'cursor');
+      if (cursor && n?.c) loginCursor(cursor, n.c);
+    }),
+    vscode.commands.registerCommand('steerhouse.removeCursorAccount', async (n?: { c?: CursorAccount }) => {
+      if (!n?.c) return;
+      const REMOVE = vscode.l10n.t('Remove from Steerhouse');
+      if ((await vscode.window.showWarningMessage(vscode.l10n.t('Remove {0}?', n.c.name), { modal: true, detail: vscode.l10n.t('Its login stays in {0}.', n.c.dir) }, REMOVE)) !== REMOVE) return;
+      removeCursorAccount(n.c.id);
+      tree.refresh();
+    }),
     vscode.commands.registerCommand('steerhouse.accounts', async () => {
       const pref = preferredAccount();
       const pick = await vscode.window.showQuickPick(
@@ -840,11 +897,13 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!pick.a) return vscode.commands.executeCommand('steerhouse.addAccount');
       if (pick.a.id === '__provider') return vscode.commands.executeCommand('steerhouse.addProvider');
       const acc = pick.a;
-      if (acc.id !== 'default') {
+      {
         const USE = vscode.l10n.t('Use by default');
+        const RENAME = vscode.l10n.t('Rename…');
         const LOGIN = vscode.l10n.t('Log in again');
         const REMOVE = vscode.l10n.t('Remove from Steerhouse');
-        const act = await vscode.window.showQuickPick([USE, LOGIN, REMOVE], { placeHolder: acc.name });
+        const act = await vscode.window.showQuickPick(acc.id === 'default' ? [USE, RENAME] : [USE, RENAME, LOGIN, REMOVE], { placeHolder: acc.name });
+        if (act === RENAME) return vscode.commands.executeCommand('steerhouse.renameAccount', { a: acc });
         if (act === LOGIN) return runAgent(`Claude login · ${acc.name}`, require('os').homedir(), [], await envFor(acc));
         if (act === REMOVE) {
           removeAccount(acc.id);
@@ -901,6 +960,8 @@ export function activate(ctx: vscode.ExtensionContext) {
     treeView.badge = n ? { value: n, tooltip: `${n} agent session(s) working` } : undefined;
   }
   refresh(true);
+  // until Claude Code is installed and logged in, the way back to the guide sits at the top of the tree
+  syncSetupContext().then((checks) => tree.setNeedsSetup(checks.some((c) => (c.name === 'Claude Code' || c.name === 'Login') && c.ok === false))).catch(() => {});
   restoreTestHooks(chats);
   registerFileActions(ctx, () => tree.refresh());
   // Source control per project, through VS Code's own Git

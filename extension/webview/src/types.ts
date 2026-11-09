@@ -25,6 +25,11 @@ export type ToExtension =
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
   | { type: 'openTerminal' }
+  | { type: 'openBrowser' }
+  | { type: 'completeFiles'; query: string }
+  | { type: 'shell'; command: string }
+  | { type: 'stopShell'; id: string }
+  | { type: 'setTabCompletion'; on: boolean }
   | { type: 'taskOutput'; id: string }
   | { type: 'stopTask'; id: string }
   | { type: 'followTask'; id: string }
@@ -58,6 +63,7 @@ export type ChatItem =
   | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string }
   | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string }
   | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
+  | { kind: 'shell'; id: string; command: string; output: string; status: 'running' | 'done' | 'error'; exitCode?: number | null; error?: string }
   | { kind: 'permission'; id: string; tool: string; summary: string; input: unknown; canAlways: boolean; status: 'pending' | 'allowed' | 'denied'; reason?: string }
   | { kind: 'plan'; id: string; plan: string; status: 'pending' | 'approved' | 'rejected' }
   | { kind: 'question'; id: string; questions: Question[]; status: 'pending' | 'answered'; answers?: Record<string, string> }
@@ -67,6 +73,7 @@ export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | '
 export interface ChatState {
   key: string; sessionId?: string; cwd: string; title: string; model?: string; models: { value: string; displayName: string }[];
   permissionMode: PermissionMode; effort?: Effort; fastMode: boolean; ultracode: boolean; status: 'starting' | 'idle' | 'working' | 'waiting' | 'closed' | 'error'; activity?: string;
+  tabCompletion?: boolean;
   todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[]; tokens?: number; context?: { used: number; max: number; percentage: number; detailed?: boolean; categories?: { id?: string; name: string; tokens: number; kind: 'used' | 'free' | 'buffer' | 'deferred' }[] }; earlier: number; slashCommands: string[]; mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string }; host?: string; hostIcon?: string; limits?: Limits; suggestion?: string; stash?: string[]; tasks?: BgTaskView[]; prs?: Record<string, { state: 'open' | 'draft' | 'merged' | 'closed' | 'unknown'; title?: string; tasks?: { done: number; total: number }; checks?: PrCheckView[]; review?: 'approved' | 'changes_requested' | 'required' }>; error?: string;
 }
 export type LinkedSession = { id: string; title: string; state: State; activity?: string };
@@ -83,6 +90,11 @@ export type ToChat =
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
   | { type: 'openTerminal' }
+  | { type: 'openBrowser' }
+  | { type: 'completeFiles'; query: string }
+  | { type: 'shell'; command: string }
+  | { type: 'stopShell'; id: string }
+  | { type: 'setTabCompletion'; on: boolean }
   | { type: 'taskOutput'; id: string }
   | { type: 'stopTask'; id: string }
   | { type: 'followTask'; id: string }

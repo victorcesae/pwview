@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils';
 
 export interface RichInputHandle {
   getMarkdown(): string;
+  /** the text exactly as typed, without Markdown escapes */
+  getText(): string;
   setMarkdown(md: string): void;
   clear(): void;
   focus(): void;
@@ -108,6 +110,7 @@ export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput({
 
   useImperativeHandle(ref, () => ({
     getMarkdown: () => (editor ? md(editor).trim() : ''),
+    getText: () => editor?.getText({ blockSeparator: '\n' }) ?? '',
     setMarkdown: (m: string) => editor?.commands.setContent(m),
     clear: () => editor?.commands.clearContent(true),
     focus: () => editor?.commands.focus('end'),

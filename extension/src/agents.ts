@@ -16,7 +16,7 @@ export interface CliAgent {
 }
 
 export const CLI_AGENTS: CliAgent[] = [
-  { id: 'cursor', name: 'Cursor Agent', bins: ['cursor-agent', 'agent'], vendor: 'other', login: 'cursor-agent login' },
+  { id: 'cursor', name: 'Cursor Agent', bins: ['cursor-agent', 'agent'], vendor: 'cursor', login: 'cursor-agent login' },
   { id: 'codex', name: 'Codex', bins: ['codex'], vendor: 'openai', login: 'codex login' },
   { id: 'gemini', name: 'Gemini CLI', bins: ['gemini'], vendor: 'google', login: 'gemini' },
   { id: 'opencode', name: 'OpenCode', bins: ['opencode'], vendor: 'other', login: 'opencode auth login' },
@@ -35,13 +35,15 @@ export function installedAgents(find: (bin: string) => string | undefined = whic
 }
 
 /** Opens an agent CLI in a terminal in the folder (its own process, not typed into a shell). */
-export function runCliAgent(a: CliAgent & { exe: string }, cwd: string, media: vscode.Uri) {
+export function runCliAgent(a: CliAgent & { exe: string }, cwd: string, media: vscode.Uri, opts: { env?: Record<string, string>; args?: string[]; label?: string } = {}) {
+  const args = opts.args ?? [];
   const isScript = /\.(cmd|bat)$/i.test(a.exe);
   const term = vscode.window.createTerminal({
-    name: `${a.name} · ${path.basename(cwd)}`,
+    name: `${opts.label ?? a.name} · ${path.basename(cwd)}`,
     cwd,
+    env: opts.env,
     shellPath: isScript ? 'cmd.exe' : a.exe,
-    shellArgs: isScript ? ['/c', a.exe] : [],
+    shellArgs: isScript ? ['/c', a.exe, ...args] : args,
     iconPath: vscode.Uri.joinPath(media, 'vendors', `${a.vendor}.svg`),
   });
   term.show();
