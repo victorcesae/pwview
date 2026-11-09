@@ -172,9 +172,15 @@ test('commands the agent waits on: live output from the session folder, then the
     r = chat.taskOutput('b1');
     assert.strictEqual(r.missing, true);
     assert.strictEqual(r.file, undefined);
-    // a file Claude Code named wins, and points at the folder for the others
-    chat.state.tasks.push({ id: 'b2', command: 'x', status: 'completed', outputFile: path.join(tmp, 'other', 'b2.output') });
-    assert.strictEqual(chat.taskFile(chat.state.tasks[0]), path.join(tmp, 'other', 'b1.output'));
+    // another command's folder (an earlier session, in a resumed chat) only counts if the file is there
+    const other = path.join(tmp, 'other');
+    chat.state.tasks.push({ id: 'b2', command: 'x', status: 'completed', outputFile: path.join(other, 'b2.output') });
+    assert.strictEqual(chat.taskFile(chat.state.tasks[0]), file, 'its own session by default');
+    fs.mkdirSync(other, { recursive: true });
+    fs.writeFileSync(path.join(other, 'b1.output'), 'x');
+    assert.strictEqual(chat.taskFile(chat.state.tasks[0]), path.join(other, 'b1.output'));
+    fs.writeFileSync(file, 'mine');
+    assert.strictEqual(chat.taskFile(chat.state.tasks[0]), file, 'its own session wins');
     assert.strictEqual(chat.taskOutput('nope').missing, true);
   } finally {
     if (saved === undefined) delete process.env.CLAUDE_CODE_TMPDIR;

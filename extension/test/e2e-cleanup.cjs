@@ -8,7 +8,7 @@ const path = require('path');
 const projectDirFor = (cwd) => path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'projects', cwd.replace(/[^a-zA-Z0-9]/g, '-'));
 
 async function removeTestSession(cwd) {
-  if (!/steerhouse-(e2e|steer)-/.test(path.basename(cwd))) return; // never touch anything else
+  if (!/steerhouse-(e2e|steer|restore-ws)-/.test(path.basename(cwd))) return; // never touch anything else
   await new Promise((r) => setTimeout(r, 1500)); // let the CLI finish writing after close
   fs.rmSync(projectDirFor(cwd), { recursive: true, force: true, maxRetries: 20, retryDelay: 300 });
   fs.rmSync(cwd, { recursive: true, force: true, maxRetries: 20, retryDelay: 300 });

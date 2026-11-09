@@ -10,6 +10,7 @@ import { migrateFromAgentLens } from './migrate';
 import { canTrash, registerFileActions, removePath } from './fileActions';
 import { registerCodeCompletion } from './codeCompletion';
 import { pickFolder } from './folders';
+import { setShuttingDown } from './relayClient';
 import { Pwview } from './pwview';
 import { Scm, type ScmFile } from './scm';
 import { followCommand } from './bgtasks';
@@ -66,10 +67,14 @@ function restoreTestHooks(chats: { describe(): unknown; testSend(text: string): 
         return;
       }
       if (open.startsWith('resume:')) await vscode.commands.executeCommand('steerhouse.resumeSession', open.slice(7));
-      else await vscode.commands.executeCommand('steerhouse.newChatHere', { kind: 'project', path: open });
+      else {
+        await vscode.commands.executeCommand('steerhouse.newChatHere', { kind: 'project', path: open });
+        // agents installed on this machine bring up a picker: take the first
+        setTimeout(() => vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem').then(undefined, () => {}), 800);
+      }
       // optionally leave the chat busy (mid-turn) when the window closes
       const prompt = process.env.STEERHOUSE_TEST_PROMPT;
-      if (prompt) setTimeout(() => chats.testSend(prompt), 1500);
+      if (prompt) setTimeout(() => chats.testSend(prompt), 2500);
       setTimeout(() => vscode.commands.executeCommand('workbench.action.closeWindow'), Number(process.env.STEERHOUSE_TEST_CLOSE_MS ?? 4000));
     }, 2000);
   if (report)
@@ -78,6 +83,11 @@ function restoreTestHooks(chats: { describe(): unknown; testSend(text: string): 
       vscode.commands.executeCommand('workbench.action.closeWindow');
     }, Number(process.env.STEERHOUSE_TEST_REPORT_MS ?? 8000));
 }
+
+let handOverQueues: (() => void) | undefined;
+
+type FollowTarget = { outputFile?: string; command?: string; description?: string; chatTitle?: string };
+const following = new Map<string, vscode.Terminal>();
 
 export function activate(ctx: vscode.ExtensionContext) {
   // Steerhouse used to be AgentLens: carry over its data folder, hook entries and settings (once)
@@ -183,6 +193,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   const chats = new Chats(ctx, () => sessions, (id) => dashboard.show(id));
   ctx.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('steerhouse.tabCompletion') && chats.refresh()));
   registerCodeCompletion(ctx);
+  handOverQueues = () => chats.handOverQueues();
   const pwview = new Pwview(ctx);
   chats.onStart = (cwd, chat) => void pwview.attach(cwd, chat);
   const browserFolder = (n?: { path?: string } | string) => (typeof n === 'string' ? n : n?.path) ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -729,13 +740,18 @@ export function activate(ctx: vscode.ExtensionContext) {
     // "New chat here" on a project or folder in the Sessions tree (or a folder in the Explorer)
     // Your default shell in that folder (from a chat, a project or a folder in the tree)
     // Watch a background command's output in a terminal, as it is written (like tail -f)
-    vscode.commands.registerCommand('steerhouse.followTask', (x?: { outputFile?: string; command?: string; description?: string } | { task?: { outputFile?: string; command?: string; description?: string } }) => {
-      const t = x && 'task' in x ? x.task : (x as { outputFile?: string; command?: string; description?: string } | undefined);
+    vscode.commands.registerCommand('steerhouse.followTask', (x?: FollowTarget | { task?: FollowTarget }) => {
+      const t = x && 'task' in x ? x.task : (x as FollowTarget | undefined);
       if (!t?.outputFile) return vscode.window.showWarningMessage(vscode.l10n.t('This command has no output file.'));
-      const f = followCommand(t.outputFile);
-      vscode.window
-        .createTerminal({ name: '▶ ' + clip(t.description || t.command || 'output', 30), shellPath: f.shell, shellArgs: f.args, iconPath: new vscode.ThemeIcon('debug-console') })
-        .show();
+      // one terminal per command, named after the chat, so it can't be taken for another session's
+      const open = following.get(t.outputFile);
+      if (open && open.exitStatus === undefined) return open.show();
+      const what = clip(t.description || t.command || 'output', 30);
+      const label = `${t.chatTitle ? clip(t.chatTitle, 60) + ': ' : ''}${t.description || t.command || ''}`;
+      const f = followCommand(t.outputFile, process.platform, label);
+      const term = vscode.window.createTerminal({ name: `▶ ${t.chatTitle ? clip(t.chatTitle, 20) + ' · ' : ''}${what}`, shellPath: f.shell, shellArgs: f.args, iconPath: new vscode.ThemeIcon('debug-console') });
+      following.set(t.outputFile, term);
+      term.show();
     }),
     vscode.commands.registerCommand('steerhouse.openTaskFile', (x?: { task?: { outputFile?: string } }) => x?.task?.outputFile && vscode.window.showTextDocument(vscode.Uri.file(x.task.outputFile), { preview: true })),
     vscode.commands.registerCommand('steerhouse.openTerminalHere', (n?: { path?: string } | vscode.Uri | string) => {
@@ -1003,4 +1019,9 @@ export function activate(ctx: vscode.ExtensionContext) {
   );
 }
 
-export function deactivate() {}
+export function deactivate() {
+  setShuttingDown();
+  handOverQueues?.();
+  // gives the messages time to reach the process that outlives VS Code
+  return new Promise<void>((r) => setTimeout(r, 200));
+}

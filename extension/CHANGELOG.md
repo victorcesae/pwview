@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.9
+- Messages go as typed: Shift+Enter no longer sends a backslash, and `my_file` or `<div>` are no longer changed.
+- Follow in terminal: one terminal per command, named after its chat, and it looks in the chat's own session first.
+- **Prompts survive Reload Window and closing VS Code**: chats keep working and reconnect when reopened, also when a permission request was waiting. Closing a chat's tab still stops it. With nobody connected, a chat stops 15 minutes after finishing, or after 24 hours if it is still waiting. Off with `steerhouse.keepChatsRunning`.
+
 ## 1.0.8
 - **Code completion in the editor**: gray suggestions, Tab to accept, from a model provider you added (Ollama, LM Studio, LiteLLM, OpenRouter, custom). Off by default; turn it on from the Tab item in the status bar. Files like `.env` and private keys are never sent.
 - Expanded command lists in a chat are no longer cut off with their title underneath (the "empty black bar").

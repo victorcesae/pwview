@@ -2,7 +2,7 @@
   "name": "steerhouse",
   "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -1175,6 +1175,11 @@
           "minimum": 0,
           "description": "%setting.code.completion.delay%"
         },
+        "steerhouse.keepChatsRunning": {
+          "type": "boolean",
+          "default": true,
+          "description": "%setting.keep.chats.running%"
+        },
         "steerhouse.tabCompletion": {
           "type": "boolean",
           "default": true,
@@ -1321,12 +1326,12 @@
   },
   "scripts": {
     "build": "npm run build:ext && npm run build:webview",
-    "build:ext": "esbuild src/extension.ts src/hook.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --external:bufferutil --external:utf-8-validate --outdir=dist",
+    "build:ext": "esbuild src/extension.ts src/hook.ts src/relay.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --external:bufferutil --external:utf-8-validate --outdir=dist",
     "build:webview": "vite build --config webview/vite.config.mts",
     "dev:webview": "vite --config webview/vite.config.mts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
-    "test": "node --test test/codeCompletion.test.cjs test/shell.test.cjs test/pwview.test.cjs test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs test/scm.test.cjs",
-    "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs test/e2e-fork.test.cjs test/e2e-bg.test.cjs",
+    "test": "node --test test/relay.test.cjs test/codeCompletion.test.cjs test/shell.test.cjs test/pwview.test.cjs test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs test/scm.test.cjs",
+    "test:e2e": "node --test test/e2e-relay.test.cjs test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs test/e2e-fork.test.cjs test/e2e-bg.test.cjs",
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs",
     "test:restore": "npm run build && node test/editor/restore.cjs",
@@ -1338,7 +1343,9 @@
     "@tailwindcss/vite": "4.1.8",
     "@tanstack/react-virtual": "^3.14.26",
     "@tiptap/core": "^3.33.0",
+    "@tiptap/extension-hard-break": "^3.33.0",
     "@tiptap/extension-placeholder": "^3.33.0",
+    "@tiptap/extension-text": "^3.33.0",
     "@tiptap/pm": "^3.33.0",
     "@tiptap/react": "^3.33.0",
     "@tiptap/starter-kit": "^3.33.0",

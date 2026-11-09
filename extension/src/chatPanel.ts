@@ -8,6 +8,7 @@ import { findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMetho
 import { openUrl } from './browser';
 import { findUrls } from './bgtasks';
 import { completeFiles } from './folders';
+import { isShuttingDown } from './relayClient';
 import { vendorOf } from './providers';
 import type { Session } from './engine';
 import { addLink, briefing, loadLinks, removeLink, sameConnection } from './links';
@@ -94,6 +95,15 @@ export class Chats {
     private sessions: () => Session[],
     private openSession: (id: string) => void,
   ) {}
+
+  private relayScript() {
+    return vscode.workspace.getConfiguration('steerhouse').get<boolean>('keepChatsRunning', true) ? path.join(this.ctx.extensionPath, 'dist', 'relay.js') : undefined;
+  }
+
+  /** VS Code is going away: nothing waiting here may be lost. */
+  handOverQueues() {
+    for (const o of this.open) o.chat.handOverQueue();
+  }
 
   /** Called with every chat that starts. */
   onStart?: (cwd: string, chat: ChatSession) => void;
@@ -265,7 +275,7 @@ export class Chats {
     panel.iconPath = { light: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-light.svg'), dark: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-dark.svg') };
     const transcript = opts.resume ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
     const history = transcript ? historyFromTranscript(transcript) : undefined;
-    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.account?.provider?.model }, () => this.schedule(entry));
+    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), relayScript: this.relayScript(), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.account?.provider?.model }, () => this.schedule(entry));
     const entry: Open = { chat, panel, accountId: opts.account?.id };
     this.open.push(entry);
     panel.webview.html = html(panel.webview, root);
@@ -273,7 +283,7 @@ export class Chats {
     panel.onDidDispose(() => {
       this.open = this.open.filter((o) => o !== entry); // first: closing the chat repaints it
       clearTimeout(entry.timer);
-      entry.chat.close();
+      if (!isShuttingDown()) entry.chat.close(); // a tab closed by hand; a reload leaves the prompt running
     });
     chat.start();
     this.onStart?.(opts.cwd, chat);
@@ -449,7 +459,7 @@ export class Chats {
         return c.stopTask(m.id).catch((e) => vscode.window.showErrorMessage(vscode.l10n.t('Could not stop it: {0}', String(e?.message ?? e))));
       case 'followTask': {
         const t = c.state.tasks.find((x) => x.id === m.id);
-        return t && vscode.commands.executeCommand('steerhouse.followTask', { ...t, outputFile: c.taskFile(t) });
+        return t && vscode.commands.executeCommand('steerhouse.followTask', { ...t, outputFile: c.taskFile(t), chatTitle: c.state.title });
       }
       case 'openTaskFile': {
         const file = c.taskOutput(m.id).file;

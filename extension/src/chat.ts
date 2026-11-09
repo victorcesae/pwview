@@ -3,8 +3,10 @@
 // Bedrock/Vertex...). Messages carry a native priority: later = queue, next = steer
 // (picked up between steps), now = send now.
 import { BgTaskTracker, guessStatus, parseStarted, readTail, sdkStatus, sessionTasksDir, textsOf, type BgTask } from './bgtasks';
+import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
+import { findRelay, RelayProcess, startRelay } from './relayClient';
 import { ShellRun, shellContext, withoutShellContext } from './shell';
 import { query, type PermissionMode, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 
@@ -317,6 +319,8 @@ export interface ChatOptions {
   prefs?: ChatPrefs;
   /** run a copy of the resumed session cut at this transcript entry (edit an earlier prompt) */
   fork?: { at: string };
+  /** path of dist/relay.js: Claude Code then keeps running when VS Code reloads or closes */
+  relayScript?: string;
 }
 
 /** What a chat remembers per session: restored when it is resumed or the window reloads. */
@@ -382,10 +386,31 @@ export class ChatSession {
     this.onChange(this.state);
   }
 
+  /** Reconnects to the process still running this session, or starts one that outlives VS Code. */
+  private relayedSpawn() {
+    const script = this.opts.relayScript;
+    if (!script) return undefined;
+    const running = this.opts.resume && !this.opts.fork ? findRelay(this.opts.resume) : undefined;
+    return (o: { command: string; args: string[]; cwd?: string; env: Record<string, string | undefined> }) => {
+      const proc = new RelayProcess(running ?? startRelay(script, { ...o, sessionId: this.opts.resume }));
+      proc.hello.then(({ busy }) => {
+        if (running) this.q?.reinitialize().catch(() => {}); // hands back the permission requests still waiting
+        if (busy && this.state.status === 'idle') {
+          this.state.status = 'working';
+          this.state.activity = 'Thinking…';
+          this.changed();
+        }
+      });
+      return proc as any;
+    };
+  }
+
   start() {
+    const spawnClaudeCodeProcess = this.relayedSpawn();
     this.q = query({
       prompt: this.input,
       options: {
+        ...(spawnClaudeCodeProcess ? { spawnClaudeCodeProcess } : {}),
         cwd: this.opts.cwd,
         resume: this.opts.resume,
         model: this.opts.prefs?.model ?? this.opts.model,
@@ -538,9 +563,11 @@ export class ChatSession {
   /** A command's output file: the one Claude Code named, or where it writes while the command runs. */
   taskFile(t: BgTask): string | undefined {
     if (t.outputFile) return t.outputFile;
-    const named = this.state.tasks.find((x) => x.outputFile)?.outputFile;
-    const dir = named ? path.dirname(named) : this.state.sessionId ? sessionTasksDir(this.opts.cwd, this.state.sessionId) : undefined;
-    return dir && path.join(dir, `${t.id}.output`);
+    // its own session's folder first: in a resumed chat, other commands may be from an earlier session
+    const own = this.state.sessionId ? path.join(sessionTasksDir(this.opts.cwd, this.state.sessionId), `${t.id}.output`) : undefined;
+    if (own && fs.existsSync(own)) return own;
+    const named = this.state.tasks.flatMap((x) => (x.outputFile ? [path.join(path.dirname(x.outputFile), `${t.id}.output`)] : [])).find((f) => fs.existsSync(f));
+    return named ?? own;
   }
 
   /** A command's output: live from its file; once that is gone, what the command returned to the agent. */
@@ -677,6 +704,14 @@ export class ChatSession {
 
   stopShell(id: string) {
     this.shells.get(id)?.stop();
+  }
+
+  /** Before VS Code goes away: messages waiting here go to Claude Code's own queue, so they aren't lost. */
+  handOverQueue() {
+    for (const m of this.queued.splice(0)) {
+      this.disarm(m.id);
+      this.push(m.text, m.images, m.priority);
+    }
   }
 
   /** Give the agent context (e.g. a linked session): shown as a system note, delivered between steps. */

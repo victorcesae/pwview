@@ -17,6 +17,7 @@ line and the agent picks it up. Works in VS Code, Cursor, Windsurf and VSCodium,
   permission-mode pickers, slash commands, and **Steer (default) / Queue / Send now** while it works. A queued
   message can still be sent now or cancelled. **Link session** lets the agent see what another session is
   doing, and you can jump to that session.
+- **Prompts survive reloads:** Reload Window or closing VS Code doesn't stop a running chat; it reconnects when you reopen it. Closing the chat's tab does stop it.
 - **Code completion:** gray suggestions in the editor, Tab to accept, from a model provider you added. Off by default: click **Tab** in the status bar. The code around your cursor goes to that provider as you type (a local one like Ollama keeps it on the machine), and files like `.env` and private keys are never sent.
 - **Browser with no setup:** chats in web projects (with a `package.json`) can drive a real browser. It
   starts on the first browser action, downloading Chromium if there is none. **Open Live Browser** shows it

@@ -1,4 +1,5 @@
 {
+  "setting.keep.chats.running": "Chats keep working when VS Code reloads or closes, and reconnect when you reopen them. With nobody connected, a chat stops 15 minutes after it finishes, or after 24 hours if it is still waiting. Closing a chat's tab stops it.",
   "cmd.code.completion.toggle": "Turn Code Completion On or Off",
   "setting.code.completion.enabled": "Gray code suggestions in the editor, accepted with Tab. Sends the code around the cursor to the chosen provider as you type.",
   "setting.code.completion.provider": "Id of the model provider that suggests code. Set by the command that turns code completion on.",

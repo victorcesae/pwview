@@ -1,5 +1,8 @@
 // Rich-text prompt input (TipTap). Users type naturally (**bold**, `code`, ``` blocks, - lists,
 // # headings become formatting as they type, or use the toolbar) and the agent receives markdown.
+import { Fragment, Slice } from '@tiptap/pm/model';
+import HardBreak from '@tiptap/extension-hard-break';
+import Text from '@tiptap/extension-text';
 import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -33,20 +36,49 @@ interface Props {
 
 const md = (e: Editor) => ((e.storage as any).markdown?.getMarkdown?.() as string | undefined) ?? e.getText();
 
+// A message is a prompt, not a Markdown document: what was typed goes as typed. Without these, the
+// library sends a line break as a backslash plus a newline, my_file as my\_file and <div> as &lt;div&gt;.
+const PromptText = Text.extend({
+  addStorage: () => ({ markdown: { serialize: (state: any, node: any) => state.text(node.text, false), parse: {} } }),
+});
+const PromptBreak = HardBreak.extend({
+  addStorage: () => ({
+    markdown: {
+      serialize(state: any, node: any, parent: any, index: number) {
+        // line breaks at the very end of a message are dropped
+        for (let i = index + 1; i < parent.childCount; i++)
+          if (parent.child(i).type !== node.type) return void state.write('\n');
+      },
+      parse: {},
+    },
+  }),
+});
+
 export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput({ placeholder, onSubmit, onEscape, onFiles, onChange, onKey, className }, ref) {
   // keep latest callbacks without re-creating the editor
   const cb = useRef({ onSubmit, onEscape, onFiles, onChange, onKey });
   cb.current = { onSubmit, onEscape, onFiles, onChange, onKey };
 
   const editor = useEditor({
+    // bold and italic only from the toolbar: typing __init__.py or a * b * c must stay as typed
+    enableInputRules: ['heading', 'blockquote', 'bulletList', 'orderedList', 'codeBlock', 'code', 'horizontalRule'],
+    enablePasteRules: ['code'],
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false }),
+      StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false, hardBreak: false, text: false }),
+      PromptText,
+      PromptBreak,
       Placeholder.configure({ placeholder }),
-      Markdown.configure({ html: false, transformPastedText: true, breaks: true }),
+      Markdown.configure({ html: false, transformPastedText: false, breaks: true }),
       PasteChip,
     ],
     editorProps: {
       attributes: { class: 'rich-input outline-none min-h-11 max-h-64 overflow-y-auto px-1 py-0.5 text-[13px] leading-relaxed' },
+      // pasted lines stay lines, exactly as copied (code keeps its indentation and blank lines)
+      clipboardTextParser: (text, $context) => {
+        const { schema } = $context.doc.type;
+        const nodes = text.split(/\r?\n/).flatMap((line, i) => [...(i ? [schema.nodes.hardBreak.create()] : []), ...(line ? [schema.text(line)] : [])]);
+        return new Slice(Fragment.from(schema.nodes.paragraph.create(null, nodes)), 1, 1);
+      },
       handleKeyDown: (view, event) => {
         if (cb.current.onKey?.(event)) return true;
         if (event.key === 'Escape') {

@@ -8,6 +8,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { downloadAndUnzipVSCode } = require('@vscode/test-electron');
+const { removeTestSession } = require('../e2e-cleanup.cjs');
 
 delete process.env.ELECTRON_RUN_AS_NODE;
 
@@ -55,6 +56,25 @@ function fakeSession(configDir, cwd) {
   return id;
 }
 
+/** The relays keeping chats of this folder alive, which VS Code closing must not have stopped. */
+function relaysOf(configDir, cwd) {
+  const dir = path.join(configDir, 'steerhouse', 'relays');
+  if (!fs.existsSync(dir)) return [];
+  const out = [];
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith('.json') || f.endsWith('.spec.json')) continue;
+    const e = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+    let alive = true;
+    try {
+      process.kill(e.pid, 0);
+    } catch {
+      alive = false;
+    }
+    if (alive && e.cwd === cwd) out.push(e);
+  }
+  return out;
+}
+
 async function run(exe, ext, label, open, check, setup, opts = {}) {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-restore-ws-'));
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-restore-ud-'));
@@ -65,10 +85,13 @@ async function run(exe, ext, label, open, check, setup, opts = {}) {
   fs.writeFileSync(path.join(userData, 'User', 'settings.json'), JSON.stringify({ 'steerhouse.hideTempSessions': false }));
   const report = path.join(os.tmpdir(), `steerhouse-restore-${Date.now()}.json`);
   const extDir = path.join(ext, '.vscode-test', 'extensions-en');
-  const args = [workspace, '--extensionDevelopmentPath=' + ext, '--user-data-dir', userData, '--extensions-dir', extDir, '--disable-workspace-trust', '--skip-welcome', '--skip-release-notes', '--new-window'];
+  const args = [workspace, '--extensionDevelopmentPath=' + ext, '--user-data-dir', userData, '--extensions-dir', extDir, '--disable-workspace-trust', '--skip-welcome', '--skip-release-notes', '--new-window', ...(process.platform === 'linux' ? ['--no-sandbox', '--disable-gpu'] : [])];
   // a busy chat needs your real Claude login; the others use an empty config folder
   const env = opts.prompt ? {} : { CLAUDE_CONFIG_DIR: configDir };
   await launch(exe, args, { ...env, STEERHOUSE_TEST_OPEN_CHAT: open(workspace, extra), ...(opts.prompt ? { STEERHOUSE_TEST_PROMPT: opts.prompt, STEERHOUSE_TEST_CLOSE_MS: String(opts.closeMs ?? 25000) } : {}) }, 120_000);
+  const relayDir = opts.prompt ? process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude') : configDir;
+  const survivors = relaysOf(relayDir, workspace);
+  console.log(`  after VS Code closed: ${survivors.length} relay(s) alive, pids ${survivors.map((e) => e.pid).join(',')}`);
   const port = 9300 + Math.floor(Math.random() * 500);
   const second = launch(exe, [...args, `--remote-debugging-port=${port}`], { ...env, STEERHOUSE_TEST_REPORT: report, STEERHOUSE_TEST_REPORT_MS: String(opts.reportMs ?? 15000) }, 120_000);
   await new Promise((r) => setTimeout(r, (opts.reportMs ?? 15000) - 3000));
@@ -78,6 +101,15 @@ async function run(exe, ext, label, open, check, setup, opts = {}) {
   const r = JSON.parse(fs.readFileSync(report, 'utf8'));
   const tabs = r.tabs.filter((t) => /(steerhouse|agentlens).chat$/.test(t.viewType ?? ''));
   console.log('  page text: ' + JSON.stringify(pages.map((p) => p.slice(0, 120))));
+  const after = relaysOf(relayDir, workspace);
+  console.log(`  after it reopened: ${after.length} relay(s) alive, pids ${after.map((e) => e.pid).join(',')}`);
+  for (const e of after) process.kill(e.pid, 'SIGTERM'); // nothing of this test keeps running
+  if (opts.prompt) await removeTestSession(workspace);
+  const lostRelay = opts.keepsRelay && (!survivors.length ? 'VS Code closing stopped the chat' : !after.some((e) => survivors.some((x) => x.pid === e.pid)) ? 'the reopened chat did not reconnect to the same process' : after.length > survivors.length ? 'a second Claude Code was started' : '');
+  if (lostRelay) {
+    console.log(`✖ restore (${label}): ${lostRelay}`);
+    return false;
+  }
   const page = pages.find((p) => !/^Loading/.test(p)) ?? pages[0] ?? '';
   const stuck = !pages.length ? 'the chat page shows nothing' : /Loading sessions/.test(page) && page.length < 40 ? `the chat page is stuck on "${page}"` : '';
   const problem = stuck || tabs.length !== 1 ? `chat tabs after relaunch: ${tabs.length} (${r.tabs.map((t) => t.label).join(', ')})` : r.chats.length !== 1 ? `the tab came back but Steerhouse did not reconnect it (chats: ${r.chats.length})` : check(r.chats[0], workspace, extra);
@@ -98,6 +130,7 @@ async function main() {
       (ws, x) => 'resume:' + x.id,
       (c, ws, x) => (c.sessionId !== x.id ? `wrong session ${c.sessionId}` : c.title !== 'Restore me after reload' ? `wrong title ${c.title}` : ''),
       (configDir, ws) => ({ id: fakeSession(configDir, ws) }),
+      { keepsRelay: true },
     ),
   ];
   // the case from the field: a chat tab saved by AgentLens before the rename to Steerhouse
@@ -110,9 +143,10 @@ async function main() {
         ext,
         'chat busy when the window closed',
         (ws) => ws,
-        (c) => (c.status !== 'idle' ? `still ${c.status} (${c.activity ?? ''}) after the reload` : c.tail.some((it) => it.status === 'running' || it.streaming) ? `items still running: ${JSON.stringify(c.tail)}` : ''),
+        // it keeps working through the reload: running, or waiting for the permission to run
+        (c) => (!/working|waiting/.test(c.status) ? `it stopped: ${c.status} after the reload` : ''),
         undefined,
-        { prompt: 'Use the Bash tool to run: sleep 60 . Then reply done.', closeMs: 25000, reportMs: 20000 },
+        { prompt: `Use the Bash tool, in the foreground (no background flag), to run exactly this once: node -e "setTimeout(() => {}, 150000)"`, closeMs: 25000, reportMs: 20000, keepsRelay: true },
       ),
     );
   if (ok.includes(false)) process.exit(1);
