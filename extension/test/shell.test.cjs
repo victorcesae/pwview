@@ -239,3 +239,26 @@ test('follow view: shows output as written, ignores typing, says when the file i
   assert.ok(closed, 'Ctrl+C closes the view');
   pty.close();
 });
+
+test('tool pictures: shown from a live result and from a transcript, too large ones noted', () => {
+  const out2 = path.join(os.tmpdir(), 'steerhouse-toolimg-build');
+  execSync(`npx esbuild src/chat.ts --bundle --platform=node --format=cjs --outdir="${out2}" --alias:vscode="${path.join(__dirname, 'vscode-stub.cjs')}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --log-level=error`, { cwd: root });
+  const { resultImages, historyFromTranscript } = require(path.join(out2, 'chat.js'));
+  const png = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' } };
+  assert.deepStrictEqual(resultImages([{ type: 'text', text: 'x' }, png]), { images: ['data:image/png;base64,iVBORw0KGgo='], skipped: 0 });
+  const huge = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'A'.repeat(7 * 1024 * 1024) } };
+  assert.deepStrictEqual(resultImages([png, png, png, png, png, huge]).images.length, 4);
+  assert.strictEqual(resultImages([png, png, png, png, png, huge]).skipped, 2);
+  assert.deepStrictEqual(resultImages('text'), { images: [], skipped: 0 });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-toolimg-'));
+  const file = path.join(dir, 's.jsonl');
+  const rec = (o) => JSON.stringify({ sessionId: 's', cwd: '/w', timestamp: new Date().toISOString(), ...o });
+  fs.writeFileSync(file, [
+    rec({ type: 'user', uuid: 'u1', message: { role: 'user', content: 'look at the screenshot' } }),
+    rec({ type: 'assistant', uuid: 'a1', message: { id: 'm1', role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'tool_use', id: 'tu1', name: 'Read', input: { file_path: '/tmp/ds-device-3.png' } }] } }),
+    rec({ type: 'user', uuid: 'u2', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1', content: [png] }] } }),
+  ].join('\n') + '\n');
+  const read = historyFromTranscript(file).items.find((i) => i.kind === 'tool');
+  assert.deepStrictEqual(read.images, ['data:image/png;base64,iVBORw0KGgo=']);
+  assert.ok(!/\[image\]/.test(read.result ?? ''), 'no placeholder text');
+});

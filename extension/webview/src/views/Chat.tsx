@@ -113,12 +113,7 @@ function ToolRow({ it, sessionId, children }: { it: Extract<ChatItem, { kind: 't
             !children && (
               <>
                 <ToolInput it={it} />
-                {it.result && (
-                  <div className="border-t">
-                    <div className="text-muted-foreground px-3 pt-1.5 text-[10.5px] font-medium tracking-wide uppercase">{t('Output')}</div>
-                    <pre className="text-foreground/85 max-h-72 overflow-auto px-3 pt-1 pb-2 font-mono text-[11.5px] whitespace-pre-wrap">{it.result}</pre>
-                  </div>
-                )}
+                <ToolOutput it={it} />
               </>
             )
           )}
@@ -170,6 +165,24 @@ function StepLabel({ it }: { it: ToolItem }) {
   }
 }
 
+/** What a call returned: its text, and the pictures it read or took (click to enlarge). */
+function ToolOutput({ it }: { it: ToolItem }) {
+  if (!it.result && !it.images?.length) return null;
+  return (
+    <div className="border-t" data-tool-output>
+      <div className="text-muted-foreground px-3 pt-1.5 text-[10.5px] font-medium tracking-wide uppercase">{t('Output')}</div>
+      {!!it.images?.length && (
+        <div className="flex flex-wrap gap-2 px-3 pt-1.5">
+          {it.images.map((src, i) => (
+            <Zoomable key={i} src={src} className="max-h-64 max-w-full rounded-md border object-contain" />
+          ))}
+        </div>
+      )}
+      {it.result && <pre className="text-foreground/85 max-h-72 overflow-auto px-3 pt-1 pb-2 font-mono text-[11.5px] whitespace-pre-wrap">{it.result}</pre>}
+    </div>
+  );
+}
+
 /** Full details of one call: the command or input, the output, or the diff. */
 function ToolDetails({ it, sessionId }: { it: ToolItem; sessionId?: string }) {
   if (it.patch && it.patch.length > 0)
@@ -193,12 +206,7 @@ function ToolDetails({ it, sessionId }: { it: ToolItem; sessionId?: string }) {
   return (
     <>
       <ToolInput it={it} />
-      {it.result && (
-        <div className="border-t">
-          <div className="text-muted-foreground px-3 pt-1.5 text-[10.5px] font-medium tracking-wide uppercase">{t('Output')}</div>
-          <pre className="text-foreground/85 max-h-72 overflow-auto px-3 pt-1 pb-2 font-mono text-[11.5px] whitespace-pre-wrap">{it.result}</pre>
-        </div>
-      )}
+      <ToolOutput it={it} />
     </>
   );
 }

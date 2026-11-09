@@ -63,7 +63,7 @@ export type Question = { question: string; header: string; multiSelect: boolean;
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string }
   | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string }
-  | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
+  | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; images?: string[]; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
   | { kind: 'shell'; id: string; command: string; output: string; status: 'running' | 'done' | 'error'; exitCode?: number | null; error?: string }
   | { kind: 'permission'; id: string; tool: string; summary: string; input: unknown; canAlways: boolean; status: 'pending' | 'allowed' | 'denied'; reason?: string }
   | { kind: 'plan'; id: string; plan: string; status: 'pending' | 'approved' | 'rejected' }

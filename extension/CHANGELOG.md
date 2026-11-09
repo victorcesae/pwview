@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.14
+- Uses pwview 0.2.1, which caps each project's browser cache at 100 MB (it reached 807 MB in one project).
+- Pictures a tool returns (the agent reading a .png, a screenshot) are shown in its output, and enlarge on click, instead of the word [image]. Up to 4 per call.
+
 ## 1.0.13
 - Jump to latest stays readable on hover: themes with a see-through hover colour (the GitHub themes) made it transparent over the chat.
 - The VS Code mark in the chat header is just the blue icon, with no box behind it.

@@ -18,7 +18,7 @@ export type Todo = { content: string; status: 'pending' | 'in_progress' | 'compl
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string }
   | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string }
-  | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
+  | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; images?: string[]; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
   | { kind: 'shell'; id: string; command: string; output: string; status: 'running' | 'done' | 'error'; exitCode?: number | null; error?: string }
   | { kind: 'permission'; id: string; tool: string; summary: string; input: unknown; canAlways: boolean; status: 'pending' | 'allowed' | 'denied'; reason?: string }
   | { kind: 'plan'; id: string; plan: string; status: 'pending' | 'approved' | 'rejected' }
@@ -218,10 +218,21 @@ function summary(name: string, input: any): string {
   }
 }
 
+/** Pictures a tool returned (reading a .png, a screenshot) are shown; past these limits, a note instead. */
+const MAX_TOOL_IMAGES = 4;
+const MAX_TOOL_IMAGE_CHARS = 6 * 1024 * 1024;
+export function resultImages(content: unknown): { images: string[]; skipped: number } {
+  const all = Array.isArray(content) ? content.filter((c: any) => c?.type === 'image' && c.source?.type === 'base64' && typeof c.source.data === 'string') : [];
+  const fit = all.filter((c: any) => c.source.data.length <= MAX_TOOL_IMAGE_CHARS).slice(0, MAX_TOOL_IMAGES);
+  return { images: fit.map((c: any) => `data:${c.source.media_type ?? 'image/png'};base64,${c.source.data}`), skipped: all.length - fit.length };
+}
+
 function resultText(content: unknown): string {
   if (typeof content === 'string') return content;
-  if (Array.isArray(content)) return content.map((c: any) => (c?.type === 'text' ? c.text : c?.type === 'image' ? '[image]' : '')).join('\n');
-  return '';
+  if (!Array.isArray(content)) return '';
+  const { skipped } = resultImages(content);
+  const text = content.map((c: any) => (c?.type === 'text' ? c.text : '')).filter(Boolean).join('\n');
+  return skipped ? [text, `[${skipped} image(s) too large to show]`].filter(Boolean).join('\n') : text;
 }
 
 const NOISE = ['<system-reminder>', '<local-command', '<command-', 'Caveat:', '[Request interrupted'];
@@ -276,6 +287,8 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
           if (!t) continue;
           t.status = c.is_error ? 'error' : 'done';
           t.result = clip(resultText(c.content), 6000);
+          const pics = resultImages(c.content).images;
+          if (pics.length) t.images = pics;
           const r = rec.toolUseResult;
           if (r && Array.isArray(r.structuredPatch)) t.patch = r.structuredPatch;
         }
@@ -985,6 +998,8 @@ export class ChatSession {
           if (!t) continue;
           t.status = c.is_error ? 'error' : 'done';
           t.result = clip(resultText(c.content), 6000);
+          const pics = resultImages(c.content).images;
+          if (pics.length) t.images = pics;
           const r: any = (m as any).tool_use_result;
           if (r && Array.isArray(r.structuredPatch)) t.patch = r.structuredPatch;
           if (r?.filePath) t.file = r.filePath;

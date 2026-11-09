@@ -2,7 +2,7 @@
   "name": "steerhouse",
   "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,

@@ -11,7 +11,7 @@ import { LiveBrowser } from './liveBrowser';
 import { which } from './util';
 
 /** The pwview release Steerhouse needs (for `status --json` and starting the browser on demand). */
-export const PWVIEW_VERSION = '0.2.0';
+export const PWVIEW_VERSION = '0.2.1';
 const RELEASES = 'https://github.com/victorcesae/pwview/releases/download';
 
 export interface PwviewStatus {
