@@ -63,6 +63,17 @@ async function run() {
     const after = vscode.window.tabGroups.all.flatMap((g) => g.tabs).filter((t) => t.input?.viewType?.endsWith('steerhouse.chat')).length;
     assert.strictEqual(after, before + 1);
   });
+  await check('open terminal here opens a shell in that folder', async () => {
+    const dir = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'steerhouse-term-'));
+    const before = vscode.window.terminals.length;
+    await vscode.commands.executeCommand('steerhouse.openTerminalHere', { kind: 'project', path: dir });
+    await wait(800);
+    assert.strictEqual(vscode.window.terminals.length, before + 1);
+    const term = vscode.window.terminals.at(-1);
+    const cwd = term.creationOptions.cwd;
+    assert.strictEqual(String(cwd?.fsPath ?? cwd).toLowerCase(), dir.toLowerCase());
+    term.dispose();
+  });
   await check('check setup runs', async () => {
     await vscode.commands.executeCommand('steerhouse.refresh');
   });

@@ -24,6 +24,7 @@ export type ToExtension =
   | { type: 'openUrl'; url: string }
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
+  | { type: 'openTerminal' }
   | { type: 'editPrompt'; id: string; text: string }
   | { type: 'stash'; text: string }
   | { type: 'unstash'; index: number }
@@ -77,6 +78,7 @@ export type ToChat =
   | { type: 'openUrl'; url: string }
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
+  | { type: 'openTerminal' }
   | { type: 'editPrompt'; id: string; text: string }
   | { type: 'stash'; text: string }
   | { type: 'unstash'; index: number }

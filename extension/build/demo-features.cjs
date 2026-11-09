@@ -35,6 +35,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await send('Page.navigate', { url: 'about:blank' });
   await sleep(300);
   await send('Page.navigate', { url: baseUrl + '/#multi' });
+  await sleep(1500);
+  // start clean: no viewed marks left from an earlier run
+  await evaluate(`sessionStorage.clear()`);
+  await send('Page.reload');
   await sleep(3000);
 
   // suggestion
@@ -101,6 +105,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await sleep(200);
   check('Merge asks the extension (which confirms first)', (await sentMsgs()).some((m) => m.type === 'prMerge' && m.url.endsWith('/1288')));
 
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  await sleep(200);
+  await evaluate(`document.querySelector('[data-open-terminal]').click()`);
+  await sleep(150);
+  check('terminal button asks to open a terminal in the chat folder', (await sentMsgs()).some((m) => m.type === 'openTerminal'));
   console.log(results.join('\n'));
   console.log(errors.length ? 'errors: ' + errors.join(' | ') : 'no JS errors');
   ws.close();

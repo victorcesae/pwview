@@ -78,5 +78,6 @@
   "cmd.unpin.project": "Unpin",
   "cmd.archive.project": "Archive Project",
   "cmd.unarchive.project": "Unarchive Project",
-  "cmd.remote.access": "Open on Phone…"
+  "cmd.remote.access": "Open on Phone…",
+  "cmd.open.terminal.here": "Open Terminal Here"
 }

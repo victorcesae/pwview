@@ -78,5 +78,6 @@
   "cmd.unpin.project": "Desafixar",
   "cmd.archive.project": "Arquivar projeto",
   "cmd.unarchive.project": "Desarquivar projeto",
-  "cmd.remote.access": "Abrir no celular…"
+  "cmd.remote.access": "Abrir no celular…",
+  "cmd.open.terminal.here": "Abrir terminal aqui"
 }

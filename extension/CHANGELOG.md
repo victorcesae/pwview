@@ -1,6 +1,7 @@
 # Changelog
 
-## 0.13.0
+## 1.0.0
+- **Open Terminal Here** from a chat (header button), a project or a folder in the Sessions tree.
 - **Renamed AgentLens to Steerhouse**, with a new icon. Settings (`agentlens.*` → `steerhouse.*`), the data folder and Claude Code hook entries carry over on first start.
 
 ## 0.12.0

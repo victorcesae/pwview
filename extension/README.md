@@ -11,7 +11,7 @@ line and the agent picks it up. Works in VS Code, Cursor, Windsurf and VSCodium,
 
 ## What you get
 
-- **New in 0.13:** worktree per chat; PR files with viewed marks and Merge; edit an earlier message and run again (with file undo); Quote, Up-arrow recall, prompt stash and suggested next prompt; pin and archive projects; Open on Phone; Add MCP server; accounts view; agent picker (Claude, providers, Cursor Agent, Codex, Gemini, OpenCode, Grok).
+- **New in 1.0:** worktree per chat; PR files with viewed marks and Merge; edit an earlier message and run again (with file undo); Quote, Up-arrow recall, prompt stash and suggested next prompt; pin and archive projects; Open on Phone; Add MCP server; accounts view; agent picker (Claude, providers, Cursor Agent, Codex, Gemini, OpenCode, Grok).
 
 - **Steerhouse chat:** Claude Code with a real UI instead of a terminal. You get streaming answers, the
   agent's **plan as a live checklist**, what it's doing right now ("Searching…", "Editing page.tsx…"), every

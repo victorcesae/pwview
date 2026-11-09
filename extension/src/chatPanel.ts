@@ -23,6 +23,7 @@ export type FromChat =
   | { type: 'openUrl'; url: string }
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
+  | { type: 'openTerminal' }
   | { type: 'editPrompt'; id: string; text: string }
   | { type: 'stash'; text: string }
   | { type: 'unstash'; index: number }
@@ -409,6 +410,8 @@ export class Chats {
       }
       case 'editPrompt':
         return this.editAndRerun(o, m.id, m.text);
+      case 'openTerminal':
+        return vscode.commands.executeCommand('steerhouse.openTerminalHere', c.state.cwd);
       case 'deleteSession':
         return c.state.sessionId && vscode.commands.executeCommand('steerhouse.deleteSession', c.state.sessionId);
       case 'revealFolder':

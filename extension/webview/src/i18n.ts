@@ -100,6 +100,8 @@ const PT: Record<string, string> = {
   'A classifier approves safe actions': 'Um classificador aprova ações seguras',
   'Never asks. Use with care': 'Nunca pergunta. Use com cuidado',
   Context: 'Contexto',
+  'Open a terminal in this folder': 'Abrir um terminal nesta pasta',
+  'Open terminal': 'Abrir terminal',
   Quote: 'Citar',
   'Quote this answer in your next message': 'Citar esta resposta na sua próxima mensagem',
   Copy: 'Copiar',

@@ -2,7 +2,7 @@
   "name": "steerhouse",
   "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "0.13.0",
+  "version": "1.0.0",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -349,6 +349,12 @@
         "title": "%cmd.remote.access%",
         "category": "Steerhouse",
         "icon": "$(device-mobile)"
+      },
+      {
+        "command": "steerhouse.openTerminalHere",
+        "title": "%cmd.open.terminal.here%",
+        "category": "Steerhouse",
+        "icon": "$(terminal)"
       }
     ],
     "menus": {
@@ -544,6 +550,16 @@
           "command": "steerhouse.removeWorktree",
           "when": "view == steerhouse.sessions && viewItem =~ /\\bworktree\\b/",
           "group": "9_delete@1"
+        },
+        {
+          "command": "steerhouse.openTerminalHere",
+          "when": "view == steerhouse.sessions && viewItem =~ /^project\b/",
+          "group": "inline@2"
+        },
+        {
+          "command": "steerhouse.openTerminalHere",
+          "when": "view == steerhouse.sessions && viewItem == fsfolder",
+          "group": "inline@1"
         }
       ],
       "comments/commentThread/context": [

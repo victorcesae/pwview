@@ -656,6 +656,13 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (s) runAgent(`${clip(s.info.title, 30)}`, s.info.project, ['--resume', s.info.id], await envFor(accountOf(s.info.account)));
     }),
     // "New chat here" on a project or folder in the Sessions tree (or a folder in the Explorer)
+    // Your default shell in that folder (from a chat, a project or a folder in the tree)
+    vscode.commands.registerCommand('steerhouse.openTerminalHere', (n?: { path?: string } | vscode.Uri | string) => {
+      const dir = typeof n === 'string' ? n : n instanceof vscode.Uri ? n.fsPath : (n?.path ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
+      if (!dir) return vscode.window.showWarningMessage(vscode.l10n.t('Open a folder first.'));
+      const cwd = fs.existsSync(dir) && fs.statSync(dir).isDirectory() ? dir : path.dirname(dir);
+      vscode.window.createTerminal({ name: path.basename(cwd), cwd }).show();
+    }),
     vscode.commands.registerCommand('steerhouse.newChatHere', (n?: { kind?: string; path?: string } | vscode.Uri) => {
       const cwd = n instanceof vscode.Uri ? n.fsPath : n?.path;
       if (!cwd) return vscode.commands.executeCommand('steerhouse.newChat');

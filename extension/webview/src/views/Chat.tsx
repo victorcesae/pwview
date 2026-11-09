@@ -1,4 +1,4 @@
-import { Ban, Bot, ChevronUp, Copy, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
+import { Ban, Bot, ChevronUp, Copy, SquareTerminal, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
@@ -773,6 +773,9 @@ export function ChatView({ data }: { data: ChatData }) {
         )}
         <Button size="xs" variant="ghost" onClick={() => (setSearchOpen((o) => !o), requestAnimationFrame(() => searchInput.current?.focus()))} title={t('Search (Ctrl+F)')} aria-label={t('Search')}>
           <Search />
+        </Button>
+        <Button size="xs" variant="ghost" onClick={() => post({ type: 'openTerminal' })} title={t('Open a terminal in this folder')} aria-label={t('Open terminal')} data-open-terminal>
+          <SquareTerminal />
         </Button>
         <Button size="xs" variant="ghost" onClick={() => post({ type: 'link' })} title={t('Let this agent see what another session is doing')}>
           <Link2 /> {t('Link session')}
