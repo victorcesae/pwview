@@ -62,7 +62,16 @@ export function App() {
         if (m.type === 'openSession') setData(mock.session(m.id, m.agentId));
         else if (m.type === 'overview') setData(mock.overview);
         else if (m.type === 'message') window.postMessage({ type: 'toast', text: m.mode === 'steer' ? 'steering: delivered at its next step' : m.mode === 'now' ? 'interrupted and sent' : 'queued: delivered when this turn ends' }, '*');
-        else console.info('[dev] would send to extension:', m);
+        else if (m.type === 'prFiles' || m.type === 'prViewed') {
+          // browser dev mode: answer like the extension would (GitHub's file list with viewed marks)
+          const viewed = new Set(JSON.parse(sessionStorage.getItem('devViewed') ?? '[]'));
+          if (m.type === 'prViewed') (m.viewed ? viewed.add(m.path) : viewed.delete(m.path), sessionStorage.setItem('devViewed', JSON.stringify([...viewed])));
+          const files = mock.prFiles.map((f) => ({ ...f, viewed: viewed.has(f.path) }));
+          setTimeout(() => window.postMessage({ type: 'prFilesResult', url: m.url, id: 'PR_dev', files }, '*'), 50);
+        } else {
+          (window as any).__devSent = [...((window as any).__devSent ?? []), m];
+          console.info('[dev] would send to extension:', m);
+        }
       });
     }
     post({ type: 'ready' });

@@ -24,6 +24,13 @@ export type ToExtension =
   | { type: 'openUrl'; url: string }
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
+  | { type: 'editPrompt'; id: string; text: string }
+  | { type: 'stash'; text: string }
+  | { type: 'unstash'; index: number }
+  | { type: 'prFiles'; url: string }
+  | { type: 'prViewed'; url: string; prId: string; path: string; viewed: boolean }
+  | { type: 'prMerge'; url: string }
+  | { type: 'prOpenFile'; url: string; path: string }
   | { type: 'openChange'; sessionId: string; changeId: string }
   | { type: 'openFile'; path: string }
   | { type: 'resume'; id: string }
@@ -43,7 +50,7 @@ export type Priority = 'later' | 'next' | 'now';
 export type Todo = { content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string };
 export type Question = { question: string; header: string; multiSelect: boolean; options: { label: string; description: string }[] };
 export type ChatItem =
-  | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string }
+  | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string }
   | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string }
   | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
   | { kind: 'permission'; id: string; tool: string; summary: string; input: unknown; canAlways: boolean; status: 'pending' | 'allowed' | 'denied'; reason?: string }
@@ -55,7 +62,7 @@ export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | '
 export interface ChatState {
   key: string; sessionId?: string; cwd: string; title: string; model?: string; models: { value: string; displayName: string }[];
   permissionMode: PermissionMode; effort?: Effort; fastMode: boolean; ultracode: boolean; status: 'starting' | 'idle' | 'working' | 'waiting' | 'closed' | 'error'; activity?: string;
-  todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[]; tokens?: number; context?: { used: number; max: number; percentage: number; detailed?: boolean; categories?: { id?: string; name: string; tokens: number; kind: 'used' | 'free' | 'buffer' | 'deferred' }[] }; earlier: number; slashCommands: string[]; mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string }; host?: string; hostIcon?: string; limits?: Limits; prs?: Record<string, { state: 'open' | 'draft' | 'merged' | 'closed' | 'unknown'; title?: string; tasks?: { done: number; total: number }; checks?: PrCheckView[]; review?: 'approved' | 'changes_requested' | 'required' }>; error?: string;
+  todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[]; tokens?: number; context?: { used: number; max: number; percentage: number; detailed?: boolean; categories?: { id?: string; name: string; tokens: number; kind: 'used' | 'free' | 'buffer' | 'deferred' }[] }; earlier: number; slashCommands: string[]; mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string }; host?: string; hostIcon?: string; limits?: Limits; suggestion?: string; stash?: string[]; prs?: Record<string, { state: 'open' | 'draft' | 'merged' | 'closed' | 'unknown'; title?: string; tasks?: { done: number; total: number }; checks?: PrCheckView[]; review?: 'approved' | 'changes_requested' | 'required' }>; error?: string;
 }
 export type LinkedSession = { id: string; title: string; state: State; activity?: string };
 export type ChatData = { view: 'chat'; chat: ChatState; linked: LinkedSession[] };
@@ -70,6 +77,13 @@ export type ToChat =
   | { type: 'openUrl'; url: string }
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
+  | { type: 'editPrompt'; id: string; text: string }
+  | { type: 'stash'; text: string }
+  | { type: 'unstash'; index: number }
+  | { type: 'prFiles'; url: string }
+  | { type: 'prViewed'; url: string; prId: string; path: string; viewed: boolean }
+  | { type: 'prMerge'; url: string }
+  | { type: 'prOpenFile'; url: string; path: string }
   | { type: 'contextDetail' }
   | { type: 'toggleMcp'; name: string; enabled: boolean }
   | { type: 'reconnectMcp'; name: string }

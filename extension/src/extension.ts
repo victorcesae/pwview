@@ -4,6 +4,8 @@ import * as vscode from 'vscode';
 import { editRules, openRules } from './rules';
 import { modelLabel } from './pricing';
 import { installedAgents, runCliAgent } from './agents';
+import { addWorktree, removeWorktree, repoRoot, slug, validBranch, worktreeInfo } from './worktree';
+import { lanAddress, RemoteServer } from './remote';
 import { MCP_PRESETS, mcpAddArgs, runClaude, sdkConfig, splitCommand, validName, type McpPreset, type McpScope, type McpServer } from './mcp';
 import { addComment, cancelComment, editComment, loadComments, Mode } from './comments';
 import { changeDetail, Engine, Session } from './engine';
@@ -124,7 +126,20 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   // ------------------------------------------------------------ views
   setMediaRoot(vscode.Uri.joinPath(ctx.extensionUri, 'media'));
-  const tree = new SessionsTree(() => sessions, () => hooks, () => attachedSessions());
+  let remoteServer: RemoteServer | undefined;
+  const remoteItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
+  remoteItem.command = 'agentlens.remoteAccess';
+  ctx.subscriptions.push(remoteItem, { dispose: () => void remoteServer?.stop() });
+  const marks = () => ({ pinned: ctx.globalState.get<string[]>('agentlens.pinned', []), archived: ctx.globalState.get<string[]>('agentlens.archived', []) });
+  const tree = new SessionsTree(() => sessions, () => hooks, () => attachedSessions(), marks);
+  /** Adds or removes a project in a pinned / archived list, then repaints the tree. */
+  const mark = async (list: 'pinned' | 'archived', p: string | undefined, on: boolean) => {
+    if (!p) return;
+    const key = `agentlens.${list}`;
+    const cur = ctx.globalState.get<string[]>(key, []).filter((x) => x !== p);
+    await ctx.globalState.update(key, on ? [...cur, p] : cur);
+    tree.refresh();
+  };
   const treeView = vscode.window.createTreeView('agentlens.sessions', {
     treeDataProvider: tree,
     showCollapseAll: true,
@@ -501,6 +516,101 @@ export function activate(ctx: vscode.ExtensionContext) {
         const account = s ? accountOf(s.info.account) : (listAccounts().find((a) => a.name === state.account) ?? listAccounts()[0]);
         chats.start({ cwd: s?.info.project ?? state.cwd, resume: state.sessionId, title: s?.info.title ?? state.title, account, env: await envFor(account), panel });
       },
+    }),
+    vscode.commands.registerCommand('agentlens.pinProject', (n?: { path?: string }) => mark('pinned', n?.path, true)),
+    vscode.commands.registerCommand('agentlens.unpinProject', (n?: { path?: string }) => mark('pinned', n?.path, false)),
+    vscode.commands.registerCommand('agentlens.archiveProject', async (n?: { path?: string }) => (await mark('pinned', n?.path, false), mark('archived', n?.path, true))),
+    vscode.commands.registerCommand('agentlens.unarchiveProject', (n?: { path?: string }) => mark('archived', n?.path, false)),
+    // A chat in its own git worktree (new branch, separate folder), so parallel agents don't collide
+    vscode.commands.registerCommand('agentlens.newChatInWorktree', async (n?: { path?: string } | vscode.Uri) => {
+      const from = n instanceof vscode.Uri ? n.fsPath : (n?.path ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
+      if (!from) return vscode.window.showWarningMessage(vscode.l10n.t('Open a folder first.'));
+      const root = await repoRoot(from);
+      if (!root) return vscode.window.showWarningMessage(vscode.l10n.t('{0} is not in a git repository.', path.basename(from)));
+      const task = await vscode.window.showInputBox({ title: vscode.l10n.t('New chat in a worktree of {0}', path.basename(root)), prompt: vscode.l10n.t('What is this chat for? It names the branch.'), placeHolder: vscode.l10n.t('e.g. fix login redirect') });
+      if (task === undefined) return;
+      const branch = await vscode.window.showInputBox({
+        title: vscode.l10n.t('Branch'),
+        value: `agentlens/${slug(task || new Date().toISOString().slice(0, 16))}`,
+        validateInput: (b) => (validBranch(b) ? undefined : vscode.l10n.t('Not a valid branch name')),
+      });
+      if (!branch) return;
+      const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Creating worktree {0}…', branch) }, () => addWorktree(root, branch));
+      if (!r.ok) return vscode.window.showErrorMessage(vscode.l10n.t('Could not create the worktree: {0}', r.error.slice(0, 300)));
+      const account = await pickAgent(r.dir);
+      if (account) chats.start({ cwd: r.dir, account, env: await envFor(account), title: task || undefined, prompt: undefined });
+      refresh(true);
+    }),
+    vscode.commands.registerCommand('agentlens.removeWorktree', async (n?: { path?: string }) => {
+      const dir = n?.path;
+      const info = dir && worktreeInfo(dir);
+      if (!dir || !info) return;
+      const ok = await vscode.window.showWarningMessage(
+        vscode.l10n.t('Remove the worktree folder {0}?', path.basename(dir)),
+        { modal: true, detail: vscode.l10n.t('The folder is deleted; the branch {0} and its commits stay in {1}. Sessions that ran there keep their history.', info.branch ?? '?', path.basename(info.main)) },
+        vscode.l10n.t('Remove Worktree'),
+      );
+      if (!ok) return;
+      let r = await removeWorktree(dir);
+      if (!r.ok && /modified|untracked|dirty|changes/i.test(r.out)) {
+        const force = await vscode.window.showWarningMessage(
+          vscode.l10n.t('{0} has uncommitted changes.', path.basename(dir)),
+          { modal: true, detail: vscode.l10n.t('Removing it anyway deletes those changes for good.') },
+          vscode.l10n.t('Remove Anyway'),
+        );
+        if (!force) return;
+        r = await removeWorktree(dir, true);
+      }
+      if (!r.ok) return vscode.window.showErrorMessage(r.out.slice(0, 300));
+      vscode.window.setStatusBarMessage(vscode.l10n.t('$(git-branch) AgentLens: worktree {0} removed', path.basename(dir)), 5000);
+      refresh(true);
+    }),
+    // Your sessions on your phone: a small web page with a secret key in its link
+    vscode.commands.registerCommand('agentlens.remoteAccess', async () => {
+      const remote = (remoteServer ??= new RemoteServer({ sessions: () => sessions, send: (id, text, mode) => send(id, text, mode) }));
+      const link = async () => {
+        const base = remote.host === '0.0.0.0' ? vscode.Uri.parse(`http://${lanAddress() ?? '127.0.0.1'}:${remote.port}/`) : await vscode.env.asExternalUri(vscode.Uri.parse(`http://127.0.0.1:${remote.port}/`));
+        return base.with({ query: `k=${remote.key}` }).toString(true);
+      };
+      if (remote.running) {
+        const copy = vscode.l10n.t('Copy Link');
+        const openIt = vscode.l10n.t('Open');
+        const stop = vscode.l10n.t('Stop');
+        const a = await vscode.window.showInformationMessage(vscode.l10n.t('AgentLens is serving your sessions on port {0}.', remote.port), copy, openIt, stop);
+        if (a === copy) await vscode.env.clipboard.writeText(await link());
+        if (a === openIt) await vscode.env.openExternal(vscode.Uri.parse(await link()));
+        if (a === stop) {
+          await remote.stop();
+          remoteItem.hide();
+        }
+        return;
+      }
+      type P = vscode.QuickPickItem & { host: '127.0.0.1' | '0.0.0.0' };
+      const how = await vscode.window.showQuickPick<P>(
+        [
+          {
+            label: '$(lock) ' + vscode.l10n.t('Private: this computer, or anywhere via port forwarding'),
+            detail: vscode.l10n.t('Only this machine can open it. For your phone, forward the port in the Ports panel (private ports ask for a GitHub sign-in).'),
+            host: '127.0.0.1',
+          },
+          {
+            label: '$(broadcast) ' + vscode.l10n.t('Phones on the same Wi-Fi'),
+            detail: vscode.l10n.t('Anyone on this network who has the link can read and steer your sessions. Use only on networks you trust.'),
+            host: '0.0.0.0',
+          },
+        ],
+        { title: vscode.l10n.t('Open your sessions on a phone or another browser') },
+      );
+      if (!how) return;
+      const port = await remote.start(how.host);
+      remoteItem.text = '$(device-mobile) ' + port;
+      remoteItem.tooltip = vscode.l10n.t('AgentLens is serving your sessions (click for the link or to stop)');
+      remoteItem.show();
+      const url = await link();
+      await vscode.env.clipboard.writeText(url);
+      const openIt = vscode.l10n.t('Open');
+      const a = await vscode.window.showInformationMessage(vscode.l10n.t('Link copied. Open it on your phone: it holds a secret key, so share it only with yourself.'), openIt);
+      if (a === openIt) await vscode.env.openExternal(vscode.Uri.parse(url));
     }),
     // Delete sessions (several when selected together): confirm, then move the conversation and its
     // sub-agents to the system trash, so it can be recovered.

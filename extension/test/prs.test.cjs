@@ -145,3 +145,19 @@ test('prs (real GitHub): open PR with Actions checks and review decision', { ski
   for (const c of o.checks) assert.ok(['pass', 'fail', 'pending', 'skipped'].includes(c.state) && c.name);
   assert.ok(o.checks.some((c) => c.workflow), 'Actions jobs carry their workflow name');
 });
+
+test('prs: merge arguments and GitHub PR links', () => {
+  assert.deepStrictEqual(P.mergeArgs('https://github.com/a/b/pull/3', 'squash', true), ['pr', 'merge', 'https://github.com/a/b/pull/3', '--squash', '--delete-branch']);
+  assert.deepStrictEqual(P.mergeArgs('https://github.com/a/b/pull/3', 'rebase', false), ['pr', 'merge', 'https://github.com/a/b/pull/3', '--rebase']);
+  assert.deepStrictEqual(P.parseGithubPr('https://github.com/cli/cli/pull/1'), { owner: 'cli', repo: 'cli', number: 1 });
+  assert.strictEqual(P.parseGithubPr('https://gitlab.com/g/web/-/merge_requests/9'), undefined);
+});
+
+test('prs (real GitHub): changed files with your viewed marks (read only)', { skip: !online && 'gh not logged in' }, async () => {
+  const r = await P.prFiles('https://github.com/cli/cli/pull/1');
+  assert.ok(!r.error, r.error);
+  assert.ok(typeof r.id === 'string' && r.id.length > 10, 'GraphQL node id');
+  assert.ok(r.files.length > 0);
+  for (const f of r.files) assert.ok(typeof f.path === 'string' && Number.isInteger(f.additions) && typeof f.viewed === 'boolean');
+  assert.ok((await P.prFiles('https://gitlab.com/g/web/-/merge_requests/9')).error);
+});

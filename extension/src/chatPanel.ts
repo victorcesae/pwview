@@ -1,8 +1,10 @@
 // Hosts AgentLens chats: one webview panel per ChatSession.
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { ChatSession, historyFromTranscript, Priority, type ChatPrefs } from './chat';
 import { hostIcon } from './hostIcon';
-import { findPrUrls, PrTracker } from './prs';
+import { findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMethod } from './prs';
 import { openUrl } from './browser';
 import { vendorOf } from './providers';
 import type { Session } from './engine';
@@ -21,6 +23,13 @@ export type FromChat =
   | { type: 'openUrl'; url: string }
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
+  | { type: 'editPrompt'; id: string; text: string }
+  | { type: 'stash'; text: string }
+  | { type: 'unstash'; index: number }
+  | { type: 'prFiles'; url: string }
+  | { type: 'prViewed'; url: string; prId: string; path: string; viewed: boolean }
+  | { type: 'prMerge'; url: string }
+  | { type: 'prOpenFile'; url: string; path: string }
   | { type: 'contextDetail' }
   | { type: 'toggleMcp'; name: string; enabled: boolean }
   | { type: 'reconnectMcp'; name: string }
@@ -41,6 +50,8 @@ export type FromChat =
 interface Open {
   chat: ChatSession;
   panel: vscode.WebviewPanel;
+  /** pending repaint (streaming updates are throttled to ~25 fps) */
+  timer?: ReturnType<typeof setTimeout>;
   /** what the webview already has: item id -> serialized item, and the item order */
   sent?: { items: Map<string, string>; order: string[] };
   /** vendor whose mark is the tab icon */
@@ -69,6 +80,67 @@ export class Chats {
     private sessions: () => Session[],
     private openSession: (id: string) => void,
   ) {}
+
+  /** Repaint soon (at most every 40 ms). */
+  private schedule(o: Open) {
+    if (o.timer) return;
+    o.timer = setTimeout(() => {
+      o.timer = undefined;
+      this.post(o);
+    }, 40);
+  }
+
+  private stash(): string[] {
+    return this.ctx.globalState.get<string[]>('agentlens.stash', []);
+  }
+
+  /**
+   * Edit an earlier prompt and run the conversation again from there: the session is forked at the
+   * entry before that prompt (the original stays in history), the tab switches to the fork, and the
+   * edited text is sent. Optionally the files the agent changed since are restored first.
+   */
+  private async editAndRerun(o: Open, itemId: string, text: string) {
+    const c = o.chat;
+    const idx = c.state.items.findIndex((it) => it.id === itemId);
+    const item = c.state.items[idx];
+    if (!item || item.kind !== 'user' || !c.state.sessionId) return;
+    if (!item.forkAt) return vscode.window.showWarningMessage(vscode.l10n.t('This message cannot be run again (it is the first one of a session started outside AgentLens).'));
+    if (c.state.status === 'working' || c.state.status === 'waiting') await c.interrupt();
+    const undo = vscode.l10n.t('Undo File Changes Too');
+    const keep = vscode.l10n.t('Keep Files');
+    const pick = await vscode.window.showWarningMessage(
+      vscode.l10n.t('Run the conversation again from this message?'),
+      { modal: true, detail: vscode.l10n.t('Everything after it is left out of the new run (the original session stays in your history). The agent may have changed files since: undo those changes too?') },
+      undo,
+      keep,
+    );
+    if (!pick) return;
+    if (pick === undo) {
+      const r = await c.rewindFilesTo(item.id);
+      if (!r.ok) {
+        const go = await vscode.window.showWarningMessage(vscode.l10n.t('The files could not be restored: {0}', r.error ?? ''), { modal: true }, vscode.l10n.t('Run Again Anyway'));
+        if (!go) return;
+      }
+    }
+    const history = { items: c.state.items.slice(0, idx).filter((it) => it.kind !== 'permission'), todos: [] };
+    const fork = new ChatSession(
+      {
+        ...c.options,
+        resume: c.state.sessionId,
+        fork: { at: item.forkAt },
+        history,
+        prefs: { model: c.state.model, effort: c.state.effort, permissionMode: c.state.permissionMode, fastMode: c.state.fastMode, ultracode: c.state.ultracode },
+      },
+      () => this.schedule(o),
+    );
+    c.close();
+    o.chat = fork;
+    o.sent = undefined;
+    o.prUrls = undefined;
+    fork.start();
+    fork.send(text, [], 'later');
+    this.post(o);
+  }
 
   /** Tells you when a chat you're not looking at finishes or waits for an approval or an answer. */
   private notify(o: Open) {
@@ -161,23 +233,15 @@ export class Chats {
       });
     if (opts.panel) panel.webview.options = { enableScripts: true, localResourceRoots: [root] };
     panel.iconPath = { light: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon-light.svg'), dark: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon-dark.svg') };
-    let timer: ReturnType<typeof setTimeout> | undefined;
     const transcript = opts.resume ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
     const history = transcript ? historyFromTranscript(transcript) : undefined;
-    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.account?.provider?.model }, () => {
-      // throttle streaming updates to ~25 fps
-      if (timer) return;
-      timer = setTimeout(() => {
-        timer = undefined;
-        this.post(entry);
-      }, 40);
-    });
+    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.account?.provider?.model }, () => this.schedule(entry));
     const entry: Open = { chat, panel, accountId: opts.account?.id };
     this.open.push(entry);
     panel.webview.html = html(panel.webview, root);
     panel.webview.onDidReceiveMessage((m: FromChat) => this.onMessage(entry, m));
     panel.onDidDispose(() => {
-      chat.close();
+      entry.chat.close();
       this.open = this.open.filter((o) => o !== entry);
     });
     chat.start();
@@ -225,7 +289,7 @@ export class Chats {
     if (!o.sent) {
       // first paint: the whole conversation once
       o.sent = { items: new Map(items.map((it) => [it.id, JSON.stringify(it)])), order: items.map((it) => it.id) };
-      o.panel.webview.postMessage({ type: 'data', data: { view: 'chat', chat: { ...s, prs: prsOf(items) }, linked: linkedInfo } });
+      o.panel.webview.postMessage({ type: 'data', data: { view: 'chat', chat: { ...s, prs: prsOf(items), stash: this.stash() }, linked: linkedInfo } });
       return;
     }
     // afterwards only items that are new or changed. Old finished items don't change, so only the
@@ -243,7 +307,7 @@ export class Chats {
     const order = items.map((it) => it.id);
     const orderChanged = order.length !== o.sent.order.length || order.some((id, i) => id !== o.sent!.order[i]);
     if (orderChanged) o.sent.order = order;
-    o.panel.webview.postMessage({ type: 'chatPatch', chat: { ...rest, prs: prsOf(upserts) }, upserts, order: orderChanged ? order : undefined, linked: linkedInfo });
+    o.panel.webview.postMessage({ type: 'chatPatch', chat: { ...rest, prs: prsOf(upserts), stash: this.stash() }, upserts, order: orderChanged ? order : undefined, linked: linkedInfo });
   }
 
   private async onMessage(o: Open, m: FromChat) {
@@ -286,6 +350,65 @@ export class Chats {
         return c.setUltracode(m.on).catch((e) => vscode.window.showWarningMessage(`AgentLens: ultracode not available: ${e?.message ?? e}`));
       case 'setMode':
         return c.setPermissionMode(m.mode);
+      case 'prFiles': {
+        const r = await prFiles(m.url);
+        return o.panel.webview.postMessage({ type: 'prFilesResult', url: m.url, ...r });
+      }
+      case 'prViewed': {
+        const r = await setFileViewed(m.prId, m.path, m.viewed);
+        if (!r.ok) vscode.window.showErrorMessage(vscode.l10n.t('Could not update the viewed mark: {0}', r.error ?? ''));
+        const files = await prFiles(m.url);
+        return o.panel.webview.postMessage({ type: 'prFilesResult', url: m.url, ...files });
+      }
+      case 'prOpenFile': {
+        // the local copy when this chat's folder has it, else the file on GitHub
+        const local = path.join(c.state.cwd, m.path);
+        if (fs.existsSync(local)) return vscode.window.showTextDocument(vscode.Uri.file(local));
+        return openUrl(`${m.url}/files`);
+      }
+      case 'prMerge': {
+        const st = this.prs.get(m.url);
+        type P = vscode.QuickPickItem & { method: MergeMethod };
+        const how = await vscode.window.showQuickPick<P>(
+          [
+            { label: vscode.l10n.t('Squash and merge'), detail: vscode.l10n.t('One commit on the base branch'), method: 'squash' },
+            { label: vscode.l10n.t('Create a merge commit'), detail: vscode.l10n.t('Keeps every commit, plus a merge commit'), method: 'merge' },
+            { label: vscode.l10n.t('Rebase and merge'), detail: vscode.l10n.t('Replays the commits on the base branch'), method: 'rebase' },
+          ],
+          { title: vscode.l10n.t('Merge {0}', st?.title ?? m.url) },
+        );
+        if (!how) return;
+        const failing = (st?.checks ?? []).filter((x) => x.state === 'fail').length;
+        const del = vscode.l10n.t('Merge and Delete Branch');
+        const keep = vscode.l10n.t('Merge');
+        const ok = await vscode.window.showWarningMessage(
+          vscode.l10n.t('Merge this pull request?'),
+          {
+            modal: true,
+            detail: [st?.title, m.url, failing ? vscode.l10n.t('{0} check(s) are failing.', failing) : '', st?.review === 'changes_requested' ? vscode.l10n.t('A reviewer requested changes.') : ''].filter(Boolean).join('\n'),
+          },
+          del,
+          keep,
+        );
+        if (!ok) return;
+        const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Merging…') }, () => mergePr(m.url, how.method, ok === del));
+        if (!r.ok) return vscode.window.showErrorMessage(vscode.l10n.t('Merge failed: {0}', r.out.slice(0, 300)));
+        vscode.window.showInformationMessage(vscode.l10n.t('Merged {0}.', st?.title ?? m.url));
+        await this.prs.check(m.url);
+        return this.post(o);
+      }
+      case 'stash': {
+        const list = [m.text, ...this.stash().filter((x) => x !== m.text)].slice(0, 30);
+        await this.ctx.globalState.update('agentlens.stash', list);
+        return this.refresh();
+      }
+      case 'unstash': {
+        const list = this.stash().filter((_, i) => i !== m.index);
+        await this.ctx.globalState.update('agentlens.stash', list);
+        return this.refresh();
+      }
+      case 'editPrompt':
+        return this.editAndRerun(o, m.id, m.text);
       case 'deleteSession':
         return c.state.sessionId && vscode.commands.executeCommand('agentlens.deleteSession', c.state.sessionId);
       case 'revealFolder':

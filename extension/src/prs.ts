@@ -166,3 +166,64 @@ export class PrTracker {
     if (this.timer) clearInterval(this.timer);
   }
 }
+
+// ---- review and merge (GitHub, through the gh CLI)
+
+export interface PrFile {
+  path: string;
+  additions: number;
+  deletions: number;
+  viewed: boolean;
+}
+
+const ghJson = (args: string[], cwd?: string): Promise<{ ok: boolean; data?: any; out: string }> => {
+  const exe = gh();
+  if (!exe) return Promise.resolve({ ok: false, out: 'GitHub CLI (gh) not found' });
+  return new Promise((resolve) =>
+    execFile(exe, args, { timeout: 30_000, windowsHide: true, cwd }, (err, stdout, stderr) => {
+      if (err) return resolve({ ok: false, out: `${stderr || stdout || err.message}`.trim() });
+      try {
+        resolve({ ok: true, data: stdout.trim() ? JSON.parse(stdout) : undefined, out: stdout });
+      } catch {
+        resolve({ ok: true, out: stdout });
+      }
+    }),
+  );
+};
+
+export function parseGithubPr(url: string): { owner: string; repo: string; number: number } | undefined {
+  const m = /github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/.exec(url);
+  return m ? { owner: m[1], repo: m[2], number: Number(m[3]) } : undefined;
+}
+
+/** Changed files with your "viewed" marks (GitHub keeps them per reviewer). */
+export async function prFiles(url: string): Promise<{ id?: string; files: PrFile[]; error?: string }> {
+  const p = parseGithubPr(url);
+  if (!p) return { files: [], error: 'Only GitHub pull requests can be reviewed here' };
+  const q = 'query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){id files(first:100){nodes{path additions deletions viewerViewedState}}}}}';
+  const r = await ghJson(['api', 'graphql', '-f', `query=${q}`, '-F', `o=${p.owner}`, '-F', `r=${p.repo}`, '-F', `n=${p.number}`]);
+  if (!r.ok) return { files: [], error: r.out.slice(0, 300) };
+  const pr = r.data?.data?.repository?.pullRequest;
+  return {
+    id: pr?.id,
+    files: (pr?.files?.nodes ?? []).map((f: any) => ({ path: f.path, additions: f.additions, deletions: f.deletions, viewed: f.viewerViewedState === 'VIEWED' })),
+  };
+}
+
+/** Marks a file as viewed (or not) for you on GitHub. */
+export async function setFileViewed(prId: string, file: string, viewed: boolean): Promise<{ ok: boolean; error?: string }> {
+  const m = viewed ? 'markFileAsViewed' : 'unmarkFileAsViewed';
+  const q = `mutation($id:ID!,$p:String!){${m}(input:{pullRequestId:$id,path:$p}){clientMutationId}}`;
+  const r = await ghJson(['api', 'graphql', '-f', `query=${q}`, '-F', `id=${prId}`, '-F', `p=${file}`]);
+  return r.ok ? { ok: true } : { ok: false, error: r.out.slice(0, 300) };
+}
+
+export type MergeMethod = 'squash' | 'merge' | 'rebase';
+
+/** gh pr merge arguments. */
+export const mergeArgs = (url: string, method: MergeMethod, deleteBranch: boolean) => ['pr', 'merge', url, `--${method}`, ...(deleteBranch ? ['--delete-branch'] : [])];
+
+export async function mergePr(url: string, method: MergeMethod, deleteBranch: boolean): Promise<{ ok: boolean; out: string }> {
+  const r = await ghJson(mergeArgs(url, method, deleteBranch));
+  return { ok: r.ok, out: r.out.trim() };
+}

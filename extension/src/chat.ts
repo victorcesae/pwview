@@ -2,6 +2,7 @@
 // Uses the user's own Claude Code CLI (and therefore its login: subscription, API key,
 // Bedrock/Vertex...). Messages carry a native priority: later = queue, next = steer
 // (picked up between steps), now = send now.
+import { randomUUID } from 'crypto';
 import { query, type PermissionMode, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -10,7 +11,7 @@ export type Hunk = { oldStart: number; oldLines: number; newStart: number; newLi
 export type Todo = { content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string };
 
 export type ChatItem =
-  | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string }
+  | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string }
   | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string }
   | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
   | { kind: 'permission'; id: string; tool: string; summary: string; input: unknown; canAlways: boolean; status: 'pending' | 'allowed' | 'denied'; reason?: string }
@@ -43,6 +44,10 @@ export interface ChatState {
   costUsd: number;
   /** history items not loaded yet (older than what is shown) */
   earlier: number;
+  /** Claude Code's guess at what you will ask next (after a turn) */
+  suggestion?: string;
+  /** prompts you put aside (shared by all chats) */
+  stash?: string[];
   /** All tokens this chat used (input + output + cache), from each turn's usage. */
   tokens?: number;
   /** Context window usage after the last turn (for the ring next to the input). */
@@ -264,7 +269,7 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
           if (r && Array.isArray(r.structuredPatch)) t.patch = r.structuredPatch;
         }
       }
-      if (texts.join('').trim() || images.length) items.push({ kind: 'user', id: rec.uuid ?? uid(), text: texts.join('\n').trim(), images, ts: rec.timestamp ?? '' });
+      if (texts.join('').trim() || images.length) items.push({ kind: 'user', id: rec.uuid ?? uid(), text: texts.join('\n').trim(), images, ts: rec.timestamp ?? '', forkAt: rec.parentUuid ?? undefined });
     } else if (rec.type === 'assistant') {
       for (const c of content ?? []) {
         if (c.type === 'text' && c.text?.trim()) items.push({ kind: 'assistant', id: uid(), text: c.text });
@@ -300,6 +305,8 @@ export interface ChatOptions {
   hostIcon?: string;
   /** settings saved from the last time this session was open (applied at start) */
   prefs?: ChatPrefs;
+  /** run a copy of the resumed session cut at this transcript entry (edit an earlier prompt) */
+  fork?: { at: string };
 }
 
 /** What a chat remembers per session: restored when it is resumed or the window reloads. */
@@ -313,6 +320,10 @@ export interface ChatPrefs {
 
 export class ChatSession {
   readonly state: ChatState;
+  /** how this chat was started (to start a fork of it) */
+  get options(): ChatOptions {
+    return this.opts;
+  }
   private input = new Channel<SDKUserMessage>();
   private q?: Query;
   private queued: { id: string; text: string; images: Img[]; priority: 'later' | 'next' }[] = [];
@@ -371,6 +382,10 @@ export class ChatSession {
         abortController: this.abort,
         pathToClaudeCodeExecutable: this.opts.executable,
         settingSources: ['user', 'project', 'local'],
+        promptSuggestions: true,
+        // backups of files before the agent edits them, so "edit and run again" can undo them
+        enableFileCheckpointing: true,
+        ...(this.opts.fork ? { resumeSessionAt: this.opts.fork.at, forkSession: true } : {}),
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         env: { ...process.env, ...(this.opts.account?.env ?? {}), CLAUDE_AGENT_SDK_CLIENT_APP: 'agentlens' },
         canUseTool: (tool, input, o) => this.ask(tool, input, o.suggestions, o.signal),
@@ -485,6 +500,17 @@ export class ChatSession {
       .catch(() => {});
   }
 
+  /** Restores files the agent changed after this message (needs file checkpointing, on for AgentLens chats). */
+  async rewindFilesTo(userUuid: string): Promise<{ ok: boolean; error?: string; files?: number }> {
+    try {
+      const r: any = await this.q?.rewindFiles(userUuid);
+      if (!r) return { ok: false, error: 'chat not running' };
+      return r.canRewind === false ? { ok: false, error: r.error ?? 'cannot rewind' } : { ok: true, files: r.filesChanged?.length ?? r.changedFiles?.length };
+    } catch (e: any) {
+      return { ok: false, error: String(e?.message ?? e) };
+    }
+  }
+
   /** Load older history (one page, or everything with all=true, e.g. to search it). */
   loadEarlier(all = false) {
     const older = this.opts.history?.items ?? [];
@@ -532,11 +558,14 @@ export class ChatSession {
       source: { type: 'base64', media_type: img.mime, data: img.data.replace(/^data:[^;]+;base64,/, '') },
     }));
     if (text.trim()) content.push({ type: 'text', text });
-    this.state.items.push({ kind: 'user', id: uid(), text, images: images.map((i) => i.data), priority, ts: new Date().toISOString() });
+    // the message's own uuid (so files can be rewound to it) and the entry before it (to fork there)
+    const uuid = randomUUID();
+    this.state.items.push({ kind: 'user', id: uuid, text, images: images.map((i) => i.data), priority, ts: new Date().toISOString(), forkAt: this.lastUuid });
+    this.state.suggestion = undefined;
     if (this.state.title === 'New chat' && text.trim()) this.state.title = clip(text.trim().split('\n')[0], 60);
     this.state.status = 'working';
     this.state.activity = priority === 'now' ? 'Switching to your message…' : this.state.activity ?? 'Thinking…';
-    this.input.push({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, priority } as SDKUserMessage);
+    this.input.push({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, priority, uuid } as SDKUserMessage);
     this.changed();
   }
 
@@ -707,8 +736,17 @@ export class ChatSession {
     return it?.kind === 'tool' ? it : undefined;
   }
 
+  /** uuid of the last transcript entry (answer or tool result) of the main conversation */
+  private lastUuid?: string;
+
   private handle(m: SDKMessage) {
     const parent = ('parent_tool_use_id' in m ? (m.parent_tool_use_id as string | null) : null) ?? undefined;
+    if ((m.type === 'assistant' || m.type === 'user') && !parent && (m as any).uuid) this.lastUuid = (m as any).uuid;
+    if ((m as any).type === 'prompt_suggestion') {
+      this.state.suggestion = (m as any).suggestion || undefined;
+      this.changed();
+      return;
+    }
     switch (m.type) {
       case 'system': {
         if (m.subtype === 'init') {

@@ -1,4 +1,4 @@
-import { Ban, Bot, ChevronUp, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
+import { Ban, Bot, ChevronUp, Copy, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
@@ -444,37 +444,95 @@ function QuestionCard({ it }: { it: Extract<ChatItem, { kind: 'question' }> }) {
   );
 }
 
+/** Your message, with "Edit and run again" (forks the conversation at this point). */
+function UserMessage({ it }: { it: Extract<ChatItem, { kind: 'user' }> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(it.text);
+  const area = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (editing) requestAnimationFrame(() => (area.current?.focus(), area.current?.select()));
+  }, [editing]);
+  const submit = () => {
+    if (!draft.trim()) return;
+    setEditing(false);
+    post({ type: 'editPrompt', id: it.id, text: draft });
+  };
+  return (
+    <div className="group/msg flex flex-col items-end gap-1">
+      {it.images.length > 0 && (
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {it.images.map((src, i) => (
+            <Zoomable key={i} src={src} className="h-20 rounded-md border object-cover" />
+          ))}
+        </div>
+      )}
+      {editing ? (
+        <div className="bg-muted flex w-full max-w-[85%] flex-col gap-1.5 rounded-2xl rounded-br-md p-2" data-editing>
+          <textarea
+            ref={area}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) (e.preventDefault(), submit());
+              if (e.key === 'Escape') (setEditing(false), setDraft(it.text));
+            }}
+            rows={Math.min(10, Math.max(2, draft.split('\n').length))}
+            className="w-full resize-y bg-transparent px-1.5 text-[13px] outline-none"
+          />
+          <div className="flex items-center justify-end gap-1.5">
+            <span className="text-muted-foreground mr-auto text-[11px]">{t('Runs the conversation again from here')}</span>
+            <Button size="xs" variant="ghost" onClick={() => (setEditing(false), setDraft(it.text))}>
+              {t('Cancel')}
+            </Button>
+            <Button size="xs" onClick={submit} disabled={!draft.trim()}>
+              <RotateCcw /> {t('Run again')}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        it.text && <Markdown text={it.text} className="bg-muted max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-1.5" />
+      )}
+      <div className="flex items-center gap-1">
+        {!editing && it.forkAt && (
+          <Button size="xs" variant="ghost" className="opacity-0 transition-opacity group-hover/msg:opacity-100 focus-visible:opacity-100" onClick={() => setEditing(true)} title={t('Edit this message and run the conversation again from here')} data-edit-prompt>
+            <Pencil /> {t('Edit')}
+          </Button>
+        )}
+        {it.priority && it.priority !== 'later' && (
+          <span className="text-muted-foreground opacity-60" title={`${PRIORITY[it.priority].label}: ${PRIORITY[it.priority].hint}`} aria-label={PRIORITY[it.priority].label}>
+            {(() => {
+              const I = PRIORITY[it.priority].icon;
+              return <I className="size-3" />;
+            })()}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Item({ it, children, sessionId }: { it: ChatItem; children?: React.ReactNode; sessionId?: string }) {
   switch (it.kind) {
     case 'user':
-      return (
-        <div className="flex flex-col items-end gap-1">
-          {it.images.length > 0 && (
-            <div className="flex flex-wrap justify-end gap-1.5">
-              {it.images.map((src, i) => (
-                <Zoomable key={i} src={src} className="h-20 rounded-md border object-cover" />
-              ))}
-            </div>
-          )}
-          {it.text && <Markdown text={it.text} className="bg-muted max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-1.5" />}
-          {it.priority && it.priority !== 'later' && (
-            <span className="text-muted-foreground opacity-60" title={`${PRIORITY[it.priority].label}: ${PRIORITY[it.priority].hint}`} aria-label={PRIORITY[it.priority].label}>
-              {(() => {
-                const I = PRIORITY[it.priority].icon;
-                return <I className="size-3" />;
-              })()}
-            </span>
-          )}
-        </div>
-      );
+      return <UserMessage it={it} />;
     case 'assistant':
       if (!it.text.trim() && !it.streaming) return null;
       return (
-        <div className="flex gap-2.5">
+        <div className="group/answer flex gap-2.5">
           <AgentAvatar />
           <div className="min-w-0 flex-1">
             <Markdown text={it.text} />
             {it.streaming && <span className="bg-foreground/70 ml-0.5 inline-block h-3.5 w-1.5 animate-pulse align-middle" />}
+            {!it.streaming && (
+              <div className="mt-0.5 flex gap-1 opacity-0 transition-opacity group-hover/answer:opacity-100 focus-within:opacity-100">
+                <Button size="xs" variant="ghost" onClick={() => window.dispatchEvent(new CustomEvent('agentlens:quote', { detail: it.text }))} title={t('Quote this answer in your next message')} data-quote>
+                  <Quote /> {t('Quote')}
+                </Button>
+                <Button size="xs" variant="ghost" onClick={() => navigator.clipboard?.writeText(it.text)} title={t('Copy')} aria-label={t('Copy')}>
+                  <Copy />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       );

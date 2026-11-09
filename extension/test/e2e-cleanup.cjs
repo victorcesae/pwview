@@ -10,8 +10,8 @@ const projectDirFor = (cwd) => path.join(process.env.CLAUDE_CONFIG_DIR || path.j
 async function removeTestSession(cwd) {
   if (!/agentlens-(e2e|steer)-/.test(path.basename(cwd))) return; // never touch anything else
   await new Promise((r) => setTimeout(r, 1500)); // let the CLI finish writing after close
-  fs.rmSync(projectDirFor(cwd), { recursive: true, force: true });
-  fs.rmSync(cwd, { recursive: true, force: true });
+  fs.rmSync(projectDirFor(cwd), { recursive: true, force: true, maxRetries: 20, retryDelay: 300 });
+  fs.rmSync(cwd, { recursive: true, force: true, maxRetries: 20, retryDelay: 300 });
 }
 
 module.exports = { removeTestSession, projectDirFor };

@@ -1,6 +1,6 @@
 // The prompt area: rich-text input, images, Steer/Queue/Send now, model / effort / mode pickers,
 // a context-usage ring, and a neutral look that follows the editor theme.
-import { Blocks, Bot, ListOrdered, Navigation, Paperclip, Plus, Send, ShieldCheck, Sparkles, Square, SquareSlash, Zap, Gauge, X } from 'lucide-react';
+import { Archive, ArchiveRestore, Blocks, Bot, ListOrdered, Navigation, Paperclip, Plus, Send, ShieldCheck, Sparkles, Square, SquareSlash, Zap, Gauge, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger, Switch } from '@/components/ui/dropdown-menu';
 import { Zoomable } from '@/components/Lightbox';
 import { UsagePanel } from '@/components/UsagePanel';
@@ -181,6 +181,84 @@ export function Composer({ chat }: { chat: ChatState }) {
     input.current?.focus();
   }, []);
 
+  // ---- Up / Down: walk through the prompts you sent in this chat (when the box is empty or showing one)
+  const sent = chat.items.filter((it): it is Extract<typeof it, { kind: 'user' }> => it.kind === 'user' && !!it.text.trim()).map((it) => it.text);
+  const recall = useRef<{ i: number; shown: string } | null>(null);
+  const showRecalled = (i: number) => {
+    const v = sent[i];
+    recall.current = { i, shown: v };
+    input.current?.setMarkdown(v);
+    setText(v);
+    input.current?.focus();
+  };
+  const recallKey = (e: KeyboardEvent): boolean => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return false;
+    const cur = input.current?.getMarkdown() ?? '';
+    const browsing = recall.current && cur === recall.current.shown.trim();
+    if (!browsing && cur) return false; // a draft: arrows move the cursor as usual
+    if (!sent.length) return false;
+    if (e.key === 'ArrowUp') {
+      const i = browsing ? Math.max(0, recall.current!.i - 1) : sent.length - 1;
+      showRecalled(i);
+      return true;
+    }
+    if (!browsing) return false;
+    if (recall.current!.i >= sent.length - 1) {
+      recall.current = null;
+      input.current?.clear();
+      setText('');
+      return true;
+    }
+    showRecalled(recall.current!.i + 1);
+    return true;
+  };
+
+  // ---- quote an answer into the box ("> " lines), from the Quote button on answers
+  useEffect(() => {
+    const onQuote = (e: Event) => {
+      const q = String((e as CustomEvent).detail ?? '')
+        .trim()
+        .split('\n')
+        .map((l) => '> ' + l)
+        .join('\n');
+      const cur = input.current?.getMarkdown() ?? '';
+      const next = `${cur ? cur + '\n\n' : ''}${q}\n\n`;
+      input.current?.setMarkdown(next);
+      setText(next);
+      input.current?.focus();
+    };
+    window.addEventListener('agentlens:quote', onQuote);
+    return () => window.removeEventListener('agentlens:quote', onQuote);
+  }, []);
+
+  // ---- suggested next prompt (from Claude Code, after a turn): Tab or a click puts it in the box
+  const useSuggestion = () => {
+    if (!chat.suggestion) return;
+    input.current?.setMarkdown(chat.suggestion);
+    setText(chat.suggestion);
+    input.current?.focus();
+  };
+  const showSuggestion = !!chat.suggestion && !text.trim() && !working;
+
+  // ---- stash: put the current prompt aside, bring it back later (shared by all chats)
+  const stashNow = () => {
+    const md = input.current?.getMarkdown() ?? '';
+    if (!md.trim()) return;
+    post({ type: 'stash', text: md });
+    input.current?.clear();
+    setText('');
+  };
+  const unstash = (i: number) => {
+    const v = chat.stash?.[i];
+    if (v === undefined) return;
+    const cur = input.current?.getMarkdown() ?? '';
+    const next = cur ? `${cur}\n\n${v}` : v;
+    input.current?.setMarkdown(next);
+    setText(next);
+    post({ type: 'unstash', index: i });
+    input.current?.focus();
+  };
+
   const model = chat.models.some((m) => m.value === chat.model) ? chat.model : undefined;
   const P = PRIORITY[priority];
 
@@ -231,6 +309,13 @@ export function Composer({ chat }: { chat: ChatState }) {
         </div>
       )}
 
+      {showSuggestion && (
+        <button className="text-muted-foreground hover:text-foreground hover:bg-accent -mb-0.5 flex max-w-full cursor-pointer items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-left text-[12px]" onClick={useSuggestion} title={t('Use this suggestion (Tab)')} data-suggestion>
+          <Sparkles className="size-3.5 shrink-0" />
+          <span className="truncate">{chat.suggestion}</span>
+          <kbd className="bg-muted rounded px-1 text-[10px]">Tab</kbd>
+        </button>
+      )}
       <RichInput
         ref={input}
         placeholder={working ? t('Message the agent while it works…') : t('Ask, plan, or give a task…  (/ for commands)')}
@@ -242,7 +327,12 @@ export function Composer({ chat }: { chat: ChatState }) {
         onEscape={() => working && post({ type: 'interrupt' })}
         onSubmit={({ ctrl }) => send(ctrl ? 'now' : priority)}
         onKey={(e) => {
-          if (!slash.length) return false;
+          if (showSuggestion && e.key === 'Tab' && !e.shiftKey) {
+            e.preventDefault();
+            useSuggestion();
+            return true;
+          }
+          if (!slash.length) return recallKey(e);
           if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             setSel((s) => (s + (e.key === 'ArrowDown' ? 1 : slash.length - 1)) % slash.length);
             return true;
@@ -258,6 +348,26 @@ export function Composer({ chat }: { chat: ChatState }) {
       <div className="flex flex-wrap items-center gap-0.5 border-t pt-1.5">
         <input ref={fileInput} type="file" accept="image/*" multiple className="hidden" onChange={(e) => addFiles([...(e.target.files ?? [])])} />
         <PlusMenu chat={chat} onFiles={() => fileInput.current?.click()} onSlash={(c) => pickSlash(c)} />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="text-muted-foreground hover:text-foreground hover:bg-accent data-[state=open]:bg-accent relative grid size-7 cursor-pointer place-items-center rounded-md" aria-label={t('Prompt stash')} title={t('Prompt stash: put a prompt aside, bring it back later')} data-stash>
+              <Archive className="size-4" />
+              {!!chat.stash?.length && <span className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 min-w-3.5 rounded-full px-0.5 text-center text-[9px] leading-3.5">{chat.stash.length}</span>}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="top" className="max-w-96">
+            <DropdownMenuItem onSelect={stashNow} disabled={!text.trim()}>
+              <ArchiveRestore className="rotate-180" /> {t('Stash this prompt')}
+            </DropdownMenuItem>
+            {!!chat.stash?.length && <DropdownMenuSeparator />}
+            {!!chat.stash?.length && <DropdownMenuLabel>{t('Stashed prompts')}</DropdownMenuLabel>}
+            {(chat.stash ?? []).map((p, i) => (
+              <DropdownMenuItem key={i} onSelect={() => unstash(i)} title={p} data-stashed>
+                <span className="truncate">{p.split('\n')[0]}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <Select value={chat.permissionMode} onValueChange={(v) => post({ type: 'setMode', mode: v as PermissionMode })}>
           <SelectTrigger aria-label={t('Permission mode')} title={t('Permission mode')}>

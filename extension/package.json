@@ -2,7 +2,7 @@
   "name": "agentlens",
   "displayName": "AgentLens",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -307,6 +307,48 @@
         "title": "%cmd.delete.session%",
         "category": "AgentLens",
         "icon": "$(trash)"
+      },
+      {
+        "command": "agentlens.newChatInWorktree",
+        "title": "%cmd.new.chat.worktree%",
+        "category": "AgentLens",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "agentlens.removeWorktree",
+        "title": "%cmd.remove.worktree%",
+        "category": "AgentLens",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agentlens.pinProject",
+        "title": "%cmd.pin.project%",
+        "category": "AgentLens",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "agentlens.unpinProject",
+        "title": "%cmd.unpin.project%",
+        "category": "AgentLens",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "agentlens.archiveProject",
+        "title": "%cmd.archive.project%",
+        "category": "AgentLens",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "agentlens.unarchiveProject",
+        "title": "%cmd.unarchive.project%",
+        "category": "AgentLens",
+        "icon": "$(inbox)"
+      },
+      {
+        "command": "agentlens.remoteAccess",
+        "title": "%cmd.remote.access%",
+        "category": "AgentLens",
+        "icon": "$(device-mobile)"
       }
     ],
     "menus": {
@@ -390,6 +432,11 @@
           "command": "agentlens.addProvider",
           "when": "view == agentlens.sessions",
           "group": "1_more@2"
+        },
+        {
+          "command": "agentlens.remoteAccess",
+          "when": "view == agentlens.sessions",
+          "group": "navigation@9"
         }
       ],
       "view/item/context": [
@@ -455,7 +502,7 @@
         },
         {
           "command": "agentlens.newChatHere",
-          "when": "view == agentlens.sessions && viewItem == project",
+          "when": "view == agentlens.sessions && viewItem =~ /^project\\b/",
           "group": "inline@0"
         },
         {
@@ -466,6 +513,36 @@
         {
           "command": "agentlens.deleteSession",
           "when": "view == agentlens.sessions && viewItem == session",
+          "group": "9_delete@1"
+        },
+        {
+          "command": "agentlens.newChatInWorktree",
+          "when": "view == agentlens.sessions && viewItem =~ /^project\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentlens.pinProject",
+          "when": "view == agentlens.sessions && viewItem =~ /^project unpinned active/",
+          "group": "2_organize@1"
+        },
+        {
+          "command": "agentlens.unpinProject",
+          "when": "view == agentlens.sessions && viewItem =~ /^project pinned/",
+          "group": "2_organize@1"
+        },
+        {
+          "command": "agentlens.archiveProject",
+          "when": "view == agentlens.sessions && viewItem =~ /^project .* active/",
+          "group": "2_organize@2"
+        },
+        {
+          "command": "agentlens.unarchiveProject",
+          "when": "view == agentlens.sessions && viewItem =~ /^project .* archived/",
+          "group": "2_organize@2"
+        },
+        {
+          "command": "agentlens.removeWorktree",
+          "when": "view == agentlens.sessions && viewItem =~ /\\bworktree\\b/",
           "group": "9_delete@1"
         }
       ],
@@ -534,6 +611,26 @@
         {
           "command": "agentlens.deleteSession",
           "when": "false"
+        },
+        {
+          "command": "agentlens.removeWorktree",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.pinProject",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.unpinProject",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.archiveProject",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.unarchiveProject",
+          "when": "false"
         }
       ],
       "terminal/title/context": [
@@ -547,6 +644,11 @@
           "command": "agentlens.newChatHere",
           "when": "explorerResourceIsFolder",
           "group": "agentlens@1"
+        },
+        {
+          "command": "agentlens.newChatInWorktree",
+          "when": "explorerResourceIsFolder",
+          "group": "agentlens@2"
         }
       ]
     },
@@ -730,8 +832,8 @@
     "build:webview": "vite build --config webview/vite.config.mts",
     "dev:webview": "vite --config webview/vite.config.mts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
-    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs",
-    "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs",
+    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs",
+    "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs test/e2e-fork.test.cjs",
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs",
     "test:restore": "npm run build && node test/editor/restore.cjs"

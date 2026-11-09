@@ -71,5 +71,12 @@
   "cmd.open.rules": "Abrir arquivo de regras",
   "cmd.new.chat.here": "Novo chat aqui",
   "cmd.delete.session": "Excluir sessão…",
-  "setting.notifications": "Avisar quando um chat que você não está vendo terminar ou esperar uma aprovação ou resposta."
+  "setting.notifications": "Avisar quando um chat que você não está vendo terminar ou esperar uma aprovação ou resposta.",
+  "cmd.new.chat.worktree": "Novo chat em um worktree…",
+  "cmd.remove.worktree": "Remover worktree…",
+  "cmd.pin.project": "Fixar no topo",
+  "cmd.unpin.project": "Desafixar",
+  "cmd.archive.project": "Arquivar projeto",
+  "cmd.unarchive.project": "Desarquivar projeto",
+  "cmd.remote.access": "Abrir no celular…"
 }

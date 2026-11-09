@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { AgentInfo, Change, Engine, HotFile, Session, State } from './engine';
 import { norm } from './paths';
 import { projectRules, userRules, type RuleFile } from './rules';
+import { worktreeInfo } from './worktree';
 import { accountIdentity, listAccounts, preferredAccount, type Account } from './accounts';
 import { modelLabel } from './pricing';
 import { vendorOf } from './providers';
@@ -13,7 +14,8 @@ export type Node =
   | { kind: 'hint'; text: string; command: string; icon: string }
   | { kind: 'hot'; files: HotFile[] }
   | { kind: 'hotfile'; hot: HotFile }
-  | { kind: 'project'; path: string; sessions: Session[]; current: boolean }
+  | { kind: 'project'; path: string; sessions: Session[]; current: boolean; pinned?: boolean; archived?: boolean }
+  | { kind: 'archived'; projects: Extract<Node, { kind: 'project' }>[] }
   | { kind: 'session'; s: Session; via?: string }
   | { kind: 'agent'; s: Session; a: AgentInfo; via?: string }
   | { kind: 'changes'; s: Session; agentId?: string; list: Change[]; via?: string }
@@ -84,6 +86,8 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
     private sessions: () => Session[],
     private hooks: () => 'all' | 'some' | 'none',
     private attached: () => Set<string>,
+    /** projects the user pinned to the top or archived (moved under "Archived") */
+    private marks: () => { pinned: string[]; archived: string[] } = () => ({ pinned: [], archived: [] }),
   ) {}
 
   refresh() {
@@ -107,18 +111,27 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
       const roots = this.workspaceRoots();
       const byProject = new Map<string, Session[]>();
       for (const s of sessions) (byProject.get(s.info.project) ?? byProject.set(s.info.project, []).get(s.info.project)!).push(s);
-      const projects = [...byProject.entries()].map(([p, list]) => ({
+      const { pinned, archived } = this.marks();
+      const has = (list: string[], p: string) => list.some((x) => norm(x) === norm(p));
+      const all = [...byProject.entries()].map(([p, list]) => ({
         kind: 'project' as const,
         path: p,
         sessions: list,
         current: roots.some((r) => norm(p) === r || norm(p).startsWith(r + '/')),
+        pinned: has(pinned, p),
+        archived: has(archived, p),
       }));
-      projects.sort((a, b) => Number(b.current) - Number(a.current) || (b.sessions[0].info.updated ?? '').localeCompare(a.sessions[0].info.updated ?? ''));
+      // pinned first, then this workspace, then most recently active
+      all.sort((a, b) => Number(b.pinned) - Number(a.pinned) || Number(b.current) - Number(a.current) || (b.sessions[0].info.updated ?? '').localeCompare(a.sessions[0].info.updated ?? ''));
+      const projects = all.filter((p) => !p.archived);
+      const hidden = all.filter((p) => p.archived);
       if (!sessions.length)
-        out.push({ kind: 'hint', text: 'No agent sessions yet. Start one', command: 'agentlens.newSession', icon: 'add' });
-      return [...out, ...projects];
+        out.push({ kind: 'hint', text: vscode.l10n.t('No agent sessions yet. Start one'), command: 'agentlens.newSession', icon: 'add' });
+      return [...out, ...projects, ...(hidden.length ? [{ kind: 'archived' as const, projects: hidden }] : [])];
     }
     switch (node.kind) {
+      case 'archived':
+        return node.projects;
       case 'hot':
         return node.files.map((hot) => ({ kind: 'hotfile', hot }));
       case 'hotfile':
@@ -185,13 +198,30 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         it.tooltip = node.hot.file;
         return it;
       }
+      case 'archived': {
+        const it = new vscode.TreeItem(vscode.l10n.t('Archived'), C.Collapsed);
+        it.id = 'archived';
+        it.iconPath = new vscode.ThemeIcon('archive');
+        it.description = vscode.l10n.t('{0} projects', node.projects.length);
+        return it;
+      }
       case 'project': {
-        const it = new vscode.TreeItem(path.basename(node.path) || node.path, node.current ? C.Expanded : C.Collapsed);
-        it.iconPath = new vscode.ThemeIcon(node.current ? 'root-folder-opened' : 'folder');
+        const wt = worktreeInfo(node.path);
+        const it = new vscode.TreeItem(path.basename(node.path) || node.path, node.current && !node.archived ? C.Expanded : C.Collapsed);
+        it.id = `project:${node.path}`;
+        it.iconPath = new vscode.ThemeIcon(wt ? 'git-branch' : node.pinned ? 'pinned' : node.current ? 'root-folder-opened' : 'folder');
         const working = node.sessions.filter((s) => s.info.state === 'working').length;
-        it.description = [vscode.l10n.t('{0} sessions', node.sessions.length), working ? vscode.l10n.t('{0} working', working) : '', node.current ? vscode.l10n.t('this workspace') : ''].filter(Boolean).join(' · ');
+        it.description = [
+          wt ? vscode.l10n.t('worktree of {0}', path.basename(wt.main)) + (wt.branch ? ` · ${wt.branch}` : '') : '',
+          vscode.l10n.t('{0} sessions', node.sessions.length),
+          working ? vscode.l10n.t('{0} working', working) : '',
+          node.current ? vscode.l10n.t('this workspace') : '',
+        ]
+          .filter(Boolean)
+          .join(' · ');
         it.tooltip = node.path;
-        it.contextValue = 'project';
+        // e.g. "project pinned worktree": menus match the words they need
+        it.contextValue = ['project', node.pinned ? 'pinned' : 'unpinned', node.archived ? 'archived' : 'active', wt ? 'worktree' : ''].filter(Boolean).join(' ');
         return it;
       }
       case 'session': {

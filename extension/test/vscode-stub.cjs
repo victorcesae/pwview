@@ -54,4 +54,5 @@ module.exports = {
   window: { showInformationMessage: async () => undefined, showErrorMessage: async () => undefined, showWarningMessage: async () => undefined, createTerminal: () => ({ show() {}, sendText() {} }) },
   commands: { registerCommand: () => ({ dispose() {} }), executeCommand: async () => undefined },
   env: { remoteName: undefined },
+  l10n: { t: (s, ...a) => String(s).replace(/\{(\d+)\}/g, (_, i) => String(a[i])) },
 };
