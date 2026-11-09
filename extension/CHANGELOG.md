@@ -1,6 +1,7 @@
 # Changelog
 
 ## 1.0.5
+- Background commands are shown in the chat side panel only (removed from the Sessions tree).
 - **Source control** under each project and worktree in the Sessions tree (VS Code's own Git): branch, ahead / behind, changed files with their diff, Commit (all changes when nothing is staged), Push, Pull, Sync, Open Source Control.
 
 ## 1.0.4

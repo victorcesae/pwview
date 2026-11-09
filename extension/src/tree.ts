@@ -179,7 +179,6 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         const out: Node[] = node.s.agents.map((a) => ({ kind: 'agent', s: node.s, a: a.info, via: node.via }));
         const own = node.s.t.changes;
         if (own.length) out.push({ kind: 'changes', s: node.s, list: own, via: node.via });
-        if (node.s.t.tasks?.length) out.push({ kind: 'tasks', s: node.s, via: node.via });
         if (fs.existsSync(node.s.info.project)) out.push({ kind: 'files', root: node.s.info.project, s: node.s, sessions: [node.s], via: node.via });
         return out;
       }
