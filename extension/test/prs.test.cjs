@@ -9,7 +9,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-prs-build');
+const out = path.join(os.tmpdir(), 'steerhouse-prs-build');
 const stub = path.join(__dirname, 'vscode-stub.cjs');
 execSync(`npx esbuild src/prs.ts src/chat.ts --bundle --platform=node --format=cjs --outdir="${out}" --alias:vscode="${stub}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --log-level=error`, { cwd: root });
 const P = require(path.join(out, 'prs.js'));
@@ -73,7 +73,7 @@ test('prs (real GitHub): a merged and a closed PR', { skip: !online && 'gh not l
 });
 
 test('resumed chat: shows the model of the last answer before Claude Code reports it', () => {
-  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-hist-')), 's.jsonl');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-hist-')), 's.jsonl');
   const rec = (o) => JSON.stringify(o);
   fs.writeFileSync(
     file,

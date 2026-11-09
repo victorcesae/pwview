@@ -1,6 +1,6 @@
 // Adding MCP servers (connectors): a popular one or your own (a command, or a URL), for the team
 // (.mcp.json, committed), just you in this project, or all your projects. Saved with Claude Code's
-// own `claude mcp add`, so the CLI, the terminal and AgentLens chats all see it.
+// own `claude mcp add`, so the CLI, the terminal and Steerhouse chats all see it.
 import { execFile } from 'child_process';
 
 export type McpScope = 'project' | 'local' | 'user';

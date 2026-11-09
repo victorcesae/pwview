@@ -43,7 +43,7 @@ function ancestry(): number[] {
 function recordTerminal(sessionId: string, cwd?: string) {
   const dir = path.join(dataDir(), 'terminals');
   const file = path.join(dir, `${sessionId}.json`);
-  const token = process.env.AGENTLENS_TERMINAL;
+  const token = process.env.STEERHOUSE_TERMINAL;
   const pids = ancestry();
   if (!token && !pids.length) return; // keep what SessionStart recorded (Windows)
   fs.mkdirSync(dir, { recursive: true });

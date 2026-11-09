@@ -1,8 +1,8 @@
 {
-  "name": "agentlens",
-  "displayName": "AgentLens",
+  "name": "steerhouse",
+  "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -31,648 +31,648 @@
   "main": "./dist/extension.js",
   "activationEvents": [
     "onStartupFinished",
-    "onWebviewPanel:agentlens.chat"
+    "onWebviewPanel:steerhouse.chat"
   ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "agentlens",
-          "title": "%container.agentlens%",
-          "icon": "media/icon.svg"
+          "id": "steerhouse",
+          "title": "%container.steerhouse%",
+          "icon": "media/steerhouse-mono.svg"
         }
       ]
     },
     "views": {
-      "agentlens": [
+      "steerhouse": [
         {
-          "id": "agentlens.sessions",
+          "id": "steerhouse.sessions",
           "name": "%view.sessions%"
         },
         {
-          "id": "agentlens.prompts",
+          "id": "steerhouse.prompts",
           "name": "%view.prompts%"
         },
         {
-          "id": "agentlens.skills",
+          "id": "steerhouse.skills",
           "name": "%view.skills%"
         }
       ]
     },
     "commands": [
       {
-        "command": "agentlens.refresh",
+        "command": "steerhouse.refresh",
         "title": "%cmd.refresh%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(refresh)"
       },
       {
-        "command": "agentlens.dashboard",
+        "command": "steerhouse.dashboard",
         "title": "%cmd.open.dashboard%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(dashboard)"
       },
       {
-        "command": "agentlens.openSession",
+        "command": "steerhouse.openSession",
         "title": "%cmd.open.session%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(open-preview)"
       },
       {
-        "command": "agentlens.openChange",
+        "command": "steerhouse.openChange",
         "title": "%cmd.open.change.diff%",
-        "category": "AgentLens"
+        "category": "Steerhouse"
       },
       {
-        "command": "agentlens.resumeSession",
+        "command": "steerhouse.resumeSession",
         "title": "%cmd.open.in.chat%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(comment-discussion)"
       },
       {
-        "command": "agentlens.newSession",
+        "command": "steerhouse.newSession",
         "title": "%cmd.new.agent.session%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(add)"
       },
       {
-        "command": "agentlens.messageSession",
+        "command": "steerhouse.messageSession",
         "title": "%cmd.send.message.to.agent%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(comment)"
       },
       {
-        "command": "agentlens.installHooks",
+        "command": "steerhouse.installHooks",
         "title": "%cmd.enable.comment.delivery.install.claude.code.hooks%",
-        "category": "AgentLens"
+        "category": "Steerhouse"
       },
       {
-        "command": "agentlens.newPrompt",
+        "command": "steerhouse.newPrompt",
         "title": "%cmd.new.prompt%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(add)"
       },
       {
-        "command": "agentlens.runPrompt",
+        "command": "steerhouse.runPrompt",
         "title": "%cmd.run.prompt%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(play)"
       },
       {
-        "command": "agentlens.newSkill",
+        "command": "steerhouse.newSkill",
         "title": "%cmd.new.skill%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(add)"
       },
       {
-        "command": "agentlens.openFile",
+        "command": "steerhouse.openFile",
         "title": "%cmd.open%",
-        "category": "AgentLens"
+        "category": "Steerhouse"
       },
       {
-        "command": "agentlens.starterPrompts",
+        "command": "steerhouse.starterPrompts",
         "title": "%cmd.add.starter.prompts%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(sparkle)"
       },
       {
-        "command": "agentlens.skillAdd",
+        "command": "steerhouse.skillAdd",
         "title": "%cmd.add.skill.npx.skills%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(cloud-download)"
       },
       {
-        "command": "agentlens.skillFind",
+        "command": "steerhouse.skillFind",
         "title": "%cmd.find.skills.on.skills.sh%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(search)"
       },
       {
-        "command": "agentlens.skillUpdate",
+        "command": "steerhouse.skillUpdate",
         "title": "%cmd.update.skills%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(sync)"
       },
       {
-        "command": "agentlens.skillsRefresh",
+        "command": "steerhouse.skillsRefresh",
         "title": "%cmd.refresh.skills%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(refresh)"
       },
       {
-        "command": "agentlens.skillEnable",
+        "command": "steerhouse.skillEnable",
         "title": "%cmd.enable.for.more.agents%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(add)"
       },
       {
-        "command": "agentlens.skillRemove",
+        "command": "steerhouse.skillRemove",
         "title": "%cmd.remove.skill%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(trash)"
       },
       {
-        "command": "agentlens.pasteImage",
+        "command": "steerhouse.pasteImage",
         "title": "%cmd.paste.image.for.the.agent%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(file-media)"
       },
       {
-        "command": "agentlens.savePrompt",
+        "command": "steerhouse.savePrompt",
         "title": "%cmd.save.as.prompt%",
-        "category": "AgentLens"
+        "category": "Steerhouse"
       },
       {
-        "command": "agentlens.steer",
+        "command": "steerhouse.steer",
         "title": "%cmd.steer.agent%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(debug-step-into)"
       },
       {
-        "command": "agentlens.queue",
+        "command": "steerhouse.queue",
         "title": "%cmd.queue.message%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(list-ordered)"
       },
       {
-        "command": "agentlens.sendNow",
+        "command": "steerhouse.sendNow",
         "title": "%cmd.send.now.interrupt%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(zap)"
       },
       {
-        "command": "agentlens.comment.send",
+        "command": "steerhouse.comment.send",
         "title": "%cmd.send.to.agent%",
-        "category": "AgentLens"
+        "category": "Steerhouse"
       },
       {
-        "command": "agentlens.comment.queue",
+        "command": "steerhouse.comment.queue",
         "title": "%cmd.queue%",
-        "category": "AgentLens"
+        "category": "Steerhouse"
       },
       {
-        "command": "agentlens.comment.now",
+        "command": "steerhouse.comment.now",
         "title": "%cmd.send.now%",
-        "category": "AgentLens"
+        "category": "Steerhouse"
       },
       {
-        "command": "agentlens.newChat",
+        "command": "steerhouse.newChat",
         "title": "%cmd.new.chat%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(comment-discussion)"
       },
       {
-        "command": "agentlens.resumeInTerminal",
+        "command": "steerhouse.resumeInTerminal",
         "title": "%cmd.resume.in.terminal%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(terminal)"
       },
       {
-        "command": "agentlens.linkSession",
+        "command": "steerhouse.linkSession",
         "title": "%cmd.link.another.session%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(link)"
       },
       {
-        "command": "agentlens.doctor",
+        "command": "steerhouse.doctor",
         "title": "%cmd.check.setup%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(pulse)"
       },
       {
-        "command": "agentlens.installClaude",
+        "command": "steerhouse.installClaude",
         "title": "%cmd.install.claude.code%",
-        "category": "AgentLens"
+        "category": "Steerhouse"
       },
       {
-        "command": "agentlens.login",
+        "command": "steerhouse.login",
         "title": "%cmd.log.in.to.claude.code%",
-        "category": "AgentLens"
+        "category": "Steerhouse"
       },
       {
-        "command": "agentlens.walkthrough",
+        "command": "steerhouse.walkthrough",
         "title": "%cmd.get.started.step.by.step%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(rocket)"
       },
       {
-        "command": "agentlens.addAccount",
+        "command": "steerhouse.addAccount",
         "title": "%cmd.add.claude.account%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(person-add)"
       },
       {
-        "command": "agentlens.accounts",
+        "command": "steerhouse.accounts",
         "title": "%cmd.claude.accounts%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(account)"
       },
       {
-        "command": "agentlens.addProvider",
+        "command": "steerhouse.addProvider",
         "title": "%cmd.add.model.provider.ollama.openrouter.litellm%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(server-process)"
       },
       {
-        "command": "agentlens.manageConnectors",
+        "command": "steerhouse.manageConnectors",
         "title": "%cmd.manage.connectors.mcp%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(plug)"
       },
       {
-        "command": "agentlens.editUserRules",
+        "command": "steerhouse.editUserRules",
         "title": "%cmd.edit.my.rules%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(account)"
       },
       {
-        "command": "agentlens.editProjectRules",
+        "command": "steerhouse.editProjectRules",
         "title": "%cmd.edit.project.rules%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(law)"
       },
       {
-        "command": "agentlens.openRules",
+        "command": "steerhouse.openRules",
         "title": "%cmd.open.rules%",
-        "category": "AgentLens"
+        "category": "Steerhouse"
       },
       {
-        "command": "agentlens.newChatHere",
+        "command": "steerhouse.newChatHere",
         "title": "%cmd.new.chat.here%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(comment-discussion)"
       },
       {
-        "command": "agentlens.deleteSession",
+        "command": "steerhouse.deleteSession",
         "title": "%cmd.delete.session%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(trash)"
       },
       {
-        "command": "agentlens.newChatInWorktree",
+        "command": "steerhouse.newChatInWorktree",
         "title": "%cmd.new.chat.worktree%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(git-branch)"
       },
       {
-        "command": "agentlens.removeWorktree",
+        "command": "steerhouse.removeWorktree",
         "title": "%cmd.remove.worktree%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(trash)"
       },
       {
-        "command": "agentlens.pinProject",
+        "command": "steerhouse.pinProject",
         "title": "%cmd.pin.project%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(pin)"
       },
       {
-        "command": "agentlens.unpinProject",
+        "command": "steerhouse.unpinProject",
         "title": "%cmd.unpin.project%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(pinned)"
       },
       {
-        "command": "agentlens.archiveProject",
+        "command": "steerhouse.archiveProject",
         "title": "%cmd.archive.project%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(archive)"
       },
       {
-        "command": "agentlens.unarchiveProject",
+        "command": "steerhouse.unarchiveProject",
         "title": "%cmd.unarchive.project%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(inbox)"
       },
       {
-        "command": "agentlens.remoteAccess",
+        "command": "steerhouse.remoteAccess",
         "title": "%cmd.remote.access%",
-        "category": "AgentLens",
+        "category": "Steerhouse",
         "icon": "$(device-mobile)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "agentlens.newChat",
-          "when": "view == agentlens.sessions",
+          "command": "steerhouse.newChat",
+          "when": "view == steerhouse.sessions",
           "group": "navigation@0"
         },
         {
-          "command": "agentlens.newSession",
-          "when": "view == agentlens.sessions",
+          "command": "steerhouse.newSession",
+          "when": "view == steerhouse.sessions",
           "group": "navigation@1"
         },
         {
-          "command": "agentlens.dashboard",
-          "when": "view == agentlens.sessions",
+          "command": "steerhouse.dashboard",
+          "when": "view == steerhouse.sessions",
           "group": "navigation@2"
         },
         {
-          "command": "agentlens.refresh",
-          "when": "view == agentlens.sessions",
+          "command": "steerhouse.refresh",
+          "when": "view == steerhouse.sessions",
           "group": "navigation@3"
         },
         {
-          "command": "agentlens.newPrompt",
-          "when": "view == agentlens.prompts",
+          "command": "steerhouse.newPrompt",
+          "when": "view == steerhouse.prompts",
           "group": "navigation"
         },
         {
-          "command": "agentlens.skillAdd",
-          "when": "view == agentlens.skills",
+          "command": "steerhouse.skillAdd",
+          "when": "view == steerhouse.skills",
           "group": "navigation@1"
         },
         {
-          "command": "agentlens.newSkill",
-          "when": "view == agentlens.skills",
+          "command": "steerhouse.newSkill",
+          "when": "view == steerhouse.skills",
           "group": "navigation@2"
         },
         {
-          "command": "agentlens.skillFind",
-          "when": "view == agentlens.skills",
+          "command": "steerhouse.skillFind",
+          "when": "view == steerhouse.skills",
           "group": "navigation@3"
         },
         {
-          "command": "agentlens.skillUpdate",
-          "when": "view == agentlens.skills",
+          "command": "steerhouse.skillUpdate",
+          "when": "view == steerhouse.skills",
           "group": "1_more"
         },
         {
-          "command": "agentlens.skillsRefresh",
-          "when": "view == agentlens.skills",
+          "command": "steerhouse.skillsRefresh",
+          "when": "view == steerhouse.skills",
           "group": "1_more"
         },
         {
-          "command": "agentlens.starterPrompts",
-          "when": "view == agentlens.prompts",
+          "command": "steerhouse.starterPrompts",
+          "when": "view == steerhouse.prompts",
           "group": "1_more"
         },
         {
-          "command": "agentlens.pasteImage",
-          "when": "view == agentlens.sessions",
+          "command": "steerhouse.pasteImage",
+          "when": "view == steerhouse.sessions",
           "group": "1_more"
         },
         {
-          "command": "agentlens.doctor",
-          "when": "view == agentlens.sessions",
+          "command": "steerhouse.doctor",
+          "when": "view == steerhouse.sessions",
           "group": "1_more@0"
         },
         {
-          "command": "agentlens.walkthrough",
-          "when": "view == agentlens.sessions",
+          "command": "steerhouse.walkthrough",
+          "when": "view == steerhouse.sessions",
           "group": "1_more@0"
         },
         {
-          "command": "agentlens.accounts",
-          "when": "view == agentlens.sessions",
+          "command": "steerhouse.accounts",
+          "when": "view == steerhouse.sessions",
           "group": "1_more@1"
         },
         {
-          "command": "agentlens.addProvider",
-          "when": "view == agentlens.sessions",
+          "command": "steerhouse.addProvider",
+          "when": "view == steerhouse.sessions",
           "group": "1_more@2"
         },
         {
-          "command": "agentlens.remoteAccess",
-          "when": "view == agentlens.sessions",
+          "command": "steerhouse.remoteAccess",
+          "when": "view == steerhouse.sessions",
           "group": "navigation@9"
         }
       ],
       "view/item/context": [
         {
-          "command": "agentlens.messageSession",
-          "when": "view == agentlens.sessions && viewItem == session",
+          "command": "steerhouse.messageSession",
+          "when": "view == steerhouse.sessions && viewItem == session",
           "group": "inline@1"
         },
         {
-          "command": "agentlens.steer",
-          "when": "view == agentlens.sessions && viewItem == session",
+          "command": "steerhouse.steer",
+          "when": "view == steerhouse.sessions && viewItem == session",
           "group": "1_send@1"
         },
         {
-          "command": "agentlens.queue",
-          "when": "view == agentlens.sessions && viewItem == session",
+          "command": "steerhouse.queue",
+          "when": "view == steerhouse.sessions && viewItem == session",
           "group": "1_send@2"
         },
         {
-          "command": "agentlens.sendNow",
-          "when": "view == agentlens.sessions && viewItem == session",
+          "command": "steerhouse.sendNow",
+          "when": "view == steerhouse.sessions && viewItem == session",
           "group": "1_send@3"
         },
         {
-          "command": "agentlens.resumeSession",
-          "when": "view == agentlens.sessions && viewItem == session",
+          "command": "steerhouse.resumeSession",
+          "when": "view == steerhouse.sessions && viewItem == session",
           "group": "inline@2"
         },
         {
-          "command": "agentlens.runPrompt",
-          "when": "view == agentlens.prompts && viewItem == prompt",
+          "command": "steerhouse.runPrompt",
+          "when": "view == steerhouse.prompts && viewItem == prompt",
           "group": "inline"
         },
         {
-          "command": "agentlens.skillEnable",
-          "when": "view == agentlens.skills && viewItem == skill",
+          "command": "steerhouse.skillEnable",
+          "when": "view == steerhouse.skills && viewItem == skill",
           "group": "inline@1"
         },
         {
-          "command": "agentlens.skillRemove",
-          "when": "view == agentlens.skills && viewItem == skill",
+          "command": "steerhouse.skillRemove",
+          "when": "view == steerhouse.skills && viewItem == skill",
           "group": "inline@2"
         },
         {
-          "command": "agentlens.linkSession",
-          "when": "view == agentlens.sessions && viewItem == session",
+          "command": "steerhouse.linkSession",
+          "when": "view == steerhouse.sessions && viewItem == session",
           "group": "2_more@1"
         },
         {
-          "command": "agentlens.resumeInTerminal",
-          "when": "view == agentlens.sessions && viewItem == session",
+          "command": "steerhouse.resumeInTerminal",
+          "when": "view == steerhouse.sessions && viewItem == session",
           "group": "2_more@2"
         },
         {
-          "command": "agentlens.editProjectRules",
-          "when": "view == agentlens.sessions && viewItem == rules-project",
+          "command": "steerhouse.editProjectRules",
+          "when": "view == steerhouse.sessions && viewItem == rules-project",
           "group": "inline@1"
         },
         {
-          "command": "agentlens.editUserRules",
-          "when": "view == agentlens.sessions && viewItem == rules-user",
+          "command": "steerhouse.editUserRules",
+          "when": "view == steerhouse.sessions && viewItem == rules-user",
           "group": "inline@1"
         },
         {
-          "command": "agentlens.newChatHere",
-          "when": "view == agentlens.sessions && viewItem =~ /^project\\b/",
+          "command": "steerhouse.newChatHere",
+          "when": "view == steerhouse.sessions && viewItem =~ /^project\\b/",
           "group": "inline@0"
         },
         {
-          "command": "agentlens.newChatHere",
-          "when": "view == agentlens.sessions && viewItem == fsfolder",
+          "command": "steerhouse.newChatHere",
+          "when": "view == steerhouse.sessions && viewItem == fsfolder",
           "group": "inline@0"
         },
         {
-          "command": "agentlens.deleteSession",
-          "when": "view == agentlens.sessions && viewItem == session",
+          "command": "steerhouse.deleteSession",
+          "when": "view == steerhouse.sessions && viewItem == session",
           "group": "9_delete@1"
         },
         {
-          "command": "agentlens.newChatInWorktree",
-          "when": "view == agentlens.sessions && viewItem =~ /^project\\b/",
+          "command": "steerhouse.newChatInWorktree",
+          "when": "view == steerhouse.sessions && viewItem =~ /^project\\b/",
           "group": "inline@1"
         },
         {
-          "command": "agentlens.pinProject",
-          "when": "view == agentlens.sessions && viewItem =~ /^project unpinned active/",
+          "command": "steerhouse.pinProject",
+          "when": "view == steerhouse.sessions && viewItem =~ /^project unpinned active/",
           "group": "2_organize@1"
         },
         {
-          "command": "agentlens.unpinProject",
-          "when": "view == agentlens.sessions && viewItem =~ /^project pinned/",
+          "command": "steerhouse.unpinProject",
+          "when": "view == steerhouse.sessions && viewItem =~ /^project pinned/",
           "group": "2_organize@1"
         },
         {
-          "command": "agentlens.archiveProject",
-          "when": "view == agentlens.sessions && viewItem =~ /^project .* active/",
+          "command": "steerhouse.archiveProject",
+          "when": "view == steerhouse.sessions && viewItem =~ /^project .* active/",
           "group": "2_organize@2"
         },
         {
-          "command": "agentlens.unarchiveProject",
-          "when": "view == agentlens.sessions && viewItem =~ /^project .* archived/",
+          "command": "steerhouse.unarchiveProject",
+          "when": "view == steerhouse.sessions && viewItem =~ /^project .* archived/",
           "group": "2_organize@2"
         },
         {
-          "command": "agentlens.removeWorktree",
-          "when": "view == agentlens.sessions && viewItem =~ /\\bworktree\\b/",
+          "command": "steerhouse.removeWorktree",
+          "when": "view == steerhouse.sessions && viewItem =~ /\\bworktree\\b/",
           "group": "9_delete@1"
         }
       ],
       "comments/commentThread/context": [
         {
-          "command": "agentlens.comment.send",
+          "command": "steerhouse.comment.send",
           "group": "inline@1",
-          "when": "commentController == agentlens"
+          "when": "commentController == steerhouse"
         },
         {
-          "command": "agentlens.comment.queue",
+          "command": "steerhouse.comment.queue",
           "group": "inline@2",
-          "when": "commentController == agentlens"
+          "when": "commentController == steerhouse"
         },
         {
-          "command": "agentlens.comment.now",
+          "command": "steerhouse.comment.now",
           "group": "inline@3",
-          "when": "commentController == agentlens"
+          "when": "commentController == steerhouse"
         }
       ],
       "commandPalette": [
         {
-          "command": "agentlens.comment.send",
+          "command": "steerhouse.comment.send",
           "when": "false"
         },
         {
-          "command": "agentlens.openChange",
+          "command": "steerhouse.openChange",
           "when": "false"
         },
         {
-          "command": "agentlens.openSession",
+          "command": "steerhouse.openSession",
           "when": "false"
         },
         {
-          "command": "agentlens.openFile",
+          "command": "steerhouse.openFile",
           "when": "false"
         },
         {
-          "command": "agentlens.runPrompt",
+          "command": "steerhouse.runPrompt",
           "when": "false"
         },
         {
-          "command": "agentlens.skillEnable",
+          "command": "steerhouse.skillEnable",
           "when": "false"
         },
         {
-          "command": "agentlens.skillRemove",
+          "command": "steerhouse.skillRemove",
           "when": "false"
         },
         {
-          "command": "agentlens.savePrompt",
+          "command": "steerhouse.savePrompt",
           "when": "false"
         },
         {
-          "command": "agentlens.comment.queue",
+          "command": "steerhouse.comment.queue",
           "when": "false"
         },
         {
-          "command": "agentlens.comment.now",
+          "command": "steerhouse.comment.now",
           "when": "false"
         },
         {
-          "command": "agentlens.openRules",
+          "command": "steerhouse.openRules",
           "when": "false"
         },
         {
-          "command": "agentlens.deleteSession",
+          "command": "steerhouse.deleteSession",
           "when": "false"
         },
         {
-          "command": "agentlens.removeWorktree",
+          "command": "steerhouse.removeWorktree",
           "when": "false"
         },
         {
-          "command": "agentlens.pinProject",
+          "command": "steerhouse.pinProject",
           "when": "false"
         },
         {
-          "command": "agentlens.unpinProject",
+          "command": "steerhouse.unpinProject",
           "when": "false"
         },
         {
-          "command": "agentlens.archiveProject",
+          "command": "steerhouse.archiveProject",
           "when": "false"
         },
         {
-          "command": "agentlens.unarchiveProject",
+          "command": "steerhouse.unarchiveProject",
           "when": "false"
         }
       ],
       "terminal/title/context": [
         {
-          "command": "agentlens.pasteImage",
+          "command": "steerhouse.pasteImage",
           "group": "navigation"
         }
       ],
       "explorer/context": [
         {
-          "command": "agentlens.newChatHere",
+          "command": "steerhouse.newChatHere",
           "when": "explorerResourceIsFolder",
-          "group": "agentlens@1"
+          "group": "steerhouse@1"
         },
         {
-          "command": "agentlens.newChatInWorktree",
+          "command": "steerhouse.newChatInWorktree",
           "when": "explorerResourceIsFolder",
-          "group": "agentlens@2"
+          "group": "steerhouse@2"
         }
       ]
     },
     "configuration": {
-      "title": "AgentLens",
+      "title": "Steerhouse",
       "properties": {
-        "agentlens.days": {
+        "steerhouse.days": {
           "type": "number",
           "default": 3,
           "minimum": 1,
           "description": "%setting.show.sessions.active.in.the.last.n.days%"
         },
-        "agentlens.pollSeconds": {
+        "steerhouse.pollSeconds": {
           "type": "number",
           "default": 3,
           "minimum": 1,
           "description": "%setting.how.often.to.look.for.session.updates%"
         },
-        "agentlens.agentCommand": {
+        "steerhouse.agentCommand": {
           "type": "string",
           "default": "claude",
           "description": "%setting.agent.cli.used.to.start.resume.and.run.prompts%"
         },
-        "agentlens.agentArgs": {
+        "steerhouse.agentArgs": {
           "type": "array",
           "items": {
             "type": "string"
@@ -680,7 +680,7 @@
           "default": [],
           "description": "%setting.extra.arguments.for.every.agent.run.e.g.model.opus%"
         },
-        "agentlens.browser": {
+        "steerhouse.browser": {
           "type": "string",
           "enum": [
             "default",
@@ -699,26 +699,26 @@
           "default": "default",
           "description": "%setting.browser%"
         },
-        "agentlens.browserPath": {
+        "steerhouse.browserPath": {
           "type": "string",
           "default": "",
           "description": "%setting.browserPath%"
         },
-        "agentlens.defaultSurface": {
+        "steerhouse.defaultSurface": {
           "type": "string",
           "enum": [
             "chat",
             "terminal"
           ],
           "default": "chat",
-          "description": "%setting.where.new.and.resumed.sessions.open.the.agentlens.chat.or.a.%"
+          "description": "%setting.where.new.and.resumed.sessions.open.the.steerhouse.chat.or.a.%"
         },
-        "agentlens.hideTempSessions": {
+        "steerhouse.hideTempSessions": {
           "type": "boolean",
           "default": true,
           "description": "%setting.hide.sessions.that.ran.inside.the.system.temp.folder.scratch%"
         },
-        "agentlens.notifications": {
+        "steerhouse.notifications": {
           "type": "boolean",
           "default": true,
           "description": "%setting.notifications%"
@@ -727,43 +727,43 @@
     },
     "viewsWelcome": [
       {
-        "view": "agentlens.prompts",
-        "contents": "Prompts are reusable instructions you can run in one click, interactive or headless (claude -p), with ${file}, ${selection} and ${input:…} variables.\n[Add Starter Prompts](command:agentlens.starterPrompts)\n[New Prompt](command:agentlens.newPrompt)\nProject prompts live in .agentlens/prompts/ (commit them to share with the team)."
+        "view": "steerhouse.prompts",
+        "contents": "Prompts are reusable instructions you can run in one click, interactive or headless (claude -p), with ${file}, ${selection} and ${input:…} variables.\n[Add Starter Prompts](command:steerhouse.starterPrompts)\n[New Prompt](command:steerhouse.newPrompt)\nProject prompts live in .steerhouse/prompts/ (commit them to share with the team)."
       },
       {
-        "view": "agentlens.skills",
-        "contents": "Skills teach agents how to do things in your project. One SKILL.md works in Claude Code, Cursor, Codex, Gemini CLI, Copilot and more. Each agent just looks in a different folder.\n[Add Skill from skills.sh](command:agentlens.skillAdd)\n[New Skill](command:agentlens.newSkill)"
+        "view": "steerhouse.skills",
+        "contents": "Skills teach agents how to do things in your project. One SKILL.md works in Claude Code, Cursor, Codex, Gemini CLI, Copilot and more. Each agent just looks in a different folder.\n[Add Skill from skills.sh](command:steerhouse.skillAdd)\n[New Skill](command:steerhouse.newSkill)"
       }
     ],
     "keybindings": [
       {
-        "command": "agentlens.pasteImage",
+        "command": "steerhouse.pasteImage",
         "key": "ctrl+alt+v",
         "mac": "cmd+alt+v",
         "when": "terminalFocus"
       },
       {
-        "command": "agentlens.deleteSession",
+        "command": "steerhouse.deleteSession",
         "key": "delete",
         "mac": "cmd+backspace",
-        "when": "focusedView == agentlens.sessions && listHasSelectionOrFocus"
+        "when": "focusedView == steerhouse.sessions && listHasSelectionOrFocus"
       }
     ],
     "walkthroughs": [
       {
-        "id": "agentlens.start",
-        "title": "%walk.get.started.with.agentlens%",
+        "id": "steerhouse.start",
+        "title": "%walk.get.started.with.steerhouse%",
         "description": "%walk.two.minutes.claude.code.login.message.delivery.your.first.ch%",
         "steps": [
           {
             "id": "claude",
             "title": "%step.check.claude.code%",
-            "description": "%step.agentlens.drives.your.own.claude.code.and.its.login.check.se%",
+            "description": "%step.steerhouse.drives.your.own.claude.code.and.its.login.check.se%",
             "media": {
               "markdown": "media/walkthrough/1-claude.md"
             },
             "completionEvents": [
-              "onContext:agentlens.claudeOk"
+              "onContext:steerhouse.claudeOk"
             ]
           },
           {
@@ -774,7 +774,7 @@
               "markdown": "media/walkthrough/2-login.md"
             },
             "completionEvents": [
-              "onContext:agentlens.loginOk"
+              "onContext:steerhouse.loginOk"
             ]
           },
           {
@@ -785,7 +785,7 @@
               "markdown": "media/walkthrough/3-hooks.md"
             },
             "completionEvents": [
-              "onContext:agentlens.hooksOk"
+              "onContext:steerhouse.hooksOk"
             ]
           },
           {
@@ -796,7 +796,7 @@
               "markdown": "media/walkthrough/4-chat.md"
             },
             "completionEvents": [
-              "onCommand:agentlens.newChat"
+              "onCommand:steerhouse.newChat"
             ]
           },
           {
@@ -807,7 +807,7 @@
               "markdown": "media/walkthrough/5-dashboard.md"
             },
             "completionEvents": [
-              "onCommand:agentlens.dashboard"
+              "onCommand:steerhouse.dashboard"
             ]
           },
           {
@@ -818,8 +818,8 @@
               "markdown": "media/walkthrough/6-skills.md"
             },
             "completionEvents": [
-              "onCommand:agentlens.skillAdd",
-              "onView:agentlens.skills"
+              "onCommand:steerhouse.skillAdd",
+              "onView:steerhouse.skills"
             ]
           }
         ]
@@ -832,7 +832,7 @@
     "build:webview": "vite build --config webview/vite.config.mts",
     "dev:webview": "vite --config webview/vite.config.mts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
-    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs",
+    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs",
     "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs test/e2e-fork.test.cjs",
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs",
@@ -870,5 +870,10 @@
     "typescript": "5.8.3",
     "vite": "6.3.5"
   },
-  "l10n": "./l10n"
+  "l10n": "./l10n",
+  "icon": "media/steerhouse.png",
+  "galleryBanner": {
+    "color": "#0B3B5C",
+    "theme": "dark"
+  }
 }

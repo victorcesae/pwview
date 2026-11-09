@@ -3,7 +3,7 @@ name: extension
 on:
   push:
     branches: [main]
-    tags: ["agentlens-v*"]
+    tags: ["steerhouse-v*"]
   pull_request:
 
 permissions:
@@ -36,17 +36,17 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: runner.os == 'Linux'
         with:
-          name: agentlens-vsix
+          name: steerhouse-vsix
           path: extension/*.vsix
 
   release:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/agentlens-v')
+    if: startsWith(github.ref, 'refs/tags/steerhouse-v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: agentlens-vsix
+          name: steerhouse-vsix
       - uses: softprops/action-gh-release@v2
         with:
           files: "*.vsix"

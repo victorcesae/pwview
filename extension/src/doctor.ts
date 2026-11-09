@@ -1,4 +1,4 @@
-// "AgentLens: Check Setup": everything the extension needs, with a fix for each problem.
+// "Steerhouse: Check Setup": everything the extension needs, with a fix for each problem.
 import { execFile } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -38,16 +38,16 @@ export async function runChecks(): Promise<Check[]> {
     name: 'Claude Code',
     ok: !!exe && !!v,
     detail: exe ? `${v ?? 'found but did not run'}: ${exe}` : 'not found on PATH or in the usual install folders',
-    fix: exe ? undefined : { label: 'Install Claude Code', command: 'agentlens.installClaude' },
+    fix: exe ? undefined : { label: 'Install Claude Code', command: 'steerhouse.installClaude' },
   });
   const login = loginState();
-  checks.push({ name: 'Login', ok: login.ok, detail: login.detail, fix: login.ok === true ? undefined : { label: 'Log in', command: 'agentlens.login' } });
+  checks.push({ name: 'Login', ok: login.ok, detail: login.detail, fix: login.ok === true ? undefined : { label: 'Log in', command: 'steerhouse.login' } });
   const h = hooksStatus();
   checks.push({
     name: 'Message delivery hooks',
     ok: h === 'all',
     detail: h === 'all' ? 'steer / queue / send now work in terminal sessions too' : h === 'some' ? 'an older version is installed: update for steering' : 'not installed: needed only for sessions running in a terminal',
-    fix: h === 'all' ? undefined : { label: h === 'some' ? 'Update hooks' : 'Enable', command: 'agentlens.installHooks' },
+    fix: h === 'all' ? undefined : { label: h === 'some' ? 'Update hooks' : 'Enable', command: 'steerhouse.installHooks' },
   });
   const ws = vscode.workspace.workspaceFolders?.[0];
   checks.push({ name: 'Project folder', ok: !!ws, detail: ws ? ws.uri.fsPath : 'open a folder so agents know where to work', fix: ws ? undefined : { label: 'Open Folder', command: 'workbench.action.files.openFolder' } });
@@ -63,44 +63,44 @@ export async function runChecks(): Promise<Check[]> {
 export async function syncSetupContext(checks?: Check[]) {
   checks ??= await runChecks();
   const ok = (name: string) => checks!.find((c) => c.name === name)?.ok === true;
-  await vscode.commands.executeCommand("setContext", "agentlens.claudeOk", ok("Claude Code"));
-  await vscode.commands.executeCommand("setContext", "agentlens.loginOk", ok("Login"));
-  await vscode.commands.executeCommand("setContext", "agentlens.hooksOk", ok("Message delivery hooks"));
+  await vscode.commands.executeCommand("setContext", "steerhouse.claudeOk", ok("Claude Code"));
+  await vscode.commands.executeCommand("setContext", "steerhouse.loginOk", ok("Login"));
+  await vscode.commands.executeCommand("setContext", "steerhouse.hooksOk", ok("Message delivery hooks"));
   return checks;
 }
 
 export function registerDoctor(ctx: vscode.ExtensionContext) {
   syncSetupContext().catch(() => {});
-  const out = vscode.window.createOutputChannel('AgentLens');
+  const out = vscode.window.createOutputChannel('Steerhouse');
   ctx.subscriptions.push(
     out,
-    vscode.commands.registerCommand('agentlens.doctor', async () => {
-      const checks = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'AgentLens: checking setup…' }, runChecks);
+    vscode.commands.registerCommand('steerhouse.doctor', async () => {
+      const checks = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Steerhouse: checking setup…' }, runChecks);
       syncSetupContext(checks);
       out.clear();
-      out.appendLine('AgentLens setup check\n');
+      out.appendLine('Steerhouse setup check\n');
       for (const c of checks) out.appendLine(`${c.ok === true ? '✔' : c.ok === 'unknown' ? '?' : '✖'} ${c.name}: ${c.detail}`);
       const bad = checks.filter((c) => c.ok === false);
       if (!bad.length) {
-        vscode.window.showInformationMessage('AgentLens: everything is set up. ✔', 'New Chat').then((p) => p && vscode.commands.executeCommand('agentlens.newChat'));
+        vscode.window.showInformationMessage('Steerhouse: everything is set up. ✔', 'New Chat').then((p) => p && vscode.commands.executeCommand('steerhouse.newChat'));
         return;
       }
       const first = bad[0];
-      const pick = await vscode.window.showWarningMessage(`AgentLens: ${first.name}: ${first.detail}`, ...(first.fix ? [first.fix.label] : []), 'Show details');
+      const pick = await vscode.window.showWarningMessage(`Steerhouse: ${first.name}: ${first.detail}`, ...(first.fix ? [first.fix.label] : []), 'Show details');
       if (pick === 'Show details') out.show();
       else if (pick && first.fix) vscode.commands.executeCommand(first.fix.command);
     }),
-    vscode.commands.registerCommand('agentlens.installClaude', () => installClaude()),
-    vscode.commands.registerCommand('agentlens.login', () => {
+    vscode.commands.registerCommand('steerhouse.installClaude', () => installClaude()),
+    vscode.commands.registerCommand('steerhouse.login', () => {
       const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? require('os').homedir();
       runAgent('Claude login', cwd, []);
-      vscode.window.showInformationMessage('In the Claude terminal, type /login and follow the link. You only do this once: every AgentLens chat and terminal reuses the login.');
+      vscode.window.showInformationMessage('In the Claude terminal, type /login and follow the link. You only do this once: every Steerhouse chat and terminal reuses the login.');
     }),
   );
 
   // First run: open the step-by-step setup.
-  if (!ctx.globalState.get('agentlens.walkthroughShown')) {
-    ctx.globalState.update('agentlens.walkthroughShown', true);
-    vscode.commands.executeCommand('workbench.action.openWalkthrough', 'victorcesae.agentlens#agentlens.start', false);
+  if (!ctx.globalState.get('steerhouse.walkthroughShown')) {
+    ctx.globalState.update('steerhouse.walkthroughShown', true);
+    vscode.commands.executeCommand('workbench.action.openWalkthrough', 'victorcesae.steerhouse#steerhouse.start', false);
   }
 }

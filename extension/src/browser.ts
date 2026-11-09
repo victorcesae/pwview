@@ -35,7 +35,7 @@ export function browserExecutable(choice: BrowserChoice, customPath = ''): strin
 
 export async function openUrl(url: string): Promise<void> {
   if (!/^https?:\/\//i.test(url)) return;
-  const cfg = vscode.workspace.getConfiguration('agentlens');
+  const cfg = vscode.workspace.getConfiguration('steerhouse');
   const choice = cfg.get<BrowserChoice>('browser', 'default');
   // Over Remote-SSH the extension runs on the host: a browser there would open on the server, not
   // in front of you. The default path forwards the link to your own machine.
@@ -45,7 +45,7 @@ export async function openUrl(url: string): Promise<void> {
   }
   const exe = browserExecutable(choice, cfg.get<string>('browserPath', ''));
   if (!exe) {
-    vscode.window.showWarningMessage(vscode.l10n.t('AgentLens: {0} was not found, so the link opens in your default browser.', choice === 'custom' ? cfg.get<string>('browserPath', '') || 'agentlens.browserPath' : choice));
+    vscode.window.showWarningMessage(vscode.l10n.t('Steerhouse: {0} was not found, so the link opens in your default browser.', choice === 'custom' ? cfg.get<string>('browserPath', '') || 'steerhouse.browserPath' : choice));
     await vscode.env.openExternal(vscode.Uri.parse(url));
     return;
   }

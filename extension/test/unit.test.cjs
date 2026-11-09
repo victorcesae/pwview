@@ -8,11 +8,11 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-unit-build');
+const out = path.join(os.tmpdir(), 'steerhouse-unit-build');
 const stub = path.join(__dirname, 'vscode-stub.cjs');
 execSync(`npx esbuild src/chat.ts src/links.ts src/graph.ts src/engine.ts src/skills.ts src/library.ts src/doctor.ts src/accounts.ts --bundle --platform=node --format=cjs --outdir="${out}" --alias:vscode="${stub}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --log-level=error`, { cwd: root, stdio: 'inherit' });
 
-const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-unit-'));
+const home = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-unit-'));
 process.env.CLAUDE_CONFIG_DIR = path.join(home, '.claude');
 process.env.HOME = home;
 process.env.USERPROFILE = home;
@@ -324,7 +324,7 @@ test('graph: prompts in order, edits under the right prompt, shared files connec
 // ------------------------------------------------------------------ skills, prompts, setup checks
 
 test('skills: shows which agents load each skill', () => {
-  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-ws-'));
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-ws-'));
   process.env.TEST_WS = ws;
   const skill = (dir, name) => {
     fs.mkdirSync(path.join(dir, name), { recursive: true });

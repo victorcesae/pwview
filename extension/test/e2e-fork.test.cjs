@@ -1,6 +1,6 @@
 // Real Claude Code (Haiku): "Edit and run again". Files the agent changed after a message are
 // restored (file checkpointing + rewindFiles), and the conversation forks at that message into a
-// new session that still knows what came before. Run with AGENTLENS_E2E=1 (npm run test:e2e).
+// new session that still knows what came before. Run with STEERHOUSE_E2E=1 (npm run test:e2e).
 const { execSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -10,15 +10,15 @@ const assert = require('node:assert');
 const { removeTestSession } = require('./e2e-cleanup.cjs');
 
 const root = path.join(__dirname, '..');
-const skip = !process.env.AGENTLENS_E2E && 'set AGENTLENS_E2E=1 to run against the real Claude Code';
+const skip = !process.env.STEERHOUSE_E2E && 'set STEERHOUSE_E2E=1 to run against the real Claude Code';
 
 test('e2e: rewind the files to a message, then fork the conversation there', { skip, timeout: 300_000 }, async () => {
-  const out = path.join(os.tmpdir(), 'agentlens-e2e-fork');
+  const out = path.join(os.tmpdir(), 'steerhouse-e2e-fork');
   const stub = path.join(__dirname, 'vscode-stub.cjs');
   execSync(`npx esbuild src/chat.ts src/util.ts --bundle --platform=node --format=cjs --outdir="${out}" --alias:vscode="${stub}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --log-level=error`, { cwd: root });
   const { ChatSession } = require(path.join(out, 'chat.js'));
   const { agentExecutable } = require(path.join(out, 'util.js'));
-  const cwd = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-e2e-fork-')));
+  const cwd = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-e2e-fork-')));
   const file = path.join(cwd, 'a.txt');
   const sessions = [];
   const idle = (c) =>

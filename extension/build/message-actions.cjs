@@ -22,7 +22,7 @@ R(
             {it.streaming && <span className="bg-foreground/70 ml-0.5 inline-block h-3.5 w-1.5 animate-pulse align-middle" />}
             {!it.streaming && (
               <div className="mt-0.5 flex gap-1 opacity-0 transition-opacity group-hover/answer:opacity-100 focus-within:opacity-100">
-                <Button size="xs" variant="ghost" onClick={() => window.dispatchEvent(new CustomEvent('agentlens:quote', { detail: it.text }))} title={t('Quote this answer in your next message')} data-quote>
+                <Button size="xs" variant="ghost" onClick={() => window.dispatchEvent(new CustomEvent('steerhouse:quote', { detail: it.text }))} title={t('Quote this answer in your next message')} data-quote>
                   <Quote /> {t('Quote')}
                 </Button>
                 <Button size="xs" variant="ghost" onClick={() => navigator.clipboard?.writeText(it.text)} title={t('Copy')} aria-label={t('Copy')}>

@@ -1,5 +1,5 @@
 // Other coding agents installed on this machine (Cursor Agent, Codex, Gemini CLI, OpenCode…).
-// A new chat asks which agent to use: Claude Code runs in the AgentLens chat; the others open in a
+// A new chat asks which agent to use: Claude Code runs in the Steerhouse chat; the others open in a
 // terminal in the chosen folder, with their own login and settings.
 import * as path from 'path';
 import * as vscode from 'vscode';

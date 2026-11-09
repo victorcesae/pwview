@@ -1,5 +1,5 @@
-// Delete the session folders that AgentLens' own end-to-end tests left in ~/.claude/projects.
-// Only folders whose name ends in "-agentlens-e2e-XXXXXX" or "-agentlens-steer-XXXXXX".
+// Delete the session folders that Steerhouse' own end-to-end tests left in ~/.claude/projects.
+// Only folders whose name ends in "-steerhouse-e2e-XXXXXX" or "-steerhouse-steer-XXXXXX".
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -7,7 +7,7 @@ const path = require('path');
 const projects = path.join(os.homedir(), '.claude', 'projects');
 const targets = fs
   .readdirSync(projects, { withFileTypes: true })
-  .filter((d) => d.isDirectory() && /-agentlens-(e2e|steer)-[A-Za-z0-9]{6}$/.test(d.name))
+  .filter((d) => d.isDirectory() && /-steerhouse-(e2e|steer)-[A-Za-z0-9]{6}$/.test(d.name))
   .map((d) => path.join(projects, d.name));
 
 console.log(`${targets.length} test session folder(s):`);

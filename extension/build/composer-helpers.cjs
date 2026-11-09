@@ -60,8 +60,8 @@ R(
       setText(next);
       input.current?.focus();
     };
-    window.addEventListener('agentlens:quote', onQuote);
-    return () => window.removeEventListener('agentlens:quote', onQuote);
+    window.addEventListener('steerhouse:quote', onQuote);
+    return () => window.removeEventListener('steerhouse:quote', onQuote);
   }, []);
 
   // ---- suggested next prompt (from Claude Code, after a turn): Tab or a click puts it in the box

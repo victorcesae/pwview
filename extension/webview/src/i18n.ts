@@ -164,7 +164,7 @@ const PT: Record<string, string> = {
   "This session didn't start any sub-agents.": "Esta sessão não iniciou sub-agentes.",
   "All sessions": "Todas as sessões",
   "Let this session's agent see what another session is doing": "Deixe o agente desta sessão ver o que outra sessão está fazendo",
-  "Continue this session in an AgentLens chat": "Continuar esta sessão em um chat do AgentLens",
+  "Continue this session in an Steerhouse chat": "Continuar esta sessão em um chat do Steerhouse",
   "Changes files that these sessions also changed:": "Altera arquivos que estas sessões também alteraram:",
   "No agent sessions in the last days.": "Nenhuma sessão de agente nos últimos dias.",
   "Start one with": "Comece uma com",

@@ -20,7 +20,7 @@ export function installHookScript(bundled: string) {
   fs.copyFileSync(bundled, hookScriptPath());
 }
 
-const ours = (g: any) => (g?.hooks ?? []).some((h: any) => String(h.command ?? '').includes('agentlens/hook.js'));
+const ours = (g: any) => (g?.hooks ?? []).some((h: any) => String(h.command ?? '').includes('steerhouse/hook.js'));
 
 /** 'all' | 'some' (older version installed, needs update) | 'none' */
 export function hooksStatus(target = settingsPath()): 'all' | 'some' | 'none' {
@@ -56,7 +56,7 @@ export function installHooks(target = settingsPath()): number {
     }
   }
   if (added) {
-    if (original !== undefined) fs.writeFileSync(target + '.agentlens-bak', original);
+    if (original !== undefined) fs.writeFileSync(target + '.steerhouse-bak', original);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, JSON.stringify(doc, null, 2) + '\n');
   }

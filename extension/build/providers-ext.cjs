@@ -23,14 +23,14 @@ R(E, "['--resume', s.info.id], accountEnv(account));\n      else chats.start({ c
 R(E, "['--resume', s.info.id], accountEnv(accountOf(s.info.account)));", "['--resume', s.info.id], await envFor(accountOf(s.info.account)));");
 R(E, "      pickAccount().then((account) => account && chats.start({ cwd, account }));", "      pickAccount().then(async (account) => account && chats.start({ cwd, account, env: await envFor(account) }));");
 // the resume / resumeInTerminal handlers become async
-R(E, "vscode.commands.registerCommand('agentlens.resumeSession', (x: unknown) => {", "vscode.commands.registerCommand('agentlens.resumeSession', async (x: unknown) => {");
-R(E, "vscode.commands.registerCommand('agentlens.resumeInTerminal', (x: unknown) => {", "vscode.commands.registerCommand('agentlens.resumeInTerminal', async (x: unknown) => {");
+R(E, "vscode.commands.registerCommand('steerhouse.resumeSession', (x: unknown) => {", "vscode.commands.registerCommand('steerhouse.resumeSession', async (x: unknown) => {");
+R(E, "vscode.commands.registerCommand('steerhouse.resumeInTerminal', (x: unknown) => {", "vscode.commands.registerCommand('steerhouse.resumeInTerminal', async (x: unknown) => {");
 
 // Add model provider
 R(
   E,
-  "    vscode.commands.registerCommand('agentlens.addAccount', async () => {",
-  `    vscode.commands.registerCommand('agentlens.addProvider', async () => {
+  "    vscode.commands.registerCommand('steerhouse.addAccount', async () => {",
+  `    vscode.commands.registerCommand('steerhouse.addProvider', async () => {
       const preset = (await vscode.window.showQuickPick(PRESETS.map((p) => ({ label: p.label, detail: p.detail, p })), { placeHolder: vscode.l10n.t('Which models do you want to use?') }))?.p;
       if (!preset) return;
       const baseUrl = await vscode.window.showInputBox({ prompt: vscode.l10n.t('Endpoint (Anthropic-compatible)'), value: preset.baseUrl, placeHolder: 'https://…', ignoreFocusOut: true });
@@ -60,11 +60,11 @@ R(
         if (cwd) chats.start({ cwd, account: acc, env: await envFor(acc) });
       }
     }),
-    vscode.commands.registerCommand('agentlens.addAccount', async () => {`,
+    vscode.commands.registerCommand('steerhouse.addAccount', async () => {`,
 );
 // accounts menu offers providers too
 R(E, "          { label: '$(add) ' + vscode.l10n.t('Add account…'), description: '', a: undefined as Account | undefined },", "          { label: '$(add) ' + vscode.l10n.t('Add account…'), description: '', a: undefined as Account | undefined },\n          { label: '$(server-process) ' + vscode.l10n.t('Add model provider (Ollama, OpenRouter, LiteLLM…)'), description: '', a: { id: '__provider' } as Account },");
-R(E, "      if (!pick.a) return vscode.commands.executeCommand('agentlens.addAccount');", "      if (!pick.a) return vscode.commands.executeCommand('agentlens.addAccount');\n      if (pick.a.id === '__provider') return vscode.commands.executeCommand('agentlens.addProvider');");
+R(E, "      if (!pick.a) return vscode.commands.executeCommand('steerhouse.addAccount');", "      if (!pick.a) return vscode.commands.executeCommand('steerhouse.addAccount');\n      if (pick.a.id === '__provider') return vscode.commands.executeCommand('steerhouse.addProvider');");
 R(E, "        if (act === LOGIN) return runAgent(`Claude login · ${acc.name}`, require('os').homedir(), [], accountEnv(acc));", "        if (act === LOGIN) return runAgent(`Claude login · ${acc.name}`, require('os').homedir(), [], await envFor(acc));");
 
 // chat panel: env passed in; host app name for the "Cursor + Claude" badge
@@ -81,7 +81,7 @@ R('webview/src/types.ts', 'account: { name: string; email?: string; organization
 
 // manifest + translations for the new command
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-pkg.contributes.commands.push({ command: 'agentlens.addProvider', title: 'Add Model Provider (Ollama, OpenRouter, LiteLLM…)…', category: 'AgentLens', icon: '$(server-process)' });
-pkg.contributes.menus['view/title'].push({ command: 'agentlens.addProvider', when: 'view == agentlens.sessions', group: '1_more@2' });
+pkg.contributes.commands.push({ command: 'steerhouse.addProvider', title: 'Add Model Provider (Ollama, OpenRouter, LiteLLM…)…', category: 'Steerhouse', icon: '$(server-process)' });
+pkg.contributes.menus['view/title'].push({ command: 'steerhouse.addProvider', when: 'view == steerhouse.sessions', group: '1_more@2' });
 fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 console.log('ok');

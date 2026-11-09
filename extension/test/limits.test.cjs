@@ -7,7 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-limits-build');
+const out = path.join(os.tmpdir(), 'steerhouse-limits-build');
 const stub = path.join(__dirname, 'vscode-stub.cjs');
 execSync(`npx esbuild src/chat.ts src/hostIcon.ts src/browser.ts src/tree.ts src/rules.ts src/agents.ts src/links.ts src/accounts.ts --bundle --platform=node --format=cjs --outdir="${out}" --alias:vscode="${stub}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --log-level=error`, { cwd: root });
 const C = require(path.join(out, 'chat.js'));
@@ -43,7 +43,7 @@ test('limits: only OpenRouter gateways ask for key credit', async () => {
 });
 
 test('host icon: read from the editor install as a data URI, VS Code logo vs. fork picture', () => {
-  const app = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-approot-'));
+  const app = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-approot-'));
   fs.mkdirSync(path.join(app, 'resources', 'win32'), { recursive: true });
   fs.writeFileSync(path.join(app, 'resources', 'win32', 'code_70x70.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   const uri = H.hostIcon(app, 'Visual Studio Code');
@@ -60,14 +60,14 @@ test('browser: install locations per OS; "default" means the system browser', ()
   assert.deepStrictEqual(B.browserCandidates('firefox', 'linux', {}), ['firefox']);
   assert.strictEqual(B.browserExecutable('default'), undefined);
   assert.strictEqual(B.browserExecutable('custom', ''), undefined);
-  const fake = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-br-')), 'mybrowser');
+  const fake = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-br-')), 'mybrowser');
   fs.writeFileSync(fake, '');
   assert.strictEqual(B.browserExecutable('custom', fake), fake);
 });
 
 test('files tree: folders first, hidden names left out; changed files counted across sessions and sub-agents', () => {
   const T = require(path.join(out, 'tree.js'));
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-files-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-files-'));
   for (const d of ['src', '.git', 'b-dir']) fs.mkdirSync(path.join(dir, d));
   for (const f of ['a.ts', 'Z.md']) fs.writeFileSync(path.join(dir, f), '');
   assert.deepStrictEqual(T.listDir(dir, new Set(['.git'])).map((e) => [path.basename(e.path), e.dir]), [['b-dir', true], ['src', true], ['a.ts', false], ['Z.md', false]]);
@@ -82,9 +82,9 @@ test('files tree: folders first, hidden names left out; changed files counted ac
 
 test('rules: user CLAUDE.md, project CLAUDE.md / CLAUDE.local.md always offered, others when present; local file kept out of git', () => {
   const Ru = require(path.join(out, 'rules.js'));
-  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-cfg-'));
+  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-cfg-'));
   assert.deepStrictEqual(Ru.userRules(cfg).map((r) => [r.label, r.exists]), [['CLAUDE.md', false]]);
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-proj-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-proj-'));
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# rules');
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '');
   fs.mkdirSync(path.join(root, '.cursor', 'rules'), { recursive: true });
@@ -117,7 +117,7 @@ test('links: only sessions on the same account and the same kind of model can be
 
 test('accounts: the signed-in email and organization come from Claude Code\'s .claude.json', () => {
   const A = require(path.join(out, 'accounts.js'));
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-acc-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-acc-'));
   const a = { id: 'work', name: 'Work', configDir: dir };
   assert.strictEqual(A.accountIdentity(a), undefined, 'not signed in');
   fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'dev@example.com', organizationName: 'Acme' } }));

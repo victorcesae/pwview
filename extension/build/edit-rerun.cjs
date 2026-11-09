@@ -50,7 +50,7 @@ R(C, `  /** settings saved from the last time this session was open (applied at 
   prefs?: ChatPrefs;
   /** run a copy of the resumed session cut at this transcript entry (edit an earlier prompt) */
   fork?: { at: string };`);
-R(C, `  /** Load older history (one page`, `  /** Restores files the agent changed after this message (needs file checkpointing, on for AgentLens chats). */
+R(C, `  /** Load older history (one page`, `  /** Restores files the agent changed after this message (needs file checkpointing, on for Steerhouse chats). */
   async rewindFilesTo(userUuid: string): Promise<{ ok: boolean; error?: string; files?: number }> {
     try {
       const r: any = await this.q?.rewindFiles(userUuid);
@@ -72,19 +72,19 @@ const types = "  | { type: 'editPrompt'; id: string; text: string }\n  | { type:
 for (const f of [F, 'webview/src/types.ts']) R(f, "  | { type: 'deleteSession' }\n", "  | { type: 'deleteSession' }\n" + types + '\n');
 R(F, `      case 'deleteSession':`, `      case 'stash': {
         const list = [m.text, ...this.stash().filter((x) => x !== m.text)].slice(0, 30);
-        await this.ctx.globalState.update('agentlens.stash', list);
+        await this.ctx.globalState.update('steerhouse.stash', list);
         return this.refresh();
       }
       case 'unstash': {
         const list = this.stash().filter((_, i) => i !== m.index);
-        await this.ctx.globalState.update('agentlens.stash', list);
+        await this.ctx.globalState.update('steerhouse.stash', list);
         return this.refresh();
       }
       case 'editPrompt':
         return this.editAndRerun(o, m.id, m.text);
       case 'deleteSession':`);
 R(F, `  /** Tells you when a chat you're not looking at finishes`, `  private stash(): string[] {
-    return this.ctx.globalState.get<string[]>('agentlens.stash', []);
+    return this.ctx.globalState.get<string[]>('steerhouse.stash', []);
   }
 
   /**
@@ -97,7 +97,7 @@ R(F, `  /** Tells you when a chat you're not looking at finishes`, `  private st
     const idx = c.state.items.findIndex((it) => it.id === itemId);
     const item = c.state.items[idx];
     if (!item || item.kind !== 'user' || !c.state.sessionId) return;
-    if (!item.forkAt) return vscode.window.showWarningMessage(vscode.l10n.t('This message cannot be run again (it is the first one of a session started outside AgentLens).'));
+    if (!item.forkAt) return vscode.window.showWarningMessage(vscode.l10n.t('This message cannot be run again (it is the first one of a session started outside Steerhouse).'));
     if (c.state.status === 'working' || c.state.status === 'waiting') await c.interrupt();
     const undo = vscode.l10n.t('Undo File Changes Too');
     const keep = vscode.l10n.t('Keep Files');

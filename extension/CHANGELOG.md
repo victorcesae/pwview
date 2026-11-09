@@ -1,0 +1,22 @@
+# Changelog
+
+## 0.13.0
+- **Renamed AgentLens to Steerhouse**, with a new icon. Settings (`agentlens.*` → `steerhouse.*`), the data folder and Claude Code hook entries carry over on first start.
+
+## 0.12.0
+- Worktree per chat (own branch and folder); Remove worktree.
+- PR review: changed files with your GitHub viewed marks; Merge (squash / merge / rebase) after a confirmation.
+- Edit an earlier message and run again (optionally undoing file changes); Quote, Copy, Up-arrow recall, prompt stash, suggested next prompt.
+- Pin and archive projects; Open on Phone (key-protected page with Steer / Queue / Send now).
+
+## 0.11.0
+- Add MCP server (popular or your own; team, project or everywhere), connected to open chats at once.
+
+## 0.10.0
+- Chats reopen after Reload Window; agent picker; Accounts in the tree; same-account links; Delete session; notifications.
+
+## 0.9.x
+- Live PR status with tasks, CI checks and reviews; New chat here; folders worked in; plan usage ring; side rail; real editor icon; browser choice; Files and Rules in the tree.
+
+## 0.8.0 and earlier
+- Chat on the Claude Agent SDK with Steer / Queue / Send now, context view, usage and cost, accounts and model providers, graph, real diffs, comments that reach the agent, prompts and skills.

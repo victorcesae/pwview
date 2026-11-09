@@ -7,13 +7,13 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-i18n-build');
+const out = path.join(os.tmpdir(), 'steerhouse-i18n-build');
 const stub = path.join(__dirname, 'vscode-stub.cjs');
 execSync(
   `npx esbuild src/accounts.ts src/engine.ts webview/src/i18n.ts --bundle --platform=node --format=cjs --outdir="${out}" --alias:vscode="${stub}" --log-level=error`,
   { cwd: root },
 );
-const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-acc-'));
+const home = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-acc-'));
 process.env.CLAUDE_CONFIG_DIR = path.join(home, '.claude');
 process.env.HOME = home;
 process.env.USERPROFILE = home;

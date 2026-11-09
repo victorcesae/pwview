@@ -2,7 +2,7 @@
 const assert = require('assert');
 const vscode = require('vscode');
 
-const ID = 'victorcesae.agentlens';
+const ID = 'victorcesae.steerhouse';
 const results = [];
 async function check(name, fn) {
   try {
@@ -37,42 +37,42 @@ async function run() {
   });
 
   await check('sessions view opens', async () => {
-    await vscode.commands.executeCommand('workbench.view.extension.agentlens');
+    await vscode.commands.executeCommand('workbench.view.extension.steerhouse');
     await wait(500);
   });
   await check('dashboard panel opens', async () => {
-    await vscode.commands.executeCommand('agentlens.dashboard');
+    await vscode.commands.executeCommand('steerhouse.dashboard');
     await wait(800);
     const tabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs).map((t) => t.label);
-    assert.ok(tabs.some((t) => t.startsWith('AgentLens')), `tabs: ${tabs.join(', ')}`);
+    assert.ok(tabs.some((t) => t.startsWith('Steerhouse')), `tabs: ${tabs.join(', ')}`);
   });
   await check('chat panel opens', async () => {
-    await vscode.commands.executeCommand('agentlens.newChat');
+    await vscode.commands.executeCommand('steerhouse.newChat');
     await wait(2500);
     const tabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs).map((t) => t.label);
-    assert.ok(vscode.window.tabGroups.all.flatMap((g) => g.tabs).some((t) => t.input?.viewType?.endsWith('agentlens.chat')), `tabs: ${tabs.join(', ')}`);
+    assert.ok(vscode.window.tabGroups.all.flatMap((g) => g.tabs).some((t) => t.input?.viewType?.endsWith('steerhouse.chat')), `tabs: ${tabs.join(', ')}`);
   });
   await check('new chat here opens a chat in that folder', async () => {
-    const dir = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'agentlens-here-'));
-    const before = vscode.window.tabGroups.all.flatMap((g) => g.tabs).filter((t) => t.input?.viewType?.endsWith('agentlens.chat')).length;
-    vscode.commands.executeCommand('agentlens.newChatHere', { kind: 'project', path: dir });
+    const dir = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'steerhouse-here-'));
+    const before = vscode.window.tabGroups.all.flatMap((g) => g.tabs).filter((t) => t.input?.viewType?.endsWith('steerhouse.chat')).length;
+    vscode.commands.executeCommand('steerhouse.newChatHere', { kind: 'project', path: dir });
     // one account: no picker; several: pick the first
     await wait(800);
     await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem').then(undefined, () => {});
     await wait(2500);
-    const after = vscode.window.tabGroups.all.flatMap((g) => g.tabs).filter((t) => t.input?.viewType?.endsWith('agentlens.chat')).length;
+    const after = vscode.window.tabGroups.all.flatMap((g) => g.tabs).filter((t) => t.input?.viewType?.endsWith('steerhouse.chat')).length;
     assert.strictEqual(after, before + 1);
   });
   await check('check setup runs', async () => {
-    await vscode.commands.executeCommand('agentlens.refresh');
+    await vscode.commands.executeCommand('steerhouse.refresh');
   });
   await check('walkthrough opens', async () => {
-    await vscode.commands.executeCommand('agentlens.walkthrough');
+    await vscode.commands.executeCommand('steerhouse.walkthrough');
     await wait(500);
   });
 
   const failed = results.filter((r) => r.startsWith('✖'));
-  console.log(`\n[${vscode.env.language}] AgentLens in VS Code ${vscode.version}\n` + results.join('\n'));
+  console.log(`\n[${vscode.env.language}] Steerhouse in VS Code ${vscode.version}\n` + results.join('\n'));
   if (failed.length) throw new Error(`${failed.length} editor check(s) failed`);
 }
 

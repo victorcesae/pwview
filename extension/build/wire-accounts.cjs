@@ -10,10 +10,10 @@ const R = (f, a, b) => {
 };
 
 // ---- chat engine
-R('src/chat.ts', '  costUsd: number;\n', "  costUsd: number;\n  /** Which Claude account this session runs on (name from AgentLens, details from Claude Code). */\n  account: { name: string; email?: string; organization?: string; plan?: string; provider?: string };\n");
+R('src/chat.ts', '  costUsd: number;\n', "  costUsd: number;\n  /** Which Claude account this session runs on (name from Steerhouse, details from Claude Code). */\n  account: { name: string; email?: string; organization?: string; plan?: string; provider?: string };\n");
 R('src/chat.ts', '  history?: { items: ChatItem[]; todos: Todo[] };', '  history?: { items: ChatItem[]; todos: Todo[] };\n  /** Account: its name and env (CLAUDE_CONFIG_DIR) */\n  account?: { name: string; env: Record<string, string> };');
 R('src/chat.ts', '      costUsd: 0,', "      costUsd: 0,\n      account: { name: opts.account?.name ?? 'Default' },");
-R('src/chat.ts', "        env: { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'agentlens' },", "        env: { ...process.env, ...(this.opts.account?.env ?? {}), CLAUDE_AGENT_SDK_CLIENT_APP: 'agentlens' },");
+R('src/chat.ts', "        env: { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'steerhouse' },", "        env: { ...process.env, ...(this.opts.account?.env ?? {}), CLAUDE_AGENT_SDK_CLIENT_APP: 'steerhouse' },");
 R(
   'src/chat.ts',
   "      .catch(() => {});\n    this.state.status = 'idle';\n    this.changed();\n  }",
@@ -22,7 +22,7 @@ R(
 
 // ---- terminals run as an account too
 R('src/util.ts', 'export function runAgent(name: string, cwd: string, args: string[]) {', 'export function runAgent(name: string, cwd: string, args: string[], extraEnv: Record<string, string> = {}) {');
-R('src/util.ts', '    env: { AGENTLENS_TERMINAL: token },', '    env: { ...extraEnv, AGENTLENS_TERMINAL: token },');
+R('src/util.ts', '    env: { STEERHOUSE_TERMINAL: token },', '    env: { ...extraEnv, STEERHOUSE_TERMINAL: token },');
 
 // ---- chat panel
 R('src/chatPanel.ts', '  start(opts: { cwd: string; resume?: string; title?: string; prompt?: string }) {', '  start(opts: { cwd: string; resume?: string; title?: string; prompt?: string; account?: Account }) {');
@@ -64,8 +64,8 @@ R(E, '      chats.start({ cwd });', '      pickAccount().then((account) => accou
 R(E, '        const added = installHooks();', "        // every account has its own settings.json\n        const added = listAccounts().reduce((n, a) => n + installHooks(path.join(a.configDir, 'settings.json')), 0);");
 R(
   E,
-  "    vscode.commands.registerCommand('agentlens.linkSession',",
-  `    vscode.commands.registerCommand('agentlens.addAccount', async () => {
+  "    vscode.commands.registerCommand('steerhouse.linkSession',",
+  `    vscode.commands.registerCommand('steerhouse.addAccount', async () => {
       const name = await vscode.window.showInputBox({ prompt: vscode.l10n.t('Name for the new Claude account'), placeHolder: vscode.l10n.t('Work, Personal, Client X…') });
       if (!name?.trim()) return;
       const a = addAccount(name);
@@ -74,7 +74,7 @@ R(
       vscode.window.showInformationMessage(vscode.l10n.t('Account "{0}" created. In its terminal type /login and sign in with that account.', a.name));
       refresh(true);
     }),
-    vscode.commands.registerCommand('agentlens.accounts', async () => {
+    vscode.commands.registerCommand('steerhouse.accounts', async () => {
       const pref = preferredAccount();
       const pick = await vscode.window.showQuickPick(
         [
@@ -84,12 +84,12 @@ R(
         { placeHolder: vscode.l10n.t('Default Claude account for new sessions') },
       );
       if (!pick) return;
-      if (!pick.a) return vscode.commands.executeCommand('agentlens.addAccount');
+      if (!pick.a) return vscode.commands.executeCommand('steerhouse.addAccount');
       const acc = pick.a;
       if (acc.id !== 'default') {
         const USE = vscode.l10n.t('Use by default');
         const LOGIN = vscode.l10n.t('Log in again');
-        const REMOVE = vscode.l10n.t('Remove from AgentLens');
+        const REMOVE = vscode.l10n.t('Remove from Steerhouse');
         const act = await vscode.window.showQuickPick([USE, LOGIN, REMOVE], { placeHolder: acc.name });
         if (act === LOGIN) return runAgent(\`Claude login · \${acc.name}\`, require('os').homedir(), [], accountEnv(acc));
         if (act === REMOVE) {
@@ -100,7 +100,7 @@ R(
       }
       setPreferred(acc.id);
     }),
-    vscode.commands.registerCommand('agentlens.linkSession',`,
+    vscode.commands.registerCommand('steerhouse.linkSession',`,
 );
 
 // ---- tree: show the account when there is more than one
@@ -128,8 +128,8 @@ R('webview/src/mock.ts', 'costUsd: 0.42,', "costUsd: 0.42, account: { name: 'Wor
 // ---- manifest commands (+ strings for both languages)
 const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const c = p.contributes;
-c.commands.push({ command: 'agentlens.addAccount', title: 'Add Claude Account…', category: 'AgentLens', icon: '$(person-add)' }, { command: 'agentlens.accounts', title: 'Claude Accounts…', category: 'AgentLens', icon: '$(account)' });
-c.menus['view/title'].push({ command: 'agentlens.accounts', when: 'view == agentlens.sessions', group: '1_more@1' });
+c.commands.push({ command: 'steerhouse.addAccount', title: 'Add Claude Account…', category: 'Steerhouse', icon: '$(person-add)' }, { command: 'steerhouse.accounts', title: 'Claude Accounts…', category: 'Steerhouse', icon: '$(account)' });
+c.menus['view/title'].push({ command: 'steerhouse.accounts', when: 'view == steerhouse.sessions', group: '1_more@1' });
 p.version = '0.4.0';
 fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
 console.log('wired');

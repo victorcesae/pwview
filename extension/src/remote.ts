@@ -1,4 +1,4 @@
-// Your sessions on your phone (or any browser): a small web page served by AgentLens, protected by a
+// Your sessions on your phone (or any browser): a small web page served by Steerhouse, protected by a
 // secret key in the link. It lists sessions, shows each conversation as it happens, and sends
 // Steer / Queue / Send now. Runs on the machine where the agents run (the SSH host when remote).
 import * as crypto from 'crypto';
@@ -105,7 +105,7 @@ export class RemoteServer {
     const key = keyFrom(req);
     if (!key || !sameKey(key, this.key)) {
       res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' });
-      return res.end('AgentLens: open the link with its key (run "AgentLens: Open on Phone" again to get it).');
+      return res.end('Steerhouse: open the link with its key (run "Steerhouse: Open on Phone" again to get it).');
     }
     // the key moves from the link into a cookie, so it is not left in the address bar
     if (url.searchParams.has('k')) {
@@ -156,7 +156,7 @@ function readBody(req: http.IncomingMessage, max: number): Promise<string> {
 // The page: plain HTML/JS, phone first, light and dark.
 const PAGE = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>AgentLens</title>
+<title>Steerhouse</title>
 <style>
 :root{--bg:#fff;--fg:#18181b;--mut:#71717a;--card:#f4f4f5;--bd:#e4e4e7;--acc:#2563eb;--ok:#16a34a;--warn:#d97706}
 @media (prefers-color-scheme:dark){:root{--bg:#0b0b0d;--fg:#f4f4f5;--mut:#a1a1aa;--card:#18181b;--bd:#27272a;--acc:#60a5fa;--ok:#4ade80;--warn:#fbbf24}}
@@ -175,7 +175,7 @@ textarea{flex:1;font:inherit;color:var(--fg);background:var(--card);border:1px s
 select{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:10px;padding:8px}
 .send{background:var(--acc);color:#fff;border-color:var(--acc)}.hidden{display:none}.note{color:var(--mut);font-size:13px}
 </style></head><body>
-<header><button id="back" class="hidden" aria-label="All sessions">‹</button><h1 id="title">AgentLens</h1><span id="st" class="note"></span></header>
+<header><button id="back" class="hidden" aria-label="All sessions">‹</button><h1 id="title">Steerhouse</h1><span id="st" class="note"></span></header>
 <main id="main"><p class="note">Loading…</p></main>
 <form id="f" class="hidden"><textarea id="t" rows="1" placeholder="Message the agent…"></textarea>
 <select id="mode" aria-label="Delivery"><option value="steer">Steer</option><option value="queue">Queue</option><option value="now">Send now</option></select>
@@ -185,7 +185,7 @@ const $=id=>document.getElementById(id);let cur=null,timer=null,lastLen=-1;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ago=t=>{if(!t)return'';const m=Math.round((Date.now()-new Date(t))/60000);return m<1?'now':m<60?m+'m':m<1440?Math.round(m/60)+'h':Math.round(m/1440)+'d'};
 async function api(p,o){const r=await fetch(p,Object.assign({credentials:'same-origin',headers:{'Content-Type':'application/json'}},o));if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||r.status);return r.json()}
-async function list(){cur=null;lastLen=-1;$('back').classList.add('hidden');$('f').classList.add('hidden');$('title').textContent='AgentLens';$('st').textContent='';
+async function list(){cur=null;lastLen=-1;$('back').classList.add('hidden');$('f').classList.add('hidden');$('title').textContent='Steerhouse';$('st').textContent='';
  const ss=await api('/api/sessions');$('main').innerHTML=ss.length?ss.map(s=>'<button class="s" data-id="'+esc(s.id)+'"><b><span class="dot '+esc(s.state)+'"></span>'+esc(s.title)+'</b><small>'+esc(s.project)+' · '+ago(s.updated)+(s.last?' · '+esc(s.last):'')+'</small></button>').join(''):'<p class="note">No sessions yet.</p>';
  for(const b of document.querySelectorAll('.s'))b.onclick=()=>open(b.dataset.id)}
 async function open(id){cur=id;lastLen=-1;$('back').classList.remove('hidden');$('f').classList.remove('hidden');await refresh(true)}

@@ -7,9 +7,9 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-usage-build');
+const out = path.join(os.tmpdir(), 'steerhouse-usage-build');
 execSync(`npx esbuild src/usage.ts src/pricing.ts src/engine.ts src/chat.ts --bundle --platform=node --format=cjs --outdir="${out}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --log-level=error`, { cwd: root });
-const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-usage-'));
+const home = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-usage-'));
 process.env.CLAUDE_CONFIG_DIR = path.join(home, '.claude');
 const { costOf, modelLabel } = require(path.join(out, 'pricing.js'));
 const { parse, Engine } = require(path.join(out, 'engine.js'));
@@ -57,7 +57,10 @@ test('usage: a reply split over several records is counted once', () => {
   assert.ok(Math.abs(r.totals.cost - expected) < 1e-9);
   assert.deepEqual(r.byModel.map((m) => m.label), ['Opus 5.5', 'Haiku 5.5']);
   assert.equal(r.byDay.length, 7);
-  assert.ok(r.byDay.at(-1).cost > 0, 'today has the usage');
+  // the day the replies happened (local time; 29 minutes ago is yesterday just after midnight)
+  const d = new Date(now - 29 * 60_000);
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  assert.ok(r.byDay.find((x) => x.day === day)?.cost > 0, 'the day of the replies has the usage');
   assert.equal(r.topSessions[0].title, 'Usage test');
 });
 

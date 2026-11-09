@@ -1,4 +1,5 @@
 // Prompts (reusable / programmatic prompts) and Skills (Claude Code skills) views.
+import { legacyPromptsDir } from './migrate';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -44,7 +45,7 @@ export function titleFrom(body: string): string {
 
 /** Save prompt text as a reusable prompt (from the dashboard timeline). */
 export function savePromptText(text: string): string {
-  const dir = path.join(claudeDir(), 'agentlens', 'prompts');
+  const dir = path.join(claudeDir(), 'steerhouse', 'prompts');
   fs.mkdirSync(dir, { recursive: true });
   const base = slug(titleFrom(text)).slice(0, 50) || 'prompt';
   let file = path.join(dir, `${base}.md`);
@@ -70,8 +71,8 @@ export function listPrompts(): Doc[] {
       if (d) out.push(d);
     }
   };
-  folders().forEach((f) => scan(path.join(f, '.agentlens', 'prompts'), 'project'));
-  scan(path.join(claudeDir(), 'agentlens', 'prompts'), 'user');
+  folders().forEach((f) => (scan(path.join(f, '.steerhouse', 'prompts'), 'project'), scan(legacyPromptsDir(f), 'project')));
+  scan(path.join(claudeDir(), 'steerhouse', 'prompts'), 'user');
   return out;
 }
 
@@ -94,7 +95,7 @@ class DocTree implements vscode.TreeDataProvider<Doc> {
     it.description = [d.scope, d.meta.mode, d.meta.description].filter(Boolean).join(' · ');
     it.tooltip = new vscode.MarkdownString(`**${d.name}**\n\n\`${d.file}\`\n\n---\n${d.body.slice(0, 800)}`);
     it.contextValue = this.kind;
-    it.command = { command: 'agentlens.openFile', title: 'Open', arguments: [d.file] };
+    it.command = { command: 'steerhouse.openFile', title: 'Open', arguments: [d.file] };
     return it;
   }
 }
@@ -159,9 +160,9 @@ const STARTERS: Record<string, string> = {
 export function registerLibrary(ctx: vscode.ExtensionContext) {
   const prompts = new DocTree(listPrompts, 'prompt');
   ctx.subscriptions.push(
-    vscode.window.registerTreeDataProvider('agentlens.prompts', prompts),
-    vscode.commands.registerCommand('agentlens.starterPrompts', () => {
-      const dir = path.join(claudeDir(), 'agentlens', 'prompts');
+    vscode.window.registerTreeDataProvider('steerhouse.prompts', prompts),
+    vscode.commands.registerCommand('steerhouse.starterPrompts', () => {
+      const dir = path.join(claudeDir(), 'steerhouse', 'prompts');
       fs.mkdirSync(dir, { recursive: true });
       let n = 0;
       for (const [name, body] of Object.entries(STARTERS)) {
@@ -172,14 +173,14 @@ export function registerLibrary(ctx: vscode.ExtensionContext) {
         }
       }
       prompts.refresh();
-      vscode.window.showInformationMessage(`AgentLens: added ${n} starter prompts to your personal prompts. Edit them freely.`);
+      vscode.window.showInformationMessage(`Steerhouse: added ${n} starter prompts to your personal prompts. Edit them freely.`);
     }),
-    vscode.commands.registerCommand('agentlens.openFile', (f: string) => vscode.window.showTextDocument(vscode.Uri.file(f))),
-    vscode.commands.registerCommand('agentlens.runPrompt', (d?: Doc) => d && runPrompt(d)),
-    vscode.commands.registerCommand('agentlens.newPrompt', async () => {
+    vscode.commands.registerCommand('steerhouse.openFile', (f: string) => vscode.window.showTextDocument(vscode.Uri.file(f))),
+    vscode.commands.registerCommand('steerhouse.runPrompt', (d?: Doc) => d && runPrompt(d)),
+    vscode.commands.registerCommand('steerhouse.newPrompt', async () => {
       const scope = await pickScope();
       if (!scope) return;
-      const dir = scope === 'project' ? path.join(folders()[0], '.agentlens', 'prompts') : path.join(claudeDir(), 'agentlens', 'prompts');
+      const dir = scope === 'project' ? path.join(folders()[0], '.steerhouse', 'prompts') : path.join(claudeDir(), 'steerhouse', 'prompts');
       const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-');
       const file = path.join(dir, `prompt-${stamp}.md`);
       // No name to invent: the first line of the prompt becomes its name.
@@ -194,7 +195,7 @@ export function registerLibrary(ctx: vscode.ExtensionContext) {
       }
       prompts.refresh();
     }),
-    vscode.commands.registerCommand('agentlens.savePrompt', async (text?: string) => {
+    vscode.commands.registerCommand('steerhouse.savePrompt', async (text?: string) => {
       if (!text?.trim()) return;
       const file = savePromptText(text);
       prompts.refresh();
@@ -202,7 +203,7 @@ export function registerLibrary(ctx: vscode.ExtensionContext) {
       if (open) vscode.window.showTextDocument(vscode.Uri.file(file));
     }),
   );
-  const watcher = vscode.workspace.createFileSystemWatcher('**/.agentlens/prompts/*.md');
+  const watcher = vscode.workspace.createFileSystemWatcher('**/.steerhouse/prompts/*.md');
   const again = () => prompts.refresh();
   watcher.onDidCreate(again);
   watcher.onDidDelete(again);

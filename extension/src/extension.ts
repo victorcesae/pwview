@@ -6,6 +6,8 @@ import { modelLabel } from './pricing';
 import { installedAgents, runCliAgent } from './agents';
 import { addWorktree, removeWorktree, repoRoot, slug, validBranch, worktreeInfo } from './worktree';
 import { lanAddress, RemoteServer } from './remote';
+import { migrateFromAgentLens } from './migrate';
+import { claudeDir } from './paths';
 import { MCP_PRESETS, mcpAddArgs, runClaude, sdkConfig, splitCommand, validName, type McpPreset, type McpScope, type McpServer } from './mcp';
 import { addComment, cancelComment, editComment, loadComments, Mode } from './comments';
 import { changeDetail, Engine, Session } from './engine';
@@ -25,7 +27,7 @@ import { addAccount, addProvider, listAccounts, preferredAccount, removeAccount,
 import { Node, SessionsTree, setMediaRoot } from './tree';
 import { agentExecutable, ago, clip, runAgent } from './util';
 
-const SCHEME = 'agentlens';
+const SCHEME = 'steerhouse';
 
 /** Sessions that ran inside the system temp folder (scratch runs, tests) are hidden by default. */
 const tempRoots = (() => {
@@ -45,13 +47,13 @@ const isTempProject = (p: string) => tempRoots.some((r) => norm(p) === r || norm
  * normally, or report which chat tabs came back after a relaunch.
  */
 function restoreTestHooks(chats: { describe(): unknown }) {
-  const open = process.env.AGENTLENS_TEST_OPEN_CHAT;
-  const report = process.env.AGENTLENS_TEST_REPORT;
+  const open = process.env.STEERHOUSE_TEST_OPEN_CHAT;
+  const report = process.env.STEERHOUSE_TEST_REPORT;
   if (open)
     setTimeout(async () => {
       // "resume:<session id>" resumes that session in a chat; otherwise a new chat in that folder
-      if (open.startsWith('resume:')) await vscode.commands.executeCommand('agentlens.resumeSession', open.slice(7));
-      else await vscode.commands.executeCommand('agentlens.newChatHere', { kind: 'project', path: open });
+      if (open.startsWith('resume:')) await vscode.commands.executeCommand('steerhouse.resumeSession', open.slice(7));
+      else await vscode.commands.executeCommand('steerhouse.newChatHere', { kind: 'project', path: open });
       setTimeout(() => vscode.commands.executeCommand('workbench.action.closeWindow'), 4000);
     }, 2000);
   if (report)
@@ -62,6 +64,13 @@ function restoreTestHooks(chats: { describe(): unknown }) {
 }
 
 export function activate(ctx: vscode.ExtensionContext) {
+  // Steerhouse used to be AgentLens: carry over its data folder, hook entries and settings (once)
+  const migrated = migrateFromAgentLens({
+    claudeDir: claudeDir(),
+    settingKeys: Object.keys((ctx.extension.packageJSON as any).contributes?.configuration?.properties ?? {}).map((k) => k.replace(/^steerhouse\./, '')),
+    accountSettings: [...new Set(listAccounts().map((a) => path.join(a.configDir, 'settings.json')))],
+  }).then((done) => done.length && vscode.window.setStatusBarMessage(vscode.l10n.t('$(check) Steerhouse: carried over from AgentLens: {0}', done.join(', ')), 8000), () => undefined);
+  void migrated;
   const engine = new Engine(() => {
     const seen = new Set<string>();
     return listAccounts()
@@ -73,7 +82,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   const accountOf = (id: string) => listAccounts().find((a) => a.id === id) ?? listAccounts()[0];
 
   /**
-   * New chat: which agent and account. Claude accounts and model providers run in the AgentLens
+   * New chat: which agent and account. Claude accounts and model providers run in the Steerhouse
    * chat; other agents installed here (Cursor Agent, Codex…) open in a terminal. Asked whenever
    * there is more than one choice; the last one used comes first.
    */
@@ -81,20 +90,20 @@ export function activate(ctx: vscode.ExtensionContext) {
     const all = listAccounts();
     const clis = installedAgents();
     if (all.length === 1 && !clis.length) return all[0];
-    const last = ctx.globalState.get<string>('agentlens.lastAgent') ?? preferredAccount().id;
+    const last = ctx.globalState.get<string>('steerhouse.lastAgent') ?? preferredAccount().id;
     type Item = vscode.QuickPickItem & { a?: Account; cli?: (typeof clis)[number]; add?: string };
     const media = vscode.Uri.joinPath(ctx.extensionUri, 'media', 'vendors');
     const items: Item[] = [
       ...all.map((a): Item => ({
         label: a.provider ? `${a.name}` : `Claude · ${a.name}`,
-        description: a.provider ? `${a.provider.model ?? ''} · ${a.provider.baseUrl}` : vscode.l10n.t('AgentLens chat'),
+        description: a.provider ? `${a.provider.model ?? ''} · ${a.provider.baseUrl}` : vscode.l10n.t('Steerhouse chat'),
         iconPath: vscode.Uri.joinPath(media, `${a.provider ? vendorOf(a.provider.model) : 'anthropic'}.svg`),
         a,
       })),
       ...clis.map((c): Item => ({ label: c.name, description: vscode.l10n.t('opens in a terminal'), detail: c.exe, iconPath: vscode.Uri.joinPath(media, `${c.vendor}.svg`), cli: c })),
       { label: '', kind: vscode.QuickPickItemKind.Separator },
-      { label: '$(add) ' + vscode.l10n.t('Add a Claude account…'), add: 'agentlens.addAccount' },
-      { label: '$(server) ' + vscode.l10n.t('Add a model provider (Ollama, OpenRouter…)…'), add: 'agentlens.addProvider' },
+      { label: '$(add) ' + vscode.l10n.t('Add a Claude account…'), add: 'steerhouse.addAccount' },
+      { label: '$(server) ' + vscode.l10n.t('Add a model provider (Ollama, OpenRouter…)…'), add: 'steerhouse.addProvider' },
     ];
     const key = (i: Item) => i.a?.id ?? (i.cli ? 'cli:' + i.cli.id : '');
     items.sort((x, y) => Number(key(y) === last) - Number(key(x) === last));
@@ -104,7 +113,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       await vscode.commands.executeCommand(pick.add);
       return undefined;
     }
-    ctx.globalState.update('agentlens.lastAgent', key(pick));
+    ctx.globalState.update('steerhouse.lastAgent', key(pick));
     if (pick.cli) {
       runCliAgent(pick.cli, cwd, vscode.Uri.joinPath(ctx.extensionUri, 'media'));
       return undefined;
@@ -112,7 +121,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     setPreferred(pick.a!.id);
     return pick.a;
   }
-  const cfg = () => vscode.workspace.getConfiguration('agentlens');
+  const cfg = () => vscode.workspace.getConfiguration('steerhouse');
   let sessions: Session[] = [];
   let hooks = hooksStatus();
   const hooksOk = () => hooks === 'all';
@@ -121,26 +130,26 @@ export function activate(ctx: vscode.ExtensionContext) {
   try {
     installHookScript(path.join(ctx.extensionPath, 'dist', 'hook.js'));
   } catch (e) {
-    console.error('AgentLens: could not copy hook script', e);
+    console.error('Steerhouse: could not copy hook script', e);
   }
 
   // ------------------------------------------------------------ views
   setMediaRoot(vscode.Uri.joinPath(ctx.extensionUri, 'media'));
   let remoteServer: RemoteServer | undefined;
   const remoteItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
-  remoteItem.command = 'agentlens.remoteAccess';
+  remoteItem.command = 'steerhouse.remoteAccess';
   ctx.subscriptions.push(remoteItem, { dispose: () => void remoteServer?.stop() });
-  const marks = () => ({ pinned: ctx.globalState.get<string[]>('agentlens.pinned', []), archived: ctx.globalState.get<string[]>('agentlens.archived', []) });
+  const marks = () => ({ pinned: ctx.globalState.get<string[]>('steerhouse.pinned', []), archived: ctx.globalState.get<string[]>('steerhouse.archived', []) });
   const tree = new SessionsTree(() => sessions, () => hooks, () => attachedSessions(), marks);
   /** Adds or removes a project in a pinned / archived list, then repaints the tree. */
   const mark = async (list: 'pinned' | 'archived', p: string | undefined, on: boolean) => {
     if (!p) return;
-    const key = `agentlens.${list}`;
+    const key = `steerhouse.${list}`;
     const cur = ctx.globalState.get<string[]>(key, []).filter((x) => x !== p);
     await ctx.globalState.update(key, on ? [...cur, p] : cur);
     tree.refresh();
   };
-  const treeView = vscode.window.createTreeView('agentlens.sessions', {
+  const treeView = vscode.window.createTreeView('steerhouse.sessions', {
     treeDataProvider: tree,
     showCollapseAll: true,
     canSelectMany: true,
@@ -156,7 +165,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   registerLibrary(ctx);
   registerSkills(ctx);
   registerDoctor(ctx);
-  ctx.subscriptions.push(vscode.commands.registerCommand('agentlens.walkthrough', () => vscode.commands.executeCommand('workbench.action.openWalkthrough', 'victorcesae.agentlens#agentlens.start', false)));
+  ctx.subscriptions.push(vscode.commands.registerCommand('steerhouse.walkthrough', () => vscode.commands.executeCommand('workbench.action.openWalkthrough', 'victorcesae.steerhouse#steerhouse.start', false)));
   registerImagePaste(ctx);
 
   // ------------------------------------------------------------ before/after documents for native diffs
@@ -271,7 +280,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     });
     if (text === undefined) return;
     const result = await send(id, text, mode, {}, images);
-    vscode.window.setStatusBarMessage(`$(check) AgentLens: ${result}`, 5000);
+    vscode.window.setStatusBarMessage(`$(check) Steerhouse: ${result}`, 5000);
   }
 
   // Drop image files onto a session in the tree. DataTransferFile gives the bytes even over SSH.
@@ -289,14 +298,14 @@ export function activate(ctx: vscode.ExtensionContext) {
       saved.push(saveImage(`data:${type};base64,${Buffer.from(bytes).toString('base64')}`, type));
     }
     if (!saved.length) {
-      vscode.window.showWarningMessage('AgentLens: drop image files (png, jpg, gif, webp) onto a session.');
+      vscode.window.showWarningMessage('Steerhouse: drop image files (png, jpg, gif, webp) onto a session.');
       return;
     }
     await askAndSend(s.info.id, undefined, saved);
   }
 
   // ------------------------------------------------------------ line comments on diffs and files → agent
-  const controller = vscode.comments.createCommentController('agentlens', 'AgentLens · comments to agents');
+  const controller = vscode.comments.createCommentController('steerhouse', 'Steerhouse · comments to agents');
   controller.options = { prompt: 'Comment for the agent…', placeHolder: 'Tell the agent what to change here, then Steer / Queue / Send now' };
   controller.commentingRangeProvider = {
     provideCommentingRanges(doc) {
@@ -336,7 +345,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (!text.trim()) return;
     const target = await targetFor(thread.uri);
     if (!target) {
-      vscode.window.showWarningMessage('AgentLens: no agent session is working on this file.');
+      vscode.window.showWarningMessage('Steerhouse: no agent session is working on this file.');
       return;
     }
     const line = thread.range?.start.line;
@@ -363,7 +372,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     thread.label = `Agent: ${clip(target.s.info.title, 50)}`;
     thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
     if (latest) sent.set(latest.id, { thread, index: thread.comments.length - 1 });
-    vscode.window.setStatusBarMessage(`$(check) AgentLens: ${result}`, 5000);
+    vscode.window.setStatusBarMessage(`$(check) Steerhouse: ${result}`, 5000);
   }
 
   function syncCommentLabels() {
@@ -385,12 +394,12 @@ export function activate(ctx: vscode.ExtensionContext) {
     offered = true;
     const pick = await vscode.window.showInformationMessage(
       hooks === 'some'
-        ? 'AgentLens needs updated Claude Code hooks for steering and "send now". Update ~/.claude/settings.json? A backup is kept.'
-        : 'AgentLens needs Claude Code hooks to hand your messages to agents (steer, queue, send now). Install them in ~/.claude/settings.json? A backup is kept.',
+        ? 'Steerhouse needs updated Claude Code hooks for steering and "send now". Update ~/.claude/settings.json? A backup is kept.'
+        : 'Steerhouse needs Claude Code hooks to hand your messages to agents (steer, queue, send now). Install them in ~/.claude/settings.json? A backup is kept.',
       'Install hooks',
       'Not now',
     );
-    if (pick === 'Install hooks') vscode.commands.executeCommand('agentlens.installHooks');
+    if (pick === 'Install hooks') vscode.commands.executeCommand('steerhouse.installHooks');
   }
 
   // ------------------------------------------------------------ commands
@@ -433,7 +442,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (!chats.linkInto(id, pick.x)) {
       addLink(id, pick.x.info.id);
       const result = await send(id, briefing(pick.x), 'queue');
-      vscode.window.setStatusBarMessage(`$(link) AgentLens: linked · ${result}`, 5000);
+      vscode.window.setStatusBarMessage(`$(link) Steerhouse: linked · ${result}`, 5000);
     }
     refresh(true);
   }
@@ -445,11 +454,11 @@ export function activate(ctx: vscode.ExtensionContext) {
       case 'openFile':
         return fs.existsSync(m.path) && vscode.window.showTextDocument(vscode.Uri.file(m.path));
       case 'resume':
-        return vscode.commands.executeCommand('agentlens.resumeSession', m.id);
+        return vscode.commands.executeCommand('steerhouse.resumeSession', m.id);
       case 'message': {
         const images = (m.images ?? []).map((i) => saveImage(i.data, i.mime));
         const result = await send(m.id, m.text, m.mode ?? 'queue', {}, images);
-        vscode.window.setStatusBarMessage(`$(check) AgentLens: ${result}`, 5000);
+        vscode.window.setStatusBarMessage(`$(check) Steerhouse: ${result}`, 5000);
         dashboard.toast(result);
         return;
       }
@@ -474,9 +483,9 @@ export function activate(ctx: vscode.ExtensionContext) {
       case 'newSession':
         return newSession();
       case 'installHooks':
-        return vscode.commands.executeCommand('agentlens.installHooks');
+        return vscode.commands.executeCommand('steerhouse.installHooks');
       case 'savePrompt':
-        return vscode.commands.executeCommand('agentlens.savePrompt', m.text);
+        return vscode.commands.executeCommand('steerhouse.savePrompt', m.text);
     }
   }
 
@@ -484,26 +493,26 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   ctx.subscriptions.push(
     treeView,
-    vscode.commands.registerCommand('agentlens.refresh', () => refresh(true)),
-    vscode.commands.registerCommand('agentlens.dashboard', () => dashboard.show()),
-    vscode.commands.registerCommand('agentlens.openRules', (file: string, scope: 'user' | 'project') => openRules(file, scope).then(() => tree.refresh())),
-    vscode.commands.registerCommand('agentlens.editUserRules', () => editRules('user').then(() => tree.refresh())),
-    vscode.commands.registerCommand('agentlens.editProjectRules', (n?: { root?: string }) => editRules('project', n?.root).then(() => tree.refresh())),
-    vscode.commands.registerCommand('agentlens.openSession', (id: string, agentId?: string) => dashboard.show(id, agentId)),
-    vscode.commands.registerCommand('agentlens.openChange', openChange),
-    vscode.commands.registerCommand('agentlens.newSession', newSession),
-    vscode.commands.registerCommand('agentlens.messageSession', (x: unknown) => {
+    vscode.commands.registerCommand('steerhouse.refresh', () => refresh(true)),
+    vscode.commands.registerCommand('steerhouse.dashboard', () => dashboard.show()),
+    vscode.commands.registerCommand('steerhouse.openRules', (file: string, scope: 'user' | 'project') => openRules(file, scope).then(() => tree.refresh())),
+    vscode.commands.registerCommand('steerhouse.editUserRules', () => editRules('user').then(() => tree.refresh())),
+    vscode.commands.registerCommand('steerhouse.editProjectRules', (n?: { root?: string }) => editRules('project', n?.root).then(() => tree.refresh())),
+    vscode.commands.registerCommand('steerhouse.openSession', (id: string, agentId?: string) => dashboard.show(id, agentId)),
+    vscode.commands.registerCommand('steerhouse.openChange', openChange),
+    vscode.commands.registerCommand('steerhouse.newSession', newSession),
+    vscode.commands.registerCommand('steerhouse.messageSession', (x: unknown) => {
       const id = sessionArg(x);
       if (id) askAndSend(id);
     }),
-    vscode.commands.registerCommand('agentlens.steer', (x: unknown) => sessionArg(x) && askAndSend(sessionArg(x)!, 'steer')),
-    vscode.commands.registerCommand('agentlens.queue', (x: unknown) => sessionArg(x) && askAndSend(sessionArg(x)!, 'queue')),
-    vscode.commands.registerCommand('agentlens.sendNow', (x: unknown) => sessionArg(x) && askAndSend(sessionArg(x)!, 'now')),
-    vscode.commands.registerCommand('agentlens.comment.send', (r: vscode.CommentReply) => sendComment(r)),
-    vscode.commands.registerCommand('agentlens.comment.queue', (r: vscode.CommentReply) => sendComment(r, 'queue')),
-    vscode.commands.registerCommand('agentlens.comment.now', (r: vscode.CommentReply) => sendComment(r, 'now')),
+    vscode.commands.registerCommand('steerhouse.steer', (x: unknown) => sessionArg(x) && askAndSend(sessionArg(x)!, 'steer')),
+    vscode.commands.registerCommand('steerhouse.queue', (x: unknown) => sessionArg(x) && askAndSend(sessionArg(x)!, 'queue')),
+    vscode.commands.registerCommand('steerhouse.sendNow', (x: unknown) => sessionArg(x) && askAndSend(sessionArg(x)!, 'now')),
+    vscode.commands.registerCommand('steerhouse.comment.send', (r: vscode.CommentReply) => sendComment(r)),
+    vscode.commands.registerCommand('steerhouse.comment.queue', (r: vscode.CommentReply) => sendComment(r, 'queue')),
+    vscode.commands.registerCommand('steerhouse.comment.now', (r: vscode.CommentReply) => sendComment(r, 'now')),
     // Reload Window: reopen the chats that were open, in their tabs, with their settings
-    vscode.window.registerWebviewPanelSerializer('agentlens.chat', {
+    vscode.window.registerWebviewPanelSerializer('steerhouse.chat', {
       async deserializeWebviewPanel(panel, state: { sessionId?: string; cwd?: string; title?: string; account?: string } | undefined) {
         if (!state?.cwd) return panel.dispose();
         if (!state.sessionId) {
@@ -517,12 +526,12 @@ export function activate(ctx: vscode.ExtensionContext) {
         chats.start({ cwd: s?.info.project ?? state.cwd, resume: state.sessionId, title: s?.info.title ?? state.title, account, env: await envFor(account), panel });
       },
     }),
-    vscode.commands.registerCommand('agentlens.pinProject', (n?: { path?: string }) => mark('pinned', n?.path, true)),
-    vscode.commands.registerCommand('agentlens.unpinProject', (n?: { path?: string }) => mark('pinned', n?.path, false)),
-    vscode.commands.registerCommand('agentlens.archiveProject', async (n?: { path?: string }) => (await mark('pinned', n?.path, false), mark('archived', n?.path, true))),
-    vscode.commands.registerCommand('agentlens.unarchiveProject', (n?: { path?: string }) => mark('archived', n?.path, false)),
+    vscode.commands.registerCommand('steerhouse.pinProject', (n?: { path?: string }) => mark('pinned', n?.path, true)),
+    vscode.commands.registerCommand('steerhouse.unpinProject', (n?: { path?: string }) => mark('pinned', n?.path, false)),
+    vscode.commands.registerCommand('steerhouse.archiveProject', async (n?: { path?: string }) => (await mark('pinned', n?.path, false), mark('archived', n?.path, true))),
+    vscode.commands.registerCommand('steerhouse.unarchiveProject', (n?: { path?: string }) => mark('archived', n?.path, false)),
     // A chat in its own git worktree (new branch, separate folder), so parallel agents don't collide
-    vscode.commands.registerCommand('agentlens.newChatInWorktree', async (n?: { path?: string } | vscode.Uri) => {
+    vscode.commands.registerCommand('steerhouse.newChatInWorktree', async (n?: { path?: string } | vscode.Uri) => {
       const from = n instanceof vscode.Uri ? n.fsPath : (n?.path ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
       if (!from) return vscode.window.showWarningMessage(vscode.l10n.t('Open a folder first.'));
       const root = await repoRoot(from);
@@ -531,7 +540,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (task === undefined) return;
       const branch = await vscode.window.showInputBox({
         title: vscode.l10n.t('Branch'),
-        value: `agentlens/${slug(task || new Date().toISOString().slice(0, 16))}`,
+        value: `steerhouse/${slug(task || new Date().toISOString().slice(0, 16))}`,
         validateInput: (b) => (validBranch(b) ? undefined : vscode.l10n.t('Not a valid branch name')),
       });
       if (!branch) return;
@@ -541,7 +550,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (account) chats.start({ cwd: r.dir, account, env: await envFor(account), title: task || undefined, prompt: undefined });
       refresh(true);
     }),
-    vscode.commands.registerCommand('agentlens.removeWorktree', async (n?: { path?: string }) => {
+    vscode.commands.registerCommand('steerhouse.removeWorktree', async (n?: { path?: string }) => {
       const dir = n?.path;
       const info = dir && worktreeInfo(dir);
       if (!dir || !info) return;
@@ -562,11 +571,11 @@ export function activate(ctx: vscode.ExtensionContext) {
         r = await removeWorktree(dir, true);
       }
       if (!r.ok) return vscode.window.showErrorMessage(r.out.slice(0, 300));
-      vscode.window.setStatusBarMessage(vscode.l10n.t('$(git-branch) AgentLens: worktree {0} removed', path.basename(dir)), 5000);
+      vscode.window.setStatusBarMessage(vscode.l10n.t('$(git-branch) Steerhouse: worktree {0} removed', path.basename(dir)), 5000);
       refresh(true);
     }),
     // Your sessions on your phone: a small web page with a secret key in its link
-    vscode.commands.registerCommand('agentlens.remoteAccess', async () => {
+    vscode.commands.registerCommand('steerhouse.remoteAccess', async () => {
       const remote = (remoteServer ??= new RemoteServer({ sessions: () => sessions, send: (id, text, mode) => send(id, text, mode) }));
       const link = async () => {
         const base = remote.host === '0.0.0.0' ? vscode.Uri.parse(`http://${lanAddress() ?? '127.0.0.1'}:${remote.port}/`) : await vscode.env.asExternalUri(vscode.Uri.parse(`http://127.0.0.1:${remote.port}/`));
@@ -576,7 +585,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         const copy = vscode.l10n.t('Copy Link');
         const openIt = vscode.l10n.t('Open');
         const stop = vscode.l10n.t('Stop');
-        const a = await vscode.window.showInformationMessage(vscode.l10n.t('AgentLens is serving your sessions on port {0}.', remote.port), copy, openIt, stop);
+        const a = await vscode.window.showInformationMessage(vscode.l10n.t('Steerhouse is serving your sessions on port {0}.', remote.port), copy, openIt, stop);
         if (a === copy) await vscode.env.clipboard.writeText(await link());
         if (a === openIt) await vscode.env.openExternal(vscode.Uri.parse(await link()));
         if (a === stop) {
@@ -604,7 +613,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!how) return;
       const port = await remote.start(how.host);
       remoteItem.text = '$(device-mobile) ' + port;
-      remoteItem.tooltip = vscode.l10n.t('AgentLens is serving your sessions (click for the link or to stop)');
+      remoteItem.tooltip = vscode.l10n.t('Steerhouse is serving your sessions (click for the link or to stop)');
       remoteItem.show();
       const url = await link();
       await vscode.env.clipboard.writeText(url);
@@ -614,7 +623,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
     // Delete sessions (several when selected together): confirm, then move the conversation and its
     // sub-agents to the system trash, so it can be recovered.
-    vscode.commands.registerCommand('agentlens.deleteSession', async (x: unknown, selected?: unknown[]) => {
+    vscode.commands.registerCommand('steerhouse.deleteSession', async (x: unknown, selected?: unknown[]) => {
       const ids = [...new Set((selected?.length ? selected : [x]).map(sessionArg).filter((v): v is string => !!v))];
       const list = ids.map(find).filter((s): s is Session => !!s);
       if (!list.length) return;
@@ -632,33 +641,33 @@ export function activate(ctx: vscode.ExtensionContext) {
         for (const p of [s.path, dir])
           if (fs.existsSync(p)) await vscode.workspace.fs.delete(vscode.Uri.file(p), { recursive: true, useTrash: true }).then(undefined, (e) => vscode.window.showErrorMessage(String(e?.message ?? e)));
       }
-      vscode.window.setStatusBarMessage(vscode.l10n.t('$(trash) AgentLens: moved {0} to the trash', what), 5000);
+      vscode.window.setStatusBarMessage(vscode.l10n.t('$(trash) Steerhouse: moved {0} to the trash', what), 5000);
       refresh(true);
     }),
-    vscode.commands.registerCommand('agentlens.resumeSession', async (x: unknown) => {
+    vscode.commands.registerCommand('steerhouse.resumeSession', async (x: unknown) => {
       const s = find(sessionArg(x) ?? '');
       if (!s) return;
       const account = accountOf(s.info.account);
       if (surface() === 'terminal') runAgent(`${clip(s.info.title, 30)}`, s.info.project, ['--resume', s.info.id], await envFor(account));
       else chats.start({ cwd: s.info.project, resume: s.info.id, title: s.info.title, account, env: await envFor(account) });
     }),
-    vscode.commands.registerCommand('agentlens.resumeInTerminal', async (x: unknown) => {
+    vscode.commands.registerCommand('steerhouse.resumeInTerminal', async (x: unknown) => {
       const s = find(sessionArg(x) ?? '');
       if (s) runAgent(`${clip(s.info.title, 30)}`, s.info.project, ['--resume', s.info.id], await envFor(accountOf(s.info.account)));
     }),
     // "New chat here" on a project or folder in the Sessions tree (or a folder in the Explorer)
-    vscode.commands.registerCommand('agentlens.newChatHere', (n?: { kind?: string; path?: string } | vscode.Uri) => {
+    vscode.commands.registerCommand('steerhouse.newChatHere', (n?: { kind?: string; path?: string } | vscode.Uri) => {
       const cwd = n instanceof vscode.Uri ? n.fsPath : n?.path;
-      if (!cwd) return vscode.commands.executeCommand('agentlens.newChat');
+      if (!cwd) return vscode.commands.executeCommand('steerhouse.newChat');
       pickAgent(cwd).then(async (account) => account && chats.start({ cwd, account, env: await envFor(account) }));
     }),
-    vscode.commands.registerCommand('agentlens.newChat', () => {
+    vscode.commands.registerCommand('steerhouse.newChat', () => {
       const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!cwd) return vscode.window.showWarningMessage(vscode.l10n.t('Open a folder first.'));
       pickAgent(cwd).then(async (account) => account && chats.start({ cwd, account, env: await envFor(account) }));
     }),
     // Connectors: add an MCP server (popular or your own) for the team, just you here, or everywhere
-    vscode.commands.registerCommand('agentlens.manageConnectors', async (cwd?: string) => {
+    vscode.commands.registerCommand('steerhouse.manageConnectors', async (cwd?: string) => {
       const dir = cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!dir) return vscode.window.showWarningMessage(vscode.l10n.t('Open a folder first.'));
       type Pick = vscode.QuickPickItem & { preset?: McpPreset; custom?: 'stdio' | 'http'; edit?: boolean };
@@ -710,7 +719,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         live ? vscode.l10n.t('"{0}" added and connected to {1} open chat(s).', name, live) : vscode.l10n.t('"{0}" added. New chats in this folder will use it.', name),
       );
     }),
-    vscode.commands.registerCommand('agentlens.addProvider', async () => {
+    vscode.commands.registerCommand('steerhouse.addProvider', async () => {
       const preset = (await vscode.window.showQuickPick(PRESETS.map((p) => ({ label: p.label, detail: p.detail, p })), { placeHolder: vscode.l10n.t('Which models do you want to use?') }))?.p;
       if (!preset) return;
       const baseUrl = await vscode.window.showInputBox({ prompt: vscode.l10n.t('Endpoint (Anthropic-compatible)'), value: preset.baseUrl, placeHolder: 'https://…', ignoreFocusOut: true });
@@ -740,7 +749,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         if (cwd) chats.start({ cwd, account: acc, env: await envFor(acc) });
       }
     }),
-    vscode.commands.registerCommand('agentlens.addAccount', async () => {
+    vscode.commands.registerCommand('steerhouse.addAccount', async () => {
       const name = await vscode.window.showInputBox({ prompt: vscode.l10n.t('Name for the new Claude account'), placeHolder: vscode.l10n.t('Work, Personal, Client X…') });
       if (!name?.trim()) return;
       const a = addAccount(name);
@@ -749,7 +758,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       vscode.window.showInformationMessage(vscode.l10n.t('Account "{0}" created. In its terminal type /login and sign in with that account.', a.name));
       refresh(true);
     }),
-    vscode.commands.registerCommand('agentlens.accounts', async () => {
+    vscode.commands.registerCommand('steerhouse.accounts', async () => {
       const pref = preferredAccount();
       const pick = await vscode.window.showQuickPick(
         [
@@ -760,13 +769,13 @@ export function activate(ctx: vscode.ExtensionContext) {
         { placeHolder: vscode.l10n.t('Default Claude account for new sessions') },
       );
       if (!pick) return;
-      if (!pick.a) return vscode.commands.executeCommand('agentlens.addAccount');
-      if (pick.a.id === '__provider') return vscode.commands.executeCommand('agentlens.addProvider');
+      if (!pick.a) return vscode.commands.executeCommand('steerhouse.addAccount');
+      if (pick.a.id === '__provider') return vscode.commands.executeCommand('steerhouse.addProvider');
       const acc = pick.a;
       if (acc.id !== 'default') {
         const USE = vscode.l10n.t('Use by default');
         const LOGIN = vscode.l10n.t('Log in again');
-        const REMOVE = vscode.l10n.t('Remove from AgentLens');
+        const REMOVE = vscode.l10n.t('Remove from Steerhouse');
         const act = await vscode.window.showQuickPick([USE, LOGIN, REMOVE], { placeHolder: acc.name });
         if (act === LOGIN) return runAgent(`Claude login · ${acc.name}`, require('os').homedir(), [], await envFor(acc));
         if (act === REMOVE) {
@@ -777,8 +786,8 @@ export function activate(ctx: vscode.ExtensionContext) {
       }
       setPreferred(acc.id);
     }),
-    vscode.commands.registerCommand('agentlens.linkSession', (x: unknown) => sessionArg(x) && linkSession(sessionArg(x)!)),
-    vscode.commands.registerCommand('agentlens.installHooks', () => {
+    vscode.commands.registerCommand('steerhouse.linkSession', (x: unknown) => sessionArg(x) && linkSession(sessionArg(x)!)),
+    vscode.commands.registerCommand('steerhouse.installHooks', () => {
       try {
         // every account has its own settings.json
         const added = listAccounts().reduce((n, a) => n + installHooks(path.join(a.configDir, 'settings.json')), 0);
@@ -786,12 +795,12 @@ export function activate(ctx: vscode.ExtensionContext) {
         syncSetupContext().catch(() => {});
         vscode.window.showInformationMessage(
           added
-            ? 'AgentLens: hooks installed. Steering, queue and send now work for sessions started from now on (restart running sessions to pick them up).'
-            : 'AgentLens: hooks were already installed.',
+            ? 'Steerhouse: hooks installed. Steering, queue and send now work for sessions started from now on (restart running sessions to pick them up).'
+            : 'Steerhouse: hooks were already installed.',
         );
         refresh(true);
       } catch (e) {
-        vscode.window.showErrorMessage(`AgentLens: could not update ~/.claude/settings.json: ${e}`);
+        vscode.window.showErrorMessage(`Steerhouse: could not update ~/.claude/settings.json: ${e}`);
       }
     }),
   );
@@ -806,7 +815,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       sessions = engine.scan(cfg().get<number>('days', 3)).filter((s) => !cfg().get<boolean>('hideTempSessions', true) || !isTempProject(s.info.project));
       await resolveTerminals();
     } catch (e) {
-      console.error('AgentLens scan failed', e);
+      console.error('Steerhouse scan failed', e);
       return;
     } finally {
       busy = false;
@@ -831,7 +840,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.window.onDidOpenTerminal(() => refresh(true)),
     vscode.window.onDidCloseTerminal(() => refresh(true)),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (!e.affectsConfiguration('agentlens')) return;
+      if (!e.affectsConfiguration('steerhouse')) return;
       clearInterval(timer);
       timer = setInterval(refresh, cfg().get<number>('pollSeconds', 3) * 1000);
       refresh(true);

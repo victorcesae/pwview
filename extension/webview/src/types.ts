@@ -44,7 +44,7 @@ export type ToExtension =
   | { type: 'installHooks' }
   | { type: 'savePrompt'; text: string };
 
-// ---- AgentLens chat (mirrors src/chat.ts)
+// ---- Steerhouse chat (mirrors src/chat.ts)
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type Priority = 'later' | 'next' | 'now';
 export type Todo = { content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string };

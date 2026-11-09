@@ -36,7 +36,7 @@ export const PRESETS: Preset[] = [
   { id: 'custom', label: 'Custom (Anthropic-compatible)', detail: 'Any endpoint that speaks the Anthropic Messages API', baseUrl: '', needsKey: true },
 ];
 
-export const secretKey = (id: string) => `agentlens.provider.${id}`;
+export const secretKey = (id: string) => `steerhouse.provider.${id}`;
 
 /** Environment that points Claude Code at the provider. */
 export function providerEnv(p: Provider, key: string | undefined): Record<string, string> {

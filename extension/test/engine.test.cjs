@@ -7,10 +7,10 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-test-build');
+const out = path.join(os.tmpdir(), 'steerhouse-test-build');
 execSync(`npx esbuild src/engine.ts src/hooks.ts src/hook.ts --bundle --platform=node --format=cjs --outdir="${out}"`, { cwd: root, stdio: 'ignore' });
 
-const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-home-'));
+const home = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-home-'));
 process.env.CLAUDE_CONFIG_DIR = home;
 const { Engine, changeDetail } = require(path.join(out, 'engine.js'));
 const { installHooks } = require(path.join(out, 'hooks.js'));
@@ -76,8 +76,8 @@ test('reconstructs before/after for edits and creates', () => {
 });
 
 test('hook delivers queued comments once, as a Stop block', () => {
-  fs.mkdirSync(path.join(home, 'agentlens'), { recursive: true });
-  fs.writeFileSync(path.join(home, 'agentlens', 'comments.json'), JSON.stringify([{ id: 'c1', sessionId: sid, file: '/repo/a.ts', line: 1, text: 'Use === here', created: ts(1), status: 'pending' }]));
+  fs.mkdirSync(path.join(home, 'steerhouse'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'steerhouse', 'comments.json'), JSON.stringify([{ id: 'c1', sessionId: sid, file: '/repo/a.ts', line: 1, text: 'Use === here', created: ts(1), status: 'pending' }]));
   const run = () => spawnSync(process.execPath, [path.join(out, 'hook.js'), 'stop'], { input: JSON.stringify({ session_id: sid }), env: { ...process.env, CLAUDE_CONFIG_DIR: home }, encoding: 'utf8' });
   const first = JSON.parse(run().stdout);
   assert.equal(first.decision, 'block');
@@ -96,16 +96,16 @@ test('installs hooks idempotently and keeps other settings', () => {
   assert.equal(v.hooks.UserPromptSubmit.length, 1);
   assert.equal(v.hooks.PostToolUse.length, 1);
   assert.equal(v.hooks.SessionStart.length, 1);
-  assert.ok(fs.existsSync(p + '.agentlens-bak'));
+  assert.ok(fs.existsSync(p + '.steerhouse-bak'));
 });
 
 const runHook = (event, payload, env = {}) =>
   spawnSync(process.execPath, [path.join(out, "hook.js"), event], { input: JSON.stringify(payload), env: { ...process.env, CLAUDE_CONFIG_DIR: home, ...env }, encoding: "utf8" });
 const setComments = (cs) => {
-  fs.mkdirSync(path.join(home, "agentlens"), { recursive: true });
-  fs.writeFileSync(path.join(home, "agentlens", "comments.json"), JSON.stringify(cs.map((c, i) => ({ id: "m" + i, sessionId: sid, created: ts(1), status: "pending", ...c }))));
+  fs.mkdirSync(path.join(home, "steerhouse"), { recursive: true });
+  fs.writeFileSync(path.join(home, "steerhouse", "comments.json"), JSON.stringify(cs.map((c, i) => ({ id: "m" + i, sessionId: sid, created: ts(1), status: "pending", ...c }))));
 };
-const status = () => Object.fromEntries(JSON.parse(fs.readFileSync(path.join(home, "agentlens", "comments.json"), "utf8")).map((c) => [c.id, c.status + ":" + (c.deliveredVia ?? "")]));
+const status = () => Object.fromEntries(JSON.parse(fs.readFileSync(path.join(home, "steerhouse", "comments.json"), "utf8")).map((c) => [c.id, c.status + ":" + (c.deliveredVia ?? "")]));
 
 test("steer is injected between steps; queue waits for the turn end", () => {
   setComments([{ text: "use pnpm", mode: "steer" }, { text: "then update docs", mode: "queue" }]);
@@ -135,8 +135,8 @@ test("turn-level hooks of a sub-agent do not swallow the main agent messages", (
 });
 
 test("records which terminal runs the session", () => {
-  runHook("sessionstart", { session_id: sid, cwd: "/repo" }, { AGENTLENS_TERMINAL: "tok42" });
-  const rec = JSON.parse(fs.readFileSync(path.join(home, "agentlens", "terminals", sid + ".json"), "utf8"));
+  runHook("sessionstart", { session_id: sid, cwd: "/repo" }, { STEERHOUSE_TERMINAL: "tok42" });
+  const rec = JSON.parse(fs.readFileSync(path.join(home, "steerhouse", "terminals", sid + ".json"), "utf8"));
   assert.equal(rec.token, "tok42");
   assert.equal(rec.cwd, "/repo");
   assert.ok(Array.isArray(rec.pids) && rec.pids.length > 0, "parent pids recorded");

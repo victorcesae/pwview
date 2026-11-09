@@ -8,9 +8,9 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-providers-build');
+const out = path.join(os.tmpdir(), 'steerhouse-providers-build');
 execSync(`npx esbuild src/providers.ts src/accounts.ts --bundle --platform=node --format=cjs --outdir="${out}" --log-level=error`, { cwd: root });
-const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-prov-'));
+const home = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-prov-'));
 process.env.CLAUDE_CONFIG_DIR = path.join(home, '.claude');
 process.env.HOME = home;
 process.env.USERPROFILE = home;

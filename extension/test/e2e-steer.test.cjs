@@ -1,4 +1,4 @@
-// Real Steer / Send now through the installed Claude Code (Haiku). Run: AGENTLENS_E2E=1 node --test test/e2e-steer.test.cjs
+// Real Steer / Send now through the installed Claude Code (Haiku). Run: STEERHOUSE_E2E=1 node --test test/e2e-steer.test.cjs
 const { execSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -8,9 +8,9 @@ const assert = require('node:assert');
 const { removeTestSession } = require('./e2e-cleanup.cjs');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-e2e-build');
+const out = path.join(os.tmpdir(), 'steerhouse-e2e-build');
 const stub = path.join(__dirname, 'vscode-stub.cjs');
-const skip = !process.env.AGENTLENS_E2E && 'set AGENTLENS_E2E=1 to run against the real Claude Code';
+const skip = !process.env.STEERHOUSE_E2E && 'set STEERHOUSE_E2E=1 to run against the real Claude Code';
 
 function until(c, cond, ms = 240_000) {
   return new Promise((ok, bad) => {
@@ -36,7 +36,7 @@ function setup() {
   );
   const { ChatSession } = require(path.join(out, 'chat.js'));
   const { agentExecutable } = require(path.join(out, 'util.js'));
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-steer-'));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-steer-'));
   const c = new ChatSession({ cwd, executable: agentExecutable(), model: 'haiku', permissionMode: 'acceptEdits' }, () => {});
   c.start();
   const said = () => c.state.items.filter((i) => i.kind === 'assistant').map((i) => i.text).join('\n');

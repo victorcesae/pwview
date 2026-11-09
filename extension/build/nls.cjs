@@ -8,7 +8,7 @@ const p = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 const en = fs.existsSync(path.join(root, 'package.nls.json')) ? JSON.parse(fs.readFileSync(path.join(root, 'package.nls.json'), 'utf8')) : {};
 
 const PT = {
-  'AgentLens': 'AgentLens',
+  'Steerhouse': 'Steerhouse',
   'Sessions': 'Sessões',
   'Prompts': 'Prompts',
   'Skills': 'Skills',
@@ -55,24 +55,24 @@ const PT = {
   'How often to look for session updates.': 'Com que frequência verificar atualizações das sessões.',
   'Agent CLI used to start, resume and run prompts.': 'CLI do agente usada para iniciar, retomar e executar prompts.',
   'Extra arguments for every agent run, e.g. ["--model", "opus"].': 'Argumentos extras para cada execução do agente, ex.: ["--model", "opus"].',
-  'Where new and resumed sessions open: the AgentLens chat, or a terminal running the agent CLI.': 'Onde sessões novas e retomadas abrem: no chat do AgentLens ou em um terminal com a CLI do agente.',
+  'Where new and resumed sessions open: the Steerhouse chat, or a terminal running the agent CLI.': 'Onde sessões novas e retomadas abrem: no chat do Steerhouse ou em um terminal com a CLI do agente.',
   'See every AI coding agent session, sub-agent and change. Review real diffs, comment on lines and the agent picks it up, run prompts and skills, without leaving your editor.':
     'Veja cada sessão de agente de IA, sub-agente e alteração. Revise diffs reais, comente linhas e o agente recebe, rode prompts e skills, sem sair do editor.',
-  'Get started with AgentLens': 'Primeiros passos com o AgentLens',
+  'Get started with Steerhouse': 'Primeiros passos com o Steerhouse',
   'Two minutes: Claude Code, login, message delivery, your first chat.': 'Dois minutos: Claude Code, login, entrega de mensagens e seu primeiro chat.',
   'Check Claude Code': 'Verificar o Claude Code',
-  'AgentLens drives your own Claude Code and its login.\n[Check setup](command:agentlens.doctor)\n[Install Claude Code](command:agentlens.installClaude)':
-    'O AgentLens usa o seu próprio Claude Code e o login dele.\n[Verificar configuração](command:agentlens.doctor)\n[Instalar Claude Code](command:agentlens.installClaude)',
+  'Steerhouse drives your own Claude Code and its login.\n[Check setup](command:steerhouse.doctor)\n[Install Claude Code](command:steerhouse.installClaude)':
+    'O Steerhouse usa o seu próprio Claude Code e o login dele.\n[Verificar configuração](command:steerhouse.doctor)\n[Instalar Claude Code](command:steerhouse.installClaude)',
   'Log in once': 'Faça login uma vez',
-  'One login is reused by every chat and terminal.\n[Log in](command:agentlens.login)': 'Um único login vale para todos os chats e terminais.\n[Entrar](command:agentlens.login)',
+  'One login is reused by every chat and terminal.\n[Log in](command:steerhouse.login)': 'Um único login vale para todos os chats e terminais.\n[Entrar](command:steerhouse.login)',
   'Enable messages to terminal agents': 'Ativar mensagens para agentes no terminal',
-  'Queue / Steer / Send now for sessions running in a terminal.\n[Enable](command:agentlens.installHooks)': 'Enfileirar / Direcionar / Enviar agora para sessões rodando em um terminal.\n[Ativar](command:agentlens.installHooks)',
+  'Queue / Steer / Send now for sessions running in a terminal.\n[Enable](command:steerhouse.installHooks)': 'Enfileirar / Direcionar / Enviar agora para sessões rodando em um terminal.\n[Ativar](command:steerhouse.installHooks)',
   'Start your first chat': 'Comece seu primeiro chat',
-  'Claude Code with a real UI: plan, live status, diffs, images.\n[New chat](command:agentlens.newChat)': 'Claude Code com uma interface de verdade: plano, status ao vivo, diffs e imagens.\n[Novo chat](command:agentlens.newChat)',
+  'Claude Code with a real UI: plan, live status, diffs, images.\n[New chat](command:steerhouse.newChat)': 'Claude Code com uma interface de verdade: plano, status ao vivo, diffs e imagens.\n[Novo chat](command:steerhouse.newChat)',
   'See every session, diff and link': 'Veja cada sessão, diff e vínculo',
-  'Sessions, sub-agents, changes and the graph.\n[Open dashboard](command:agentlens.dashboard)': 'Sessões, sub-agentes, alterações e o grafo.\n[Abrir painel](command:agentlens.dashboard)',
+  'Sessions, sub-agents, changes and the graph.\n[Open dashboard](command:steerhouse.dashboard)': 'Sessões, sub-agentes, alterações e o grafo.\n[Abrir painel](command:steerhouse.dashboard)',
   'Skills for every agent': 'Skills para todos os agentes',
-  'One skill, visible to Claude Code, Cursor, Codex and more.\n[Add a skill](command:agentlens.skillAdd)': 'Uma skill, visível para Claude Code, Cursor, Codex e outros.\n[Adicionar uma skill](command:agentlens.skillAdd)',
+  'One skill, visible to Claude Code, Cursor, Codex and more.\n[Add a skill](command:steerhouse.skillAdd)': 'Uma skill, visível para Claude Code, Cursor, Codex e outros.\n[Adicionar uma skill](command:steerhouse.skillAdd)',
 };
 
 const pt = {};
@@ -91,7 +91,7 @@ function loc(obj, field, prefix) {
 const c = p.contributes;
 loc(p, 'description', 'ext');
 c.viewsContainers.activitybar.forEach((v) => loc(v, 'title', 'container'));
-c.views.agentlens.forEach((v) => loc(v, 'name', 'view'));
+c.views.steerhouse.forEach((v) => loc(v, 'name', 'view'));
 c.commands.forEach((cmd) => loc(cmd, 'title', 'cmd'));
 for (const [, prop] of Object.entries(c.configuration.properties)) loc(prop, 'description', 'setting');
 for (const w of c.walkthroughs) {

@@ -7,7 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-remote-build');
+const out = path.join(os.tmpdir(), 'steerhouse-remote-build');
 execSync(`npx esbuild src/remote.ts --bundle --platform=node --format=cjs --outdir="${out}" --log-level=error`, { cwd: root });
 const Rm = require(path.join(out, 'remote.js'));
 
@@ -42,7 +42,7 @@ test('remote: key required, moved into a cookie, then sessions / detail / send w
     const page = await fetch(base + '/', { headers: h });
     assert.strictEqual(page.status, 200);
     assert.match(page.headers.get('content-security-policy'), /default-src 'none'/);
-    assert.match(await page.text(), /<title>AgentLens<\/title>/);
+    assert.match(await page.text(), /<title>Steerhouse<\/title>/);
 
     const list = await (await fetch(base + '/api/sessions', { headers: h })).json();
     assert.deepStrictEqual(list.map((s) => s.title), ['Newer', 'Older'], 'newest first');

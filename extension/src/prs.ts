@@ -103,7 +103,7 @@ async function viaApi(url: string): Promise<PrStatus | undefined> {
   const m = /github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/.exec(url);
   if (!m) return undefined;
   try {
-    const r = await fetch(`https://api.github.com/repos/${m[1]}/${m[2]}/pulls/${m[3]}`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'agentlens' } });
+    const r = await fetch(`https://api.github.com/repos/${m[1]}/${m[2]}/pulls/${m[3]}`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'steerhouse' } });
     if (!r.ok) return undefined;
     const j: any = await r.json();
     return { state: toPrState(j), title: j.title, tasks: prTasks(j.body), checked: Date.now() };

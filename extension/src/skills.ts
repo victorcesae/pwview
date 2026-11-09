@@ -117,7 +117,7 @@ export class SkillsTree implements vscode.TreeDataProvider<Node> {
     if (n.kind === 'empty') {
       const it = new vscode.TreeItem('No skills yet. Add one from skills.sh');
       it.iconPath = new vscode.ThemeIcon('cloud-download');
-      it.command = { command: 'agentlens.skillAdd', title: 'Add skill' };
+      it.command = { command: 'steerhouse.skillAdd', title: 'Add skill' };
       return it;
     }
     if (n.kind === 'scope') {
@@ -137,7 +137,7 @@ export class SkillsTree implements vscode.TreeDataProvider<Node> {
     md.appendMarkdown(s.locations.map((l) => `\`${l}\``).join('  \n'));
     it.tooltip = md;
     it.contextValue = 'skill';
-    it.command = { command: 'agentlens.openFile', title: 'Open', arguments: [s.file] };
+    it.command = { command: 'steerhouse.openFile', title: 'Open', arguments: [s.file] };
     return it;
   }
 }
@@ -149,7 +149,7 @@ export class SkillsTree implements vscode.TreeDataProvider<Node> {
 function skillsCli(title: string, args: string[], cwd?: string) {
   const npx = which('npx');
   if (!npx) {
-    vscode.window.showErrorMessage('AgentLens: npx was not found. Install Node.js to add skills.');
+    vscode.window.showErrorMessage('Steerhouse: npx was not found. Install Node.js to add skills.');
     return;
   }
   const all = ['-y', 'skills', ...args];
@@ -194,9 +194,9 @@ export function registerSkills(ctx: vscode.ExtensionContext) {
   const tree = new SkillsTree();
   const later = () => setTimeout(() => tree.refresh(), 4000);
   ctx.subscriptions.push(
-    vscode.window.registerTreeDataProvider('agentlens.skills', tree),
-    vscode.commands.registerCommand('agentlens.skillsRefresh', () => tree.refresh()),
-    vscode.commands.registerCommand('agentlens.skillAdd', async () => {
+    vscode.window.registerTreeDataProvider('steerhouse.skills', tree),
+    vscode.commands.registerCommand('steerhouse.skillsRefresh', () => tree.refresh()),
+    vscode.commands.registerCommand('steerhouse.skillAdd', async () => {
       const source = await vscode.window.showInputBox({
         prompt: 'Skill source: GitHub owner/repo, git URL, URL to a SKILL.md, or a local folder',
         placeHolder: 'vercel-labs/agent-skills',
@@ -209,16 +209,16 @@ export function registerSkills(ctx: vscode.ExtensionContext) {
       skillsCli('skills: add', ['add', source, ...agentFlags(agents), ...(scope === 'user' ? ['-g'] : [])]);
       later();
     }),
-    vscode.commands.registerCommand('agentlens.skillFind', async () => {
+    vscode.commands.registerCommand('steerhouse.skillFind', async () => {
       const query = await vscode.window.showInputBox({ prompt: 'Search skills (skills.sh)', placeHolder: 'react, testing, postgres…' });
       if (query === undefined) return;
       skillsCli('skills: find', ['find', ...(query ? [query] : [])]);
     }),
-    vscode.commands.registerCommand('agentlens.skillUpdate', () => {
+    vscode.commands.registerCommand('steerhouse.skillUpdate', () => {
       skillsCli('skills: update', ['update']);
       later();
     }),
-    vscode.commands.registerCommand('agentlens.skillEnable', async (n?: { skill?: Skill }) => {
+    vscode.commands.registerCommand('steerhouse.skillEnable', async (n?: { skill?: Skill }) => {
       const s = n?.skill;
       if (!s) return;
       const agents = await pickAgents((a) => installedAgents().includes(a), s.agents);
@@ -226,7 +226,7 @@ export function registerSkills(ctx: vscode.ExtensionContext) {
       skillsCli('skills: enable', ['add', s.locations[0], ...agentFlags(agents), ...(s.scope === 'user' ? ['-g'] : []), '-y'], s.scope === 'project' ? s.root : undefined);
       later();
     }),
-    vscode.commands.registerCommand('agentlens.skillRemove', async (n?: { skill?: Skill }) => {
+    vscode.commands.registerCommand('steerhouse.skillRemove', async (n?: { skill?: Skill }) => {
       const s = n?.skill;
       if (!s) return;
       const ok = await vscode.window.showWarningMessage(
@@ -238,7 +238,7 @@ export function registerSkills(ctx: vscode.ExtensionContext) {
       skillsCli('skills: remove', ['remove', s.name, ...agentFlags(s.agents), ...(s.scope === 'user' ? ['-g'] : []), '-y'], s.scope === 'project' ? s.root : undefined);
       later();
     }),
-    vscode.commands.registerCommand('agentlens.newSkill', async () => {
+    vscode.commands.registerCommand('steerhouse.newSkill', async () => {
       const name = (await vscode.window.showInputBox({ prompt: 'Skill name (kebab-case)', placeHolder: 'api-conventions' }))?.trim();
       if (!name) return;
       const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');

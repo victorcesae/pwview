@@ -1,6 +1,6 @@
 ## Your first chat
 
-**New chat** opens an AgentLens chat for this project. It's Claude Code with:
+**New chat** opens an Steerhouse chat for this project. It's Claude Code with:
 
 - the plan and its steps as a live checklist, plus what it's doing right now ("Searching…", "Editing…")
 - every edit as a diff, one click from the full side-by-side diff

@@ -8,13 +8,13 @@ const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
 const entry = path.join(__dirname, '.chat-ui-entry.tsx');
-const out = path.join(os.tmpdir(), 'agentlens-chat-ui', 'ui.cjs');
+const out = path.join(os.tmpdir(), 'steerhouse-chat-ui', 'ui.cjs');
 fs.writeFileSync(entry, `export { groupTools, summarizeTools, findPRs, changesByProject, projectOf, prettyModel } from ${JSON.stringify(path.join(root, 'webview/src/views/toolSummary.ts').replace(/\\/g, '/'))};`);
 execSync(`npx esbuild "${entry}" --bundle --platform=node --format=cjs --jsx=automatic --outfile="${out}" --alias:@=./webview/src --loader:.css=empty --log-level=error`, { cwd: root });
 
 const load = (lang) => {
   globalThis.document = { documentElement: { lang } };
-  for (const k of Object.keys(require.cache)) if (k.includes('agentlens-chat-ui')) delete require.cache[k];
+  for (const k of Object.keys(require.cache)) if (k.includes('steerhouse-chat-ui')) delete require.cache[k];
   return require(out);
 };
 const tool = (id, name, input, extra = {}) => ({ kind: 'tool', id, name, input, summary: '', status: 'done', file: input.file_path, ...extra });

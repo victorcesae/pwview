@@ -8,7 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-mcp-build');
+const out = path.join(os.tmpdir(), 'steerhouse-mcp-build');
 execSync(`npx esbuild src/mcp.ts --bundle --platform=node --format=cjs --outdir="${out}" --log-level=error`, { cwd: root });
 const M = require(path.join(out, 'mcp.js'));
 
@@ -31,8 +31,8 @@ test('mcp: the same server for a running chat; names; presets are complete', () 
 
 const claude = [path.join(os.homedir(), '.local', 'bin', process.platform === 'win32' ? 'claude.exe' : 'claude')].find((p) => fs.existsSync(p));
 test('mcp (real Claude Code): a server added for the team lands in the project .mcp.json', { skip: !claude && 'Claude Code not installed' }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-mcp-proj-'));
-  const config = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-mcp-cfg-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-mcp-proj-'));
+  const config = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-mcp-cfg-'));
   const server = { name: 'context7', transport: 'stdio', command: 'npx', args: ['-y', '@upstash/context7-mcp'] };
   const r = await M.runClaude(claude, M.mcpAddArgs(server, 'project'), dir, { CLAUDE_CONFIG_DIR: config });
   assert.ok(r.ok, r.out);

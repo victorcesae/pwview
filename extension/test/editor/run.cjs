@@ -1,4 +1,4 @@
-// Launches a clean VS Code (downloaded once into .vscode-test/) with AgentLens loaded from this
+// Launches a clean VS Code (downloaded once into .vscode-test/) with Steerhouse loaded from this
 // folder, in English and in Portuguese (with the official pt-BR language pack), and runs
 // suite.cjs inside it. Run: npm run test:editor
 const cp = require('child_process');
@@ -17,9 +17,9 @@ async function main() {
   const extensionDevelopmentPath = path.join(__dirname, '..', '..');
   const extensionTestsPath = path.join(__dirname, 'suite.cjs');
   const vscodeExecutablePath = await downloadAndUnzipVSCode('stable');
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-editor-ws-'));
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-editor-ws-'));
   for (const [locale, pack] of Object.entries(LOCALES)) {
-    const userData = fs.mkdtempSync(path.join(os.tmpdir(), `agentlens-editor-${locale}-`));
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), `steerhouse-editor-${locale}-`));
     const extDir = path.join(extensionDevelopmentPath, '.vscode-test', `extensions-${locale}`);
     if (pack) {
       const [cli, ...args] = resolveCliArgsFromVSCodeExecutablePath(vscodeExecutablePath);

@@ -104,7 +104,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
       const out: Node[] = [];
       const h = this.hooks();
       if (h !== 'all')
-        out.push({ kind: 'hint', text: h === 'some' ? 'Update hooks to enable steering & send now' : 'Enable messages to agents (steer, queue, send now)', command: 'agentlens.installHooks', icon: 'warning' });
+        out.push({ kind: 'hint', text: h === 'some' ? 'Update hooks to enable steering & send now' : 'Enable messages to agents (steer, queue, send now)', command: 'steerhouse.installHooks', icon: 'warning' });
       const hot = Engine.hotFiles(sessions);
       if (hot.length) out.push({ kind: 'hot', files: hot });
       out.push({ kind: 'accounts' }, { kind: 'rules', scope: 'user' });
@@ -126,7 +126,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
       const projects = all.filter((p) => !p.archived);
       const hidden = all.filter((p) => p.archived);
       if (!sessions.length)
-        out.push({ kind: 'hint', text: vscode.l10n.t('No agent sessions yet. Start one'), command: 'agentlens.newSession', icon: 'add' });
+        out.push({ kind: 'hint', text: vscode.l10n.t('No agent sessions yet. Start one'), command: 'steerhouse.newSession', icon: 'add' });
       return [...out, ...projects, ...(hidden.length ? [{ kind: 'archived' as const, projects: hidden }] : [])];
     }
     switch (node.kind) {
@@ -144,8 +144,8 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
       case 'accounts':
         return [
           ...listAccounts().map((a): Node => ({ kind: 'account', a })),
-          { kind: 'hint', text: vscode.l10n.t('Add a Claude account…'), command: 'agentlens.addAccount', icon: 'add' },
-          { kind: 'hint', text: vscode.l10n.t('Add a model provider (Ollama, OpenRouter…)…'), command: 'agentlens.addProvider', icon: 'server' },
+          { kind: 'hint', text: vscode.l10n.t('Add a Claude account…'), command: 'steerhouse.addAccount', icon: 'add' },
+          { kind: 'hint', text: vscode.l10n.t('Add a model provider (Ollama, OpenRouter…)…'), command: 'steerhouse.addProvider', icon: 'server' },
         ];
       case 'rules': {
         const list = node.scope === 'user' ? userRules() : projectRules(node.root!);
@@ -244,7 +244,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         it.contextValue = 'session';
         if (this.attached().has(i.id)) md.appendMarkdown(`
 $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
-        it.command = { command: 'agentlens.openSession', title: 'Open', arguments: [i.id] };
+        it.command = { command: 'steerhouse.openSession', title: 'Open', arguments: [i.id] };
         return it;
       }
       case 'agent': {
@@ -254,7 +254,7 @@ $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
         it.iconPath = a.state === 'working' ? stateIcon('working') : new vscode.ThemeIcon('hubot');
         it.description = [a.agentType, `${a.edits} edits`, `${a.tools} tools`, ago(a.updated)].filter(Boolean).join(' · ');
         it.tooltip = `Sub-agent ${a.id}\n${a.description}`;
-        it.command = { command: 'agentlens.openSession', title: 'Open', arguments: [node.s.info.id, a.id] };
+        it.command = { command: 'steerhouse.openSession', title: 'Open', arguments: [node.s.info.id, a.id] };
         return it;
       }
       case 'changes': {
@@ -268,7 +268,7 @@ $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
         it.id = 'accounts';
         it.iconPath = new vscode.ThemeIcon('accounts-view-bar-icon');
         it.description = String(listAccounts().length);
-        it.tooltip = vscode.l10n.t('Claude accounts and model providers AgentLens can run chats with');
+        it.tooltip = vscode.l10n.t('Claude accounts and model providers Steerhouse can run chats with');
         return it;
       }
       case 'account': {
@@ -287,7 +287,7 @@ $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
           .join(' · ');
         it.tooltip = [a.name, a.provider ? a.provider.baseUrl : a.configDir, who?.email].filter(Boolean).join('\n');
         it.contextValue = a.provider ? 'account-provider' : who ? 'account-claude' : 'account-signedout';
-        if (!a.provider && !who) it.command = { command: 'agentlens.login', title: 'Log in' };
+        if (!a.provider && !who) it.command = { command: 'steerhouse.login', title: 'Log in' };
         return it;
       }
       case 'rules': {
@@ -308,7 +308,7 @@ $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
         it.iconPath = new vscode.ThemeIcon(node.r.exists ? 'file' : 'new-file');
         it.description = node.r.exists ? vscode.l10n.t(node.r.hint) : vscode.l10n.t('create') + ' · ' + vscode.l10n.t(node.r.hint);
         it.tooltip = node.r.path;
-        it.command = { command: 'agentlens.openRules', title: 'Open', arguments: [node.r.path, node.scope] };
+        it.command = { command: 'steerhouse.openRules', title: 'Open', arguments: [node.r.path, node.scope] };
         return it;
       }
       case 'files': {
@@ -348,7 +348,7 @@ $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
         md.appendMarkdown(`**${c.kind}** \`${c.file}\`\n\n`);
         if (c.why) md.appendMarkdown(`---\n${clip(c.why, 600)}`);
         it.tooltip = md;
-        it.command = { command: 'agentlens.openChange', title: 'Open diff', arguments: [node.s.info.id, c.id] };
+        it.command = { command: 'steerhouse.openChange', title: 'Open diff', arguments: [node.s.info.id, c.id] };
         return it;
       }
     }

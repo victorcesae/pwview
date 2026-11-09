@@ -1,6 +1,6 @@
 // Real Claude Code: an MCP server added while a chat runs is connected to it right away (no
 // restart) and its tools are listed. Uses a tiny local server, no network. Sends no message, so it
-// costs nothing. Run with AGENTLENS_E2E=1 (npm run test:e2e).
+// costs nothing. Run with STEERHOUSE_E2E=1 (npm run test:e2e).
 const { execSync } = require('child_process');
 const os = require('os');
 const path = require('path');
@@ -8,10 +8,10 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
-const skip = !process.env.AGENTLENS_E2E && 'set AGENTLENS_E2E=1 to run against the real Claude Code';
+const skip = !process.env.STEERHOUSE_E2E && 'set STEERHOUSE_E2E=1 to run against the real Claude Code';
 
 test('e2e: Add MCP server connects it to the running chat', { skip, timeout: 90_000 }, async () => {
-  const out = path.join(os.tmpdir(), 'agentlens-e2e-mcp');
+  const out = path.join(os.tmpdir(), 'steerhouse-e2e-mcp');
   const stub = path.join(__dirname, 'vscode-stub.cjs');
   execSync(`npx esbuild src/chat.ts src/util.ts --bundle --platform=node --format=cjs --outdir="${out}" --alias:vscode="${stub}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --log-level=error`, { cwd: root });
   const { ChatSession } = require(path.join(out, 'chat.js'));

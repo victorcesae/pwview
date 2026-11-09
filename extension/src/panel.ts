@@ -51,12 +51,12 @@ export class Dashboard {
     this.agentId = agentId;
     if (!this.panel) {
       const root = vscode.Uri.joinPath(this.ctx.extensionUri, 'dist', 'webview');
-      this.panel = vscode.window.createWebviewPanel('agentlens.dashboard', 'AgentLens', vscode.ViewColumn.Active, {
+      this.panel = vscode.window.createWebviewPanel('steerhouse.dashboard', 'Steerhouse', vscode.ViewColumn.Active, {
         enableScripts: true,
         retainContextWhenHidden: true,
         localResourceRoots: [root],
       });
-      this.panel.iconPath = { light: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon-light.svg'), dark: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon-dark.svg') };
+      this.panel.iconPath = { light: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-light.svg'), dark: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-dark.svg') };
       this.panel.webview.html = this.html(this.panel.webview, root);
       this.panel.webview.onDidReceiveMessage((m: FromWebview) => {
         if (m.type === 'ready') this.post();
@@ -83,7 +83,7 @@ export class Dashboard {
     if (!this.panel) return;
     const sessions = this.sessions();
     const s = this.sessionId ? sessions.find((x) => x.info.id === this.sessionId) : undefined;
-    this.panel.title = s ? `AgentLens · ${s.info.title.slice(0, 40)}` : 'AgentLens';
+    this.panel.title = s ? `Steerhouse · ${s.info.title.slice(0, 40)}` : 'Steerhouse';
     if (!s) {
       this.panel.webview.postMessage({
         type: 'data',

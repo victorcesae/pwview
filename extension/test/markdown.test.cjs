@@ -6,7 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-md-build', 'md.cjs');
+const out = path.join(os.tmpdir(), 'steerhouse-md-build', 'md.cjs');
 const entry = path.join(__dirname, '.md-entry.tsx');
 require('fs').writeFileSync(
   entry,

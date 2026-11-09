@@ -2,11 +2,11 @@
 const fs = require('fs');
 const E = 'src/extension.ts';
 let s = fs.readFileSync(E, 'utf8');
-const start = s.indexOf("    vscode.commands.registerCommand('agentlens.manageConnectors'");
+const start = s.indexOf("    vscode.commands.registerCommand('steerhouse.manageConnectors'");
 const end = s.indexOf('    }),\n', start) + '    }),\n'.length;
 if (start < 0) throw new Error('manageConnectors not found');
 const flow = String.raw`    // Connectors: add an MCP server (popular or your own) for the team, just you here, or everywhere
-    vscode.commands.registerCommand('agentlens.manageConnectors', async (cwd?: string) => {
+    vscode.commands.registerCommand('steerhouse.manageConnectors', async (cwd?: string) => {
       const dir = cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!dir) return vscode.window.showWarningMessage(vscode.l10n.t('Open a folder first.'));
       type Pick = vscode.QuickPickItem & { preset?: McpPreset; custom?: 'stdio' | 'http'; edit?: boolean };

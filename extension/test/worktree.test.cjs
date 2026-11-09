@@ -8,7 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-worktree-build');
+const out = path.join(os.tmpdir(), 'steerhouse-worktree-build');
 execSync(`npx esbuild src/worktree.ts --bundle --platform=node --format=cjs --outdir="${out}" --log-level=error`, { cwd: root });
 const W = require(path.join(out, 'worktree.js'));
 
@@ -16,13 +16,13 @@ test('worktree: branch names from a task, valid names, folder next to the repo',
   assert.strictEqual(W.slug('Fix the login redirect!'), 'fix-the-login-redirect');
   assert.strictEqual(W.slug('Ação rápida: relatório'), 'acao-rapida-relatorio');
   assert.strictEqual(W.slug('!!!'), 'chat');
-  assert.ok(W.validBranch('agentlens/fix-login'));
+  assert.ok(W.validBranch('steerhouse/fix-login'));
   for (const bad of ['', '-x', 'a..b', 'a b', 'x.lock', 'a//b', 'end/']) assert.ok(!W.validBranch(bad), bad);
-  assert.strictEqual(W.worktreePath(path.join('/w', 'app'), 'agentlens/fix-login'), path.join('/w', 'app.worktrees', 'agentlens-fix-login'));
+  assert.strictEqual(W.worktreePath(path.join('/w', 'app'), 'steerhouse/fix-login'), path.join('/w', 'app.worktrees', 'steerhouse-fix-login'));
 });
 
 test('worktree (real git): create, recognise, refuse to remove while dirty, force remove; the branch stays', async () => {
-  const base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-wt-')));
+  const base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-wt-')));
   const repo = path.join(base, 'app');
   fs.mkdirSync(repo);
   const g = (cmd, cwd = repo) => execSync(`git -c user.name=t -c user.email=t@t -c init.defaultBranch=main ${cmd}`, { cwd, encoding: 'utf8' });
@@ -34,15 +34,15 @@ test('worktree (real git): create, recognise, refuse to remove while dirty, forc
   assert.strictEqual(path.resolve(await W.repoRoot(repo)).toLowerCase(), repo.toLowerCase());
   assert.strictEqual(await W.repoRoot(base), undefined, 'not a repo');
 
-  const r = await W.addWorktree(repo, 'agentlens/fix-login');
+  const r = await W.addWorktree(repo, 'steerhouse/fix-login');
   assert.ok(r.ok, r.error);
-  assert.strictEqual(r.dir, path.join(base, 'app.worktrees', 'agentlens-fix-login'));
+  assert.strictEqual(r.dir, path.join(base, 'app.worktrees', 'steerhouse-fix-login'));
   assert.ok(fs.existsSync(path.join(r.dir, 'a.txt')), 'files checked out');
   assert.ok(W.isWorktree(r.dir) && !W.isWorktree(repo));
   const info = W.worktreeInfo(r.dir);
   assert.strictEqual(path.resolve(info.main).toLowerCase(), repo.toLowerCase());
-  assert.strictEqual(info.branch, 'agentlens/fix-login');
-  assert.ok(!(await W.addWorktree(repo, 'agentlens/fix-login')).ok, 'same branch twice');
+  assert.strictEqual(info.branch, 'steerhouse/fix-login');
+  assert.ok(!(await W.addWorktree(repo, 'steerhouse/fix-login')).ok, 'same branch twice');
 
   fs.writeFileSync(path.join(r.dir, 'b.txt'), 'uncommitted');
   const refused = await W.removeWorktree(r.dir);
@@ -50,11 +50,11 @@ test('worktree (real git): create, recognise, refuse to remove while dirty, forc
   const forced = await W.removeWorktree(r.dir, true);
   assert.ok(forced.ok, forced.out);
   assert.ok(!fs.existsSync(r.dir));
-  assert.match(g('branch --list agentlens/fix-login'), /agentlens\/fix-login/, 'the branch is kept');
+  assert.match(g('branch --list steerhouse/fix-login'), /steerhouse\/fix-login/, 'the branch is kept');
 });
 
 test('tree: pinned projects first, archived ones under "Archived"', async () => {
-  const out2 = path.join(os.tmpdir(), 'agentlens-tree-build');
+  const out2 = path.join(os.tmpdir(), 'steerhouse-tree-build');
   execSync(`npx esbuild src/tree.ts --bundle --platform=node --format=cjs --outdir="${out2}" --alias:vscode="${path.join(__dirname, 'vscode-stub.cjs')}" --log-level=error`, { cwd: root });
   const { SessionsTree } = require(path.join(out2, 'tree.js'));
   const s = (id, project, updated) => ({ info: { id, project, title: id, state: 'idle', updated, agents: [], edits: 0, linked: [] }, t: { events: [], changes: [] }, agents: [] });
@@ -68,8 +68,8 @@ test('tree: pinned projects first, archived ones under "Archived"', async () => 
 });
 
 test('tree: a project that is a worktree says so (main repo and branch)', async () => {
-  const { SessionsTree } = require(path.join(os.tmpdir(), 'agentlens-tree-build', 'tree.js'));
-  const base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-wt-tree-')));
+  const { SessionsTree } = require(path.join(os.tmpdir(), 'steerhouse-tree-build', 'tree.js'));
+  const base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-wt-tree-')));
   const repo = path.join(base, 'shop');
   fs.mkdirSync(repo);
   const g = (cmd) => execSync(`git -c user.name=t -c user.email=t@t -c init.defaultBranch=main ${cmd}`, { cwd: repo });
@@ -77,12 +77,12 @@ test('tree: a project that is a worktree says so (main repo and branch)', async 
   fs.writeFileSync(path.join(repo, 'x'), 'x');
   g('add .');
   g('commit -qm i');
-  const r = await W.addWorktree(repo, 'agentlens/try-it');
+  const r = await W.addWorktree(repo, 'steerhouse/try-it');
   assert.ok(r.ok);
   const s = { info: { id: 'w', project: r.dir, title: 'w', state: 'idle', updated: '1', agents: [], edits: 0, linked: [] }, t: { events: [], changes: [] }, agents: [] };
   const tree = new SessionsTree(() => [s], () => 'all', () => new Set());
   const item = tree.getTreeItem(tree.getChildren().find((n) => n.kind === 'project'));
-  assert.match(item.description, /worktree of shop · agentlens\/try-it/);
+  assert.match(item.description, /worktree of shop · steerhouse\/try-it/);
   assert.match(item.contextValue, /\bworktree\b/);
   assert.strictEqual(item.iconPath.id, 'git-branch');
 });

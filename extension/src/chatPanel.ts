@@ -1,4 +1,4 @@
-// Hosts AgentLens chats: one webview panel per ChatSession.
+// Hosts Steerhouse chats: one webview panel per ChatSession.
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -60,7 +60,7 @@ interface Open {
   saved?: string;
   /** PR links seen in this chat */
   prUrls?: Set<string>;
-  /** AgentLens account the chat runs on */
+  /** Steerhouse account the chat runs on */
   accountId?: string;
   /** status at the last update, to notice "finished" and "needs you" */
   lastStatus?: string;
@@ -91,7 +91,7 @@ export class Chats {
   }
 
   private stash(): string[] {
-    return this.ctx.globalState.get<string[]>('agentlens.stash', []);
+    return this.ctx.globalState.get<string[]>('steerhouse.stash', []);
   }
 
   /**
@@ -104,7 +104,7 @@ export class Chats {
     const idx = c.state.items.findIndex((it) => it.id === itemId);
     const item = c.state.items[idx];
     if (!item || item.kind !== 'user' || !c.state.sessionId) return;
-    if (!item.forkAt) return vscode.window.showWarningMessage(vscode.l10n.t('This message cannot be run again (it is the first one of a session started outside AgentLens).'));
+    if (!item.forkAt) return vscode.window.showWarningMessage(vscode.l10n.t('This message cannot be run again (it is the first one of a session started outside Steerhouse).'));
     if (c.state.status === 'working' || c.state.status === 'waiting') await c.interrupt();
     const undo = vscode.l10n.t('Undo File Changes Too');
     const keep = vscode.l10n.t('Keep Files');
@@ -147,7 +147,7 @@ export class Chats {
     const s = o.chat.state;
     const prev = o.lastStatus;
     o.lastStatus = s.status;
-    if (prev === s.status || !vscode.workspace.getConfiguration('agentlens').get<boolean>('notifications', true)) return;
+    if (prev === s.status || !vscode.workspace.getConfiguration('steerhouse').get<boolean>('notifications', true)) return;
     const watching = o.panel.active && o.panel.visible && vscode.window.state.focused;
     if (watching) return;
     const title = s.title.slice(0, 60);
@@ -182,7 +182,7 @@ export class Chats {
     return this.open.map((o) => ({ cwd: o.chat.state.cwd, sessionId: o.chat.state.sessionId, title: o.chat.state.title }));
   }
 
-  /** Session ids currently driven by an AgentLens chat (a resumed session belongs to the chat). */
+  /** Session ids currently driven by an Steerhouse chat (a resumed session belongs to the chat). */
   activeIds() {
     return new Set(this.open.map((o) => o.chat.state.sessionId).filter((x): x is string => !!x));
   }
@@ -191,7 +191,7 @@ export class Chats {
     return this.open.find((o) => o.chat.state.sessionId === sessionId);
   }
 
-  private static PREFS = 'agentlens.chatPrefs';
+  private static PREFS = 'steerhouse.chatPrefs';
   /** Settings per session id, so a resumed chat (or one reopened by Reload Window) keeps them. */
   prefsOf(sessionId?: string): ChatPrefs | undefined {
     return sessionId ? this.ctx.globalState.get<Record<string, ChatPrefs & { at: number }>>(Chats.PREFS, {})[sessionId] : undefined;
@@ -219,20 +219,20 @@ export class Chats {
     }
     const exe = agentExecutable();
     if (!exe) {
-      vscode.window.showErrorMessage('AgentLens: Claude Code was not found. Install it (or set agentlens.agentCommand) to use the chat.');
+      vscode.window.showErrorMessage('Steerhouse: Claude Code was not found. Install it (or set steerhouse.agentCommand) to use the chat.');
       return;
     }
     const root = vscode.Uri.joinPath(this.ctx.extensionUri, 'dist', 'webview');
     // a tab VS Code brought back after Reload Window is reused in place
     const panel =
       opts.panel ??
-      vscode.window.createWebviewPanel('agentlens.chat', opts.title ?? 'AgentLens chat', vscode.ViewColumn.Active, {
+      vscode.window.createWebviewPanel('steerhouse.chat', opts.title ?? 'Steerhouse chat', vscode.ViewColumn.Active, {
         enableScripts: true,
         retainContextWhenHidden: true,
         localResourceRoots: [root],
       });
     if (opts.panel) panel.webview.options = { enableScripts: true, localResourceRoots: [root] };
-    panel.iconPath = { light: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon-light.svg'), dark: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon-dark.svg') };
+    panel.iconPath = { light: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-light.svg'), dark: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-dark.svg') };
     const transcript = opts.resume ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
     const history = transcript ? historyFromTranscript(transcript) : undefined;
     const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.account?.provider?.model }, () => this.schedule(entry));
@@ -327,11 +327,11 @@ export class Chats {
       case 'retry':
         return c.retry();
       case 'toggleMcp':
-        return c.toggleMcp(m.name, m.enabled).catch((e) => vscode.window.showWarningMessage(`AgentLens: ${m.name}: ${e?.message ?? e}`));
+        return c.toggleMcp(m.name, m.enabled).catch((e) => vscode.window.showWarningMessage(`Steerhouse: ${m.name}: ${e?.message ?? e}`));
       case 'reconnectMcp':
-        return c.reconnectMcp(m.name).catch((e) => vscode.window.showWarningMessage(`AgentLens: ${m.name}: ${e?.message ?? e}`));
+        return c.reconnectMcp(m.name).catch((e) => vscode.window.showWarningMessage(`Steerhouse: ${m.name}: ${e?.message ?? e}`));
       case 'manageConnectors':
-        return vscode.commands.executeCommand('agentlens.manageConnectors', c.state.cwd);
+        return vscode.commands.executeCommand('steerhouse.manageConnectors', c.state.cwd);
       case 'contextDetail':
         return c.contextDetail().catch(() => {});
       case 'loadEarlier':
@@ -343,11 +343,11 @@ export class Chats {
       case 'setModel':
         return c.setModel(m.model);
       case 'setEffort':
-        return c.setEffort(m.effort).catch((e) => vscode.window.showWarningMessage(`AgentLens: effort not changed: ${e?.message ?? e}`));
+        return c.setEffort(m.effort).catch((e) => vscode.window.showWarningMessage(`Steerhouse: effort not changed: ${e?.message ?? e}`));
       case 'setFast':
-        return c.setFastMode(m.on).catch((e) => vscode.window.showWarningMessage(`AgentLens: fast mode not available: ${e?.message ?? e}`));
+        return c.setFastMode(m.on).catch((e) => vscode.window.showWarningMessage(`Steerhouse: fast mode not available: ${e?.message ?? e}`));
       case 'setUltracode':
-        return c.setUltracode(m.on).catch((e) => vscode.window.showWarningMessage(`AgentLens: ultracode not available: ${e?.message ?? e}`));
+        return c.setUltracode(m.on).catch((e) => vscode.window.showWarningMessage(`Steerhouse: ultracode not available: ${e?.message ?? e}`));
       case 'setMode':
         return c.setPermissionMode(m.mode);
       case 'prFiles': {
@@ -399,18 +399,18 @@ export class Chats {
       }
       case 'stash': {
         const list = [m.text, ...this.stash().filter((x) => x !== m.text)].slice(0, 30);
-        await this.ctx.globalState.update('agentlens.stash', list);
+        await this.ctx.globalState.update('steerhouse.stash', list);
         return this.refresh();
       }
       case 'unstash': {
         const list = this.stash().filter((_, i) => i !== m.index);
-        await this.ctx.globalState.update('agentlens.stash', list);
+        await this.ctx.globalState.update('steerhouse.stash', list);
         return this.refresh();
       }
       case 'editPrompt':
         return this.editAndRerun(o, m.id, m.text);
       case 'deleteSession':
-        return c.state.sessionId && vscode.commands.executeCommand('agentlens.deleteSession', c.state.sessionId);
+        return c.state.sessionId && vscode.commands.executeCommand('steerhouse.deleteSession', c.state.sessionId);
       case 'revealFolder':
         return vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(m.path));
       case 'openUrl':
@@ -418,7 +418,7 @@ export class Chats {
       case 'openFile':
         return vscode.window.showTextDocument(vscode.Uri.file(m.path));
       case 'openChange':
-        return c.state.sessionId && vscode.commands.executeCommand('agentlens.openChange', c.state.sessionId, m.changeId);
+        return c.state.sessionId && vscode.commands.executeCommand('steerhouse.openChange', c.state.sessionId, m.changeId);
       case 'openSession':
         return this.find(m.id) ? this.find(m.id)!.panel.reveal() : this.openSession(m.id);
       case 'unlink':

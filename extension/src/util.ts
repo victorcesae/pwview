@@ -83,14 +83,14 @@ export function which(cmd: string): string | undefined {
 async function agentMissing(command: string) {
   const install = win ? 'irm https://claude.ai/install.ps1 | iex' : 'curl -fsSL https://claude.ai/install.sh | bash';
   const pick = await vscode.window.showErrorMessage(
-    `AgentLens: the agent CLI "${command}" isn't installed where this editor runs${vscode.env.remoteName ? ` (${vscode.env.remoteName})` : ''}. Viewing sessions, diffs and comments still works; starting, resuming and prompts need it.`,
+    `Steerhouse: the agent CLI "${command}" isn't installed where this editor runs${vscode.env.remoteName ? ` (${vscode.env.remoteName})` : ''}. Viewing sessions, diffs and comments still works; starting, resuming and prompts need it.`,
     'Install Claude Code…',
     'Set path…',
   );
   if (pick === 'Install Claude Code…') {
     installClaude();
   } else if (pick === 'Set path…') {
-    vscode.commands.executeCommand('workbench.action.openSettings', 'agentlens.agentCommand');
+    vscode.commands.executeCommand('workbench.action.openSettings', 'steerhouse.agentCommand');
   }
 }
 
@@ -118,25 +118,25 @@ export async function installClaude() {
         name: 'Install Claude Code',
         iconPath: new vscode.ThemeIcon('cloud-download'),
         shellPath: 'powershell.exe',
-        shellArgs: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-Command', `${cmd}; Write-Host ''; Write-Host 'Done. Next: AgentLens: Log in to Claude Code' -ForegroundColor Green`],
+        shellArgs: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-Command', `${cmd}; Write-Host ''; Write-Host 'Done. Next: Steerhouse: Log in to Claude Code' -ForegroundColor Green`],
       })
     : vscode.window.createTerminal({
         name: 'Install Claude Code',
         iconPath: new vscode.ThemeIcon('cloud-download'),
         shellPath: '/bin/bash',
-        shellArgs: ['-c', `${cmd}; echo; echo "Done. Next: AgentLens: Log in to Claude Code"; exec bash -l`],
+        shellArgs: ['-c', `${cmd}; echo; echo "Done. Next: Steerhouse: Log in to Claude Code"; exec bash -l`],
       });
   t.show();
 }
 
 /** The agent CLI to drive (PATH, standard install dirs, then the Claude desktop app's bundled copy). */
 export function agentExecutable(): string | undefined {
-  const command = vscode.workspace.getConfiguration('agentlens').get<string>('agentCommand', 'claude');
+  const command = vscode.workspace.getConfiguration('steerhouse').get<string>('agentCommand', 'claude');
   return which(command) ?? (command === 'claude' ? desktopBundledClaude() : undefined);
 }
 
 export function runAgent(name: string, cwd: string, args: string[], extraEnv: Record<string, string> = {}) {
-  const cfg = vscode.workspace.getConfiguration('agentlens');
+  const cfg = vscode.workspace.getConfiguration('steerhouse');
   const command = cfg.get<string>('agentCommand', 'claude');
   const all = [...cfg.get<string[]>('agentArgs', []), ...args];
   const exe = which(command) ?? (command === 'claude' ? desktopBundledClaude() : undefined);
@@ -145,7 +145,7 @@ export function runAgent(name: string, cwd: string, args: string[], extraEnv: Re
     return;
   }
   const isScript = /\.(cmd|bat)$/i.test(exe);
-  // The hook reads AGENTLENS_TERMINAL and records it, so we know this terminal runs that session.
+  // The hook reads STEERHOUSE_TERMINAL and records it, so we know this terminal runs that session.
   const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
   const term = vscode.window.createTerminal({
     name,
@@ -153,7 +153,7 @@ export function runAgent(name: string, cwd: string, args: string[], extraEnv: Re
     shellPath: isScript ? 'cmd.exe' : exe,
     shellArgs: isScript ? ['/c', exe, ...all] : all,
     iconPath: new vscode.ThemeIcon('sparkle'),
-    env: { ...extraEnv, AGENTLENS_TERMINAL: token },
+    env: { ...extraEnv, STEERHOUSE_TERMINAL: token },
   });
   launched.set(token, term);
   term.show();

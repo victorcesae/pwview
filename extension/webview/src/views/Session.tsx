@@ -280,7 +280,7 @@ export function SessionView({ data, focusAgent }: { data: SessionData; focusAgen
                 <SquareTerminal /> {t('Open in chat')}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{t('Continue this session in an AgentLens chat')}</TooltipContent>
+            <TooltipContent>{t('Continue this session in an Steerhouse chat')}</TooltipContent>
           </Tooltip>
         </div>
       </div>

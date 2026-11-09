@@ -18,8 +18,8 @@ R(
 );
 R(
   'src/extension.ts',
-  "const SCHEME = 'agentlens';",
-  `const SCHEME = 'agentlens';
+  "const SCHEME = 'steerhouse';",
+  `const SCHEME = 'steerhouse';
 
 /** Sessions that ran inside the system temp folder (scratch runs, tests) are hidden by default. */
 const tempRoots = (() => {
@@ -35,7 +35,7 @@ const tempRoots = (() => {
 const isTempProject = (p: string) => tempRoots.some((r) => norm(p) === r || norm(p).startsWith(r + '/'));`,
 );
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-pkg.contributes.configuration.properties['agentlens.hideTempSessions'] = {
+pkg.contributes.configuration.properties['steerhouse.hideTempSessions'] = {
   type: 'boolean',
   default: true,
   description: 'Hide sessions that ran inside the system temp folder (scratch runs, automated tests).',

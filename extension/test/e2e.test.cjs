@@ -1,5 +1,5 @@
 // Real end-to-end chat through the installed Claude Code (uses your login; Haiku to keep it cheap).
-// Run: AGENTLENS_E2E=1 npm run test:e2e
+// Run: STEERHOUSE_E2E=1 npm run test:e2e
 const { execSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -9,9 +9,9 @@ const assert = require('node:assert');
 const { removeTestSession } = require('./e2e-cleanup.cjs');
 
 const root = path.join(__dirname, '..');
-const out = path.join(os.tmpdir(), 'agentlens-e2e-build');
+const out = path.join(os.tmpdir(), 'steerhouse-e2e-build');
 const stub = path.join(__dirname, 'vscode-stub.cjs');
-const skip = !process.env.AGENTLENS_E2E && 'set AGENTLENS_E2E=1 to run against the real Claude Code';
+const skip = !process.env.STEERHOUSE_E2E && 'set STEERHOUSE_E2E=1 to run against the real Claude Code';
 
 function until(c, cond, ms = 180_000) {
   return new Promise((ok, bad) => {
@@ -38,7 +38,7 @@ test('e2e: chat answers, streams, runs a tool, and delivers a queued message aft
   const exe = agentExecutable();
   assert.ok(exe, 'Claude Code executable found');
   console.log('using', exe);
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-e2e-'));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-e2e-'));
   let sawStreaming = false;
   const c = new ChatSession({ cwd, executable: exe, model: 'haiku' }, (s) => {
     if (s.items.some((i) => i.kind === 'assistant' && i.streaming)) sawStreaming = true;
@@ -62,7 +62,7 @@ test('e2e: chat answers, streams, runs a tool, and delivers a queued message aft
     console.log('categories:', c.state.context.categories.map((x) => `${x.name} ${x.tokens}`).join(', '));
     console.log(`context: ${c.state.context.used} / ${c.state.context.max} tokens (${c.state.context.percentage.toFixed(1)}%)`);
 
-    c.send('Use the Bash tool to run: echo agentlens-e2e  Then say "ran it".', [], 'later');
+    c.send('Use the Bash tool to run: echo steerhouse-e2e  Then say "ran it".', [], 'later');
     await until(c, () => c.state.status === 'working' || c.state.status === 'waiting');
     c.send('Now reply with exactly: queued-ok', [], 'later');
     assert.equal(c.state.queue.length, 1, 'held while the agent works');
@@ -70,7 +70,7 @@ test('e2e: chat answers, streams, runs a tool, and delivers a queued message aft
     const bash = c.state.items.find((i) => i.kind === 'tool' && (i.name === 'Bash' || i.name === 'PowerShell'));
     assert.ok(bash, 'tool call shown');
     assert.equal(bash.status, 'done');
-    assert.match(bash.result ?? '', /agentlens-e2e/);
+    assert.match(bash.result ?? '', /steerhouse-e2e/);
     console.log(`e2e ok · cost $${c.state.costUsd.toFixed(4)} · session ${c.state.sessionId}`);
   } finally {
     c.close();

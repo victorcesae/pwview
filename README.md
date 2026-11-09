@@ -93,8 +93,8 @@ Windows, and macOS binaries and attaches them to the GitHub release that the ins
 
 ---
 
-## AgentLens (VS Code extension)
+## Steerhouse (VS Code extension)
 
-[`extension/`](extension/) contains AgentLens, the session/changes/comments companion for Claude Code.
+[`extension/`](extension/) contains Steerhouse, the session/changes/comments companion for Claude Code.
 It shows every agent session and sub-agent, real before/after diffs, and comments that reach the agent,
 plus prompts and skills. See [extension/README.md](extension/README.md).

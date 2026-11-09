@@ -20,7 +20,7 @@ R(T, `      const projects = [...byProject.entries()].map(([p, list]) => ({
       }));
       projects.sort((a, b) => Number(b.current) - Number(a.current) || (b.sessions[0].info.updated ?? '').localeCompare(a.sessions[0].info.updated ?? ''));
       if (!sessions.length)
-        out.push({ kind: 'hint', text: 'No agent sessions yet. Start one', command: 'agentlens.newSession', icon: 'add' });
+        out.push({ kind: 'hint', text: 'No agent sessions yet. Start one', command: 'steerhouse.newSession', icon: 'add' });
       return [...out, ...projects];`, `      const { pinned, archived } = this.marks();
       const has = (list: string[], p: string) => list.some((x) => norm(x) === norm(p));
       const all = [...byProject.entries()].map(([p, list]) => ({
@@ -36,7 +36,7 @@ R(T, `      const projects = [...byProject.entries()].map(([p, list]) => ({
       const projects = all.filter((p) => !p.archived);
       const hidden = all.filter((p) => p.archived);
       if (!sessions.length)
-        out.push({ kind: 'hint', text: vscode.l10n.t('No agent sessions yet. Start one'), command: 'agentlens.newSession', icon: 'add' });
+        out.push({ kind: 'hint', text: vscode.l10n.t('No agent sessions yet. Start one'), command: 'steerhouse.newSession', icon: 'add' });
       return [...out, ...projects, ...(hidden.length ? [{ kind: 'archived' as const, projects: hidden }] : [])];`);
 R(T, `    switch (node.kind) {
       case 'hot':
@@ -83,22 +83,22 @@ R(T, `import { projectRules, userRules, type RuleFile } from './rules';`, `impor
 
 // ---- extension: marks + commands
 const E = 'src/extension.ts';
-R(E, `  const tree = new SessionsTree(() => sessions, () => hooks, () => attachedSessions());`, `  const marks = () => ({ pinned: ctx.globalState.get<string[]>('agentlens.pinned', []), archived: ctx.globalState.get<string[]>('agentlens.archived', []) });
+R(E, `  const tree = new SessionsTree(() => sessions, () => hooks, () => attachedSessions());`, `  const marks = () => ({ pinned: ctx.globalState.get<string[]>('steerhouse.pinned', []), archived: ctx.globalState.get<string[]>('steerhouse.archived', []) });
   const tree = new SessionsTree(() => sessions, () => hooks, () => attachedSessions(), marks);
   /** Adds or removes a project in a pinned / archived list, then repaints the tree. */
   const mark = async (list: 'pinned' | 'archived', p: string | undefined, on: boolean) => {
     if (!p) return;
-    const key = \`agentlens.\${list}\`;
+    const key = \`steerhouse.\${list}\`;
     const cur = ctx.globalState.get<string[]>(key, []).filter((x) => x !== p);
     await ctx.globalState.update(key, on ? [...cur, p] : cur);
     tree.refresh();
   };`);
-R(E, `    // Delete sessions (several when selected together)`, `    vscode.commands.registerCommand('agentlens.pinProject', (n?: { path?: string }) => mark('pinned', n?.path, true)),
-    vscode.commands.registerCommand('agentlens.unpinProject', (n?: { path?: string }) => mark('pinned', n?.path, false)),
-    vscode.commands.registerCommand('agentlens.archiveProject', async (n?: { path?: string }) => (await mark('pinned', n?.path, false), mark('archived', n?.path, true))),
-    vscode.commands.registerCommand('agentlens.unarchiveProject', (n?: { path?: string }) => mark('archived', n?.path, false)),
+R(E, `    // Delete sessions (several when selected together)`, `    vscode.commands.registerCommand('steerhouse.pinProject', (n?: { path?: string }) => mark('pinned', n?.path, true)),
+    vscode.commands.registerCommand('steerhouse.unpinProject', (n?: { path?: string }) => mark('pinned', n?.path, false)),
+    vscode.commands.registerCommand('steerhouse.archiveProject', async (n?: { path?: string }) => (await mark('pinned', n?.path, false), mark('archived', n?.path, true))),
+    vscode.commands.registerCommand('steerhouse.unarchiveProject', (n?: { path?: string }) => mark('archived', n?.path, false)),
     // A chat in its own git worktree (new branch, separate folder), so parallel agents don't collide
-    vscode.commands.registerCommand('agentlens.newChatInWorktree', async (n?: { path?: string } | vscode.Uri) => {
+    vscode.commands.registerCommand('steerhouse.newChatInWorktree', async (n?: { path?: string } | vscode.Uri) => {
       const from = n instanceof vscode.Uri ? n.fsPath : (n?.path ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
       if (!from) return vscode.window.showWarningMessage(vscode.l10n.t('Open a folder first.'));
       const root = await repoRoot(from);
@@ -107,7 +107,7 @@ R(E, `    // Delete sessions (several when selected together)`, `    vscode.comm
       if (task === undefined) return;
       const branch = await vscode.window.showInputBox({
         title: vscode.l10n.t('Branch'),
-        value: \`agentlens/\${slug(task || new Date().toISOString().slice(0, 16))}\`,
+        value: \`steerhouse/\${slug(task || new Date().toISOString().slice(0, 16))}\`,
         validateInput: (b) => (validBranch(b) ? undefined : vscode.l10n.t('Not a valid branch name')),
       });
       if (!branch) return;
@@ -117,7 +117,7 @@ R(E, `    // Delete sessions (several when selected together)`, `    vscode.comm
       if (account) chats.start({ cwd: r.dir, account, env: await envFor(account), title: task || undefined, prompt: undefined });
       refresh(true);
     }),
-    vscode.commands.registerCommand('agentlens.removeWorktree', async (n?: { path?: string }) => {
+    vscode.commands.registerCommand('steerhouse.removeWorktree', async (n?: { path?: string }) => {
       const dir = n?.path;
       const info = dir && worktreeInfo(dir);
       if (!dir || !info) return;
@@ -138,7 +138,7 @@ R(E, `    // Delete sessions (several when selected together)`, `    vscode.comm
         r = await removeWorktree(dir, true);
       }
       if (!r.ok) return vscode.window.showErrorMessage(r.out.slice(0, 300));
-      vscode.window.setStatusBarMessage(vscode.l10n.t('$(git-branch) AgentLens: worktree {0} removed', path.basename(dir)), 5000);
+      vscode.window.setStatusBarMessage(vscode.l10n.t('$(git-branch) Steerhouse: worktree {0} removed', path.basename(dir)), 5000);
       refresh(true);
     }),
     // Delete sessions (several when selected together)`);
@@ -146,26 +146,26 @@ R(E, `import { installedAgents, runCliAgent } from './agents';`, `import { insta
 
 // ---- manifest
 const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-const cmd = (command, key, icon) => p.contributes.commands.push({ command, title: `%${key}%`, category: 'AgentLens', ...(icon ? { icon } : {}) });
-cmd('agentlens.newChatInWorktree', 'cmd.new.chat.worktree', '$(git-branch)');
-cmd('agentlens.removeWorktree', 'cmd.remove.worktree', '$(trash)');
-cmd('agentlens.pinProject', 'cmd.pin.project', '$(pin)');
-cmd('agentlens.unpinProject', 'cmd.unpin.project', '$(pinned)');
-cmd('agentlens.archiveProject', 'cmd.archive.project', '$(archive)');
-cmd('agentlens.unarchiveProject', 'cmd.unarchive.project', '$(inbox)');
+const cmd = (command, key, icon) => p.contributes.commands.push({ command, title: `%${key}%`, category: 'Steerhouse', ...(icon ? { icon } : {}) });
+cmd('steerhouse.newChatInWorktree', 'cmd.new.chat.worktree', '$(git-branch)');
+cmd('steerhouse.removeWorktree', 'cmd.remove.worktree', '$(trash)');
+cmd('steerhouse.pinProject', 'cmd.pin.project', '$(pin)');
+cmd('steerhouse.unpinProject', 'cmd.unpin.project', '$(pinned)');
+cmd('steerhouse.archiveProject', 'cmd.archive.project', '$(archive)');
+cmd('steerhouse.unarchiveProject', 'cmd.unarchive.project', '$(inbox)');
 const menu = p.contributes.menus['view/item/context'];
 // existing "New chat here" entries now match a project by word
-for (const m of menu) if (m.command === 'agentlens.newChatHere' && m.when.includes('viewItem == project')) m.when = 'view == agentlens.sessions && viewItem =~ /^project\\b/';
+for (const m of menu) if (m.command === 'steerhouse.newChatHere' && m.when.includes('viewItem == project')) m.when = 'view == steerhouse.sessions && viewItem =~ /^project\\b/';
 menu.push(
-  { command: 'agentlens.newChatInWorktree', when: 'view == agentlens.sessions && viewItem =~ /^project\\b/', group: 'inline@1' },
-  { command: 'agentlens.pinProject', when: 'view == agentlens.sessions && viewItem =~ /^project unpinned active/', group: '2_organize@1' },
-  { command: 'agentlens.unpinProject', when: 'view == agentlens.sessions && viewItem =~ /^project pinned/', group: '2_organize@1' },
-  { command: 'agentlens.archiveProject', when: 'view == agentlens.sessions && viewItem =~ /^project .* active/', group: '2_organize@2' },
-  { command: 'agentlens.unarchiveProject', when: 'view == agentlens.sessions && viewItem =~ /^project .* archived/', group: '2_organize@2' },
-  { command: 'agentlens.removeWorktree', when: 'view == agentlens.sessions && viewItem =~ /\\bworktree\\b/', group: '9_delete@1' },
+  { command: 'steerhouse.newChatInWorktree', when: 'view == steerhouse.sessions && viewItem =~ /^project\\b/', group: 'inline@1' },
+  { command: 'steerhouse.pinProject', when: 'view == steerhouse.sessions && viewItem =~ /^project unpinned active/', group: '2_organize@1' },
+  { command: 'steerhouse.unpinProject', when: 'view == steerhouse.sessions && viewItem =~ /^project pinned/', group: '2_organize@1' },
+  { command: 'steerhouse.archiveProject', when: 'view == steerhouse.sessions && viewItem =~ /^project .* active/', group: '2_organize@2' },
+  { command: 'steerhouse.unarchiveProject', when: 'view == steerhouse.sessions && viewItem =~ /^project .* archived/', group: '2_organize@2' },
+  { command: 'steerhouse.removeWorktree', when: 'view == steerhouse.sessions && viewItem =~ /\\bworktree\\b/', group: '9_delete@1' },
 );
-p.contributes.menus['explorer/context'].push({ command: 'agentlens.newChatInWorktree', when: 'explorerResourceIsFolder', group: 'agentlens@2' });
-for (const c of ['agentlens.removeWorktree', 'agentlens.pinProject', 'agentlens.unpinProject', 'agentlens.archiveProject', 'agentlens.unarchiveProject']) p.contributes.menus.commandPalette.push({ command: c, when: 'false' });
+p.contributes.menus['explorer/context'].push({ command: 'steerhouse.newChatInWorktree', when: 'explorerResourceIsFolder', group: 'steerhouse@2' });
+for (const c of ['steerhouse.removeWorktree', 'steerhouse.pinProject', 'steerhouse.unpinProject', 'steerhouse.archiveProject', 'steerhouse.unarchiveProject']) p.contributes.menus.commandPalette.push({ command: c, when: 'false' });
 fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
 const add = (f, o) => {
   const j = JSON.parse(fs.readFileSync(f, 'utf8'));
@@ -193,6 +193,6 @@ add('l10n/bundle.l10n.pt-br.json', {
   '{0} has uncommitted changes.': '{0} tem alterações sem commit.',
   'Removing it anyway deletes those changes for good.': 'Remover mesmo assim apaga essas alterações para sempre.',
   'Remove Anyway': 'Remover mesmo assim',
-  '$(git-branch) AgentLens: worktree {0} removed': '$(git-branch) AgentLens: worktree {0} removido',
+  '$(git-branch) Steerhouse: worktree {0} removed': '$(git-branch) Steerhouse: worktree {0} removido',
 });
 console.log('ok');

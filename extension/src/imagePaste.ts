@@ -11,7 +11,7 @@ import * as vscode from 'vscode';
 export const EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 
 export function imageDir() {
-  return path.join(os.tmpdir(), 'agentlens-images');
+  return path.join(os.tmpdir(), 'steerhouse-images');
 }
 
 export function saveImage(dataUrl: string, mime: string): string {
@@ -44,13 +44,13 @@ export function registerImagePaste(ctx: vscode.ExtensionContext) {
   };
 
   ctx.subscriptions.push(
-    vscode.commands.registerCommand('agentlens.pasteImage', () => {
+    vscode.commands.registerCommand('steerhouse.pasteImage', () => {
       target = vscode.window.activeTerminal;
       if (panel) {
         panel.reveal(vscode.ViewColumn.Beside, false);
         return;
       }
-      panel = vscode.window.createWebviewPanel('agentlens.pasteImage', 'Paste image for the agent', { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false }, { enableScripts: true });
+      panel = vscode.window.createWebviewPanel('steerhouse.pasteImage', 'Paste image for the agent', { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false }, { enableScripts: true });
       panel.webview.html = html(panel.webview.cspSource);
       panel.webview.onDidReceiveMessage(async (m: { type: string; images?: { data: string; mime: string }[] }) => {
         if (m.type === 'cancel') return panel?.dispose();
@@ -60,7 +60,7 @@ export function registerImagePaste(ctx: vscode.ExtensionContext) {
           panel?.dispose();
           await deliver(files);
         } catch (e) {
-          vscode.window.showErrorMessage(`AgentLens: could not save the image: ${e}`);
+          vscode.window.showErrorMessage(`Steerhouse: could not save the image: ${e}`);
         }
       });
       panel.onDidDispose(() => (panel = undefined));

@@ -47,11 +47,11 @@ R(
   P,
   "      case 'interrupt':",
   `      case 'toggleMcp':
-        return c.toggleMcp(m.name, m.enabled).catch((e) => vscode.window.showWarningMessage(\`AgentLens: \${m.name}: \${e?.message ?? e}\`));
+        return c.toggleMcp(m.name, m.enabled).catch((e) => vscode.window.showWarningMessage(\`Steerhouse: \${m.name}: \${e?.message ?? e}\`));
       case 'reconnectMcp':
-        return c.reconnectMcp(m.name).catch((e) => vscode.window.showWarningMessage(\`AgentLens: \${m.name}: \${e?.message ?? e}\`));
+        return c.reconnectMcp(m.name).catch((e) => vscode.window.showWarningMessage(\`Steerhouse: \${m.name}: \${e?.message ?? e}\`));
       case 'manageConnectors':
-        return vscode.commands.executeCommand('agentlens.manageConnectors', c.state.cwd);
+        return vscode.commands.executeCommand('steerhouse.manageConnectors', c.state.cwd);
       case 'interrupt':`,
 );
 R('webview/src/types.ts', "  | { type: 'interrupt' }", "  | { type: 'interrupt' }\n  | { type: 'toggleMcp'; name: string; enabled: boolean }\n  | { type: 'reconnectMcp'; name: string }\n  | { type: 'manageConnectors' }");
@@ -60,8 +60,8 @@ R('webview/src/types.ts', "  | { type: 'interrupt' }", "  | { type: 'interrupt' 
 const X = 'src/extension.ts';
 R(
   X,
-  "    vscode.commands.registerCommand('agentlens.addProvider', async () => {",
-  `    vscode.commands.registerCommand('agentlens.manageConnectors', async (cwd?: string) => {
+  "    vscode.commands.registerCommand('steerhouse.addProvider', async () => {",
+  `    vscode.commands.registerCommand('steerhouse.manageConnectors', async (cwd?: string) => {
       const dir = cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!dir) return;
       const file = path.join(dir, '.mcp.json');
@@ -69,7 +69,7 @@ R(
       await vscode.window.showTextDocument(vscode.Uri.file(file));
       vscode.window.showInformationMessage(vscode.l10n.t('Add MCP servers under "mcpServers" (shared with the team). Personal ones: run "claude mcp add" in a terminal. Start a new chat to load changes.'));
     }),
-    vscode.commands.registerCommand('agentlens.addProvider', async () => {`,
+    vscode.commands.registerCommand('steerhouse.addProvider', async () => {`,
 );
 const b = JSON.parse(fs.readFileSync('l10n/bundle.l10n.pt-br.json', 'utf8'));
 b['Add MCP servers under "mcpServers" (shared with the team). Personal ones: run "claude mcp add" in a terminal. Start a new chat to load changes.'] =

@@ -106,8 +106,8 @@ export function deliver(sessionId: string, event: HookEvent, agentId?: string): 
 export function formatComments(cs: Comment[], event: HookEvent): string {
   let out =
     event === 'posttool'
-      ? 'The developer is steering you mid-task (via AgentLens). Take this into account from your next step on, without abandoning the task unless told to:\n'
-      : 'The developer sent you these messages via AgentLens. Address each one (change the code where asked, or briefly explain why not):\n';
+      ? 'The developer is steering you mid-task (via Steerhouse). Take this into account from your next step on, without abandoning the task unless told to:\n'
+      : 'The developer sent you these messages via Steerhouse. Address each one (change the code where asked, or briefly explain why not):\n';
   cs.forEach((c, i) => {
     const loc = c.file ? (c.line !== undefined ? `${c.file}:${c.line + 1}` : c.file) : '';
     out += `\n${i + 1}. ${loc ? `[${loc}] ` : ''}${c.text.trim()}`;

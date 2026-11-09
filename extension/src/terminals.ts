@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { dataDir } from './paths';
 
-/** AGENTLENS_TERMINAL token → terminal, for terminals AgentLens started itself. */
+/** STEERHOUSE_TERMINAL token → terminal, for terminals Steerhouse started itself. */
 export const launched = new Map<string, vscode.Terminal>();
 
 interface Record {

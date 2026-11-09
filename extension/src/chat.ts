@@ -1,4 +1,4 @@
-// AgentLens chat: Claude Code driven through the Claude Agent SDK instead of a terminal.
+// Steerhouse chat: Claude Code driven through the Claude Agent SDK instead of a terminal.
 // Uses the user's own Claude Code CLI (and therefore its login: subscription, API key,
 // Bedrock/Vertex...). Messages carry a native priority: later = queue, next = steer
 // (picked up between steps), now = send now.
@@ -52,7 +52,7 @@ export interface ChatState {
   tokens?: number;
   /** Context window usage after the last turn (for the ring next to the input). */
   context?: { used: number; max: number; percentage: number; detailed?: boolean; categories?: { id?: string; name: string; tokens: number; kind: 'used' | 'free' | 'buffer' | 'deferred' }[] };
-  /** Which Claude account this session runs on (name from AgentLens, details from Claude Code). */
+  /** Which Claude account this session runs on (name from Steerhouse, details from Claude Code). */
   account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string };
   host?: string;
   /** the editor's own icon (data: URI) */
@@ -387,7 +387,7 @@ export class ChatSession {
         enableFileCheckpointing: true,
         ...(this.opts.fork ? { resumeSessionAt: this.opts.fork.at, forkSession: true } : {}),
         systemPrompt: { type: 'preset', preset: 'claude_code' },
-        env: { ...process.env, ...(this.opts.account?.env ?? {}), CLAUDE_AGENT_SDK_CLIENT_APP: 'agentlens' },
+        env: { ...process.env, ...(this.opts.account?.env ?? {}), CLAUDE_AGENT_SDK_CLIENT_APP: 'steerhouse' },
         canUseTool: (tool, input, o) => this.ask(tool, input, o.suggestions, o.signal),
       },
     });
@@ -500,7 +500,7 @@ export class ChatSession {
       .catch(() => {});
   }
 
-  /** Restores files the agent changed after this message (needs file checkpointing, on for AgentLens chats). */
+  /** Restores files the agent changed after this message (needs file checkpointing, on for Steerhouse chats). */
   async rewindFilesTo(userUuid: string): Promise<{ ok: boolean; error?: string; files?: number }> {
     try {
       const r: any = await this.q?.rewindFiles(userUuid);

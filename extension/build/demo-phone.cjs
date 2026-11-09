@@ -1,4 +1,4 @@
-// In the pwview browser at phone size: the remote page served by AgentLens with sample sessions.
+// In the pwview browser at phone size: the remote page served by Steerhouse with sample sessions.
 // Opens the link with its key, checks the key leaves the address bar, lists sessions, opens one,
 // sends a Steer message. Usage: node build/demo-phone.cjs <cdpPort> <outDir>   (after npm test built remote.js)
 const fs = require('fs');
@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const [port, outDir] = [Number(process.argv[2]), process.argv[3]];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const { RemoteServer } = require(path.join(os.tmpdir(), 'agentlens-remote-build', 'remote.js'));
+const { RemoteServer } = require(path.join(os.tmpdir(), 'steerhouse-remote-build', 'remote.js'));
 const now = Date.now();
 const iso = (minAgo) => new Date(now - minAgo * 60_000).toISOString();
 const s = (id, title, state, minAgo, events) => ({ info: { id, title, project: '/home/victor/intranet-v5', state, updated: iso(minAgo), model: 'claude-opus-5-5' }, t: { events } });

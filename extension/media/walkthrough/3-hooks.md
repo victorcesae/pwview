@@ -1,6 +1,6 @@
 ## Messages to agents running in a terminal
 
-AgentLens chats get **Queue / Steer / Send now** natively. For sessions you run in a plain terminal, two small Claude Code hooks deliver your messages:
+Steerhouse chats get **Queue / Steer / Send now** natively. For sessions you run in a plain terminal, two small Claude Code hooks deliver your messages:
 
 | Mode | When the agent sees it |
 |---|---|
