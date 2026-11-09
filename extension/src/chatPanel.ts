@@ -13,6 +13,7 @@ export type FromChat =
   | { type: 'cancelQueued'; id: string }
   | { type: 'editQueued'; id: string; text: string }
   | { type: 'interrupt' }
+  | { type: 'contextDetail' }
   | { type: 'toggleMcp'; name: string; enabled: boolean }
   | { type: 'reconnectMcp'; name: string }
   | { type: 'manageConnectors' }
@@ -32,6 +33,8 @@ export type FromChat =
 interface Open {
   chat: ChatSession;
   panel: vscode.WebviewPanel;
+  /** what the webview already has: item id -> serialized item, and the item order */
+  sent?: { items: Map<string, string>; order: string[] };
 }
 
 export class Chats {
@@ -110,23 +113,40 @@ export class Chats {
     o.panel.title = `✦ ${s.title.slice(0, 40)}`;
     const all = this.sessions();
     const linked = s.sessionId ? (loadLinks()[s.sessionId] ?? []) : [];
-    o.panel.webview.postMessage({
-      type: 'data',
-      data: {
-        view: 'chat',
-        chat: s,
-        linked: linked.map((id) => {
-          const x = all.find((y) => y.info.id === id);
-          return { id, title: x?.info.title ?? id.slice(0, 8), state: x?.info.state ?? 'idle', activity: x?.t.events.at(-1)?.text?.slice(0, 120) };
-        }),
-      },
+    const linkedInfo = linked.map((id) => {
+      const x = all.find((y) => y.info.id === id);
+      return { id, title: x?.info.title ?? id.slice(0, 8), state: x?.info.state ?? 'idle', activity: x?.t.events.at(-1)?.text?.slice(0, 120) };
     });
+    const { items, ...rest } = s;
+    if (!o.sent) {
+      // first paint: the whole conversation once
+      o.sent = { items: new Map(items.map((it) => [it.id, JSON.stringify(it)])), order: items.map((it) => it.id) };
+      o.panel.webview.postMessage({ type: 'data', data: { view: 'chat', chat: s, linked: linkedInfo } });
+      return;
+    }
+    // afterwards only items that are new or changed. Old finished items don't change, so only the
+    // recent tail and anything still live is compared: cheap even for very long chats.
+    const live = new Set(['running', 'pending', 'waiting']);
+    const tail = Math.max(0, items.length - 60);
+    const upserts = items.filter((it, i) => {
+      const prev = o.sent!.items.get(it.id);
+      if (prev !== undefined && i < tail && !(it as any).streaming && !live.has((it as any).status)) return false;
+      const json = JSON.stringify(it);
+      if (json === prev) return false;
+      o.sent!.items.set(it.id, json);
+      return true;
+    });
+    const order = items.map((it) => it.id);
+    const orderChanged = order.length !== o.sent.order.length || order.some((id, i) => id !== o.sent!.order[i]);
+    if (orderChanged) o.sent.order = order;
+    o.panel.webview.postMessage({ type: 'chatPatch', chat: rest, upserts, order: orderChanged ? order : undefined, linked: linkedInfo });
   }
 
   private async onMessage(o: Open, m: FromChat) {
     const c = o.chat;
     switch (m.type) {
       case 'ready':
+        o.sent = undefined; // (re)load: send everything
         return this.post(o);
       case 'send':
         return c.send(m.text, m.images, m.priority);
@@ -144,6 +164,8 @@ export class Chats {
         return c.reconnectMcp(m.name).catch((e) => vscode.window.showWarningMessage(`AgentLens: ${m.name}: ${e?.message ?? e}`));
       case 'manageConnectors':
         return vscode.commands.executeCommand('agentlens.manageConnectors', c.state.cwd);
+      case 'contextDetail':
+        return c.contextDetail().catch(() => {});
       case 'interrupt':
         return c.interrupt();
       case 'respond':

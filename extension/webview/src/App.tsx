@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { inVsCode, listen, onDevMessage, post } from './bridge';
 import { TooltipProvider } from './components/ui/tooltip';
 import * as mock from './mock';
-import type { Data } from './types';
+import type { ChatItem, Data } from './types';
 import { Overview } from './views/Overview';
 import { SessionView } from './views/Session';
 import { ChatView } from './views/Chat';
 
 export function App() {
-  const [data, setData] = useState<Data | undefined>(inVsCode ? undefined : location.hash === '#chat' ? mock.chat : mock.overview);
+  const [data, setData] = useState<Data | undefined>(inVsCode ? undefined : location.hash === '#long' ? mock.longChat() : location.hash === '#chat' ? mock.chat : mock.overview);
   const [toast, setToast] = useState<string>();
 
   useEffect(() => {
@@ -25,6 +25,20 @@ export function App() {
 
   useEffect(() => {
     const stop = listen(setData);
+    // chats send only what changed after the first paint: merge it into what we have
+    const onPatch = (e: MessageEvent) => {
+      const m = e.data;
+      if (m?.type !== 'chatPatch') return;
+      setData((prev) => {
+        if (!prev || prev.view !== 'chat') return prev;
+        const byId = new Map(prev.chat.items.map((it) => [it.id, it]));
+        for (const it of m.upserts as ChatItem[]) byId.set(it.id, it);
+        const order: string[] = m.order ?? prev.chat.items.map((it) => it.id);
+        const items = order.map((id) => byId.get(id)).filter((x): x is ChatItem => !!x);
+        return { view: 'chat', chat: { ...m.chat, items }, linked: m.linked ?? prev.linked };
+      });
+    };
+    window.addEventListener('message', onPatch);
     if (!inVsCode) {
       onDevMessage((m) => {
         if (m.type === 'openSession') setData(mock.session(m.id, m.agentId));
@@ -34,7 +48,10 @@ export function App() {
       });
     }
     post({ type: 'ready' });
-    return stop;
+    return () => {
+      stop();
+      window.removeEventListener('message', onPatch);
+    };
   }, []);
 
   if (!data) return <div className="text-muted-foreground p-6">Loading sessions…</div>;

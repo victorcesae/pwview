@@ -1,4 +1,5 @@
 import { Ban, Bot, ChevronUp, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
 import { StateDot, ToolIcon } from '@/components/common';
@@ -581,9 +582,28 @@ export function ChatView({ data }: { data: ChatData }) {
     return { top, byParent };
   }, [chat.items]);
 
+  // Long chats: only rows near the viewport are in the DOM; heights are measured as they render.
+  const rows = useMemo(() => groupTools(top), [top]);
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scroller.current,
+    estimateSize: () => 72,
+    overscan: 6,
+    getItemKey: (i) => {
+      const g = rows[i];
+      return Array.isArray(g) ? 'g:' + g[0].id : g.id;
+    },
+  });
+
+  // follow new output while you're at the bottom
+  const lastText = chat.items.at(-1)?.kind === 'assistant' ? (chat.items.at(-1) as { text: string }).text.length : 0;
   useEffect(() => {
-    if (stick.current) end.current?.scrollIntoView({ block: 'end' });
-  }, [chat.items, chat.activity]);
+    if (!stick.current) return;
+    requestAnimationFrame(() => {
+      const el = scroller.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  }, [rows.length, lastText, chat.activity, chat.queue.length]);
 
   return (
     <LightboxProvider>
@@ -644,7 +664,7 @@ export function ChatView({ data }: { data: ChatData }) {
           setAtBottom(stick.current);
         }}
       >
-        <div className="mx-auto flex max-w-[860px] flex-col gap-3 px-4 py-4">
+        <div className="mx-auto flex max-w-[860px] flex-col gap-1 px-4 py-4">
           {!top.length && (
             <div className="text-muted-foreground py-16 text-center">
               <Bot className="mx-auto mb-3 size-8 opacity-60" />
@@ -652,15 +672,22 @@ export function ChatView({ data }: { data: ChatData }) {
               <div className="mt-1 text-[12px]">{chat.cwd}</div>
             </div>
           )}
-          {groupTools(top).map((g) =>
-            Array.isArray(g) ? (
-              <ToolGroup key={g[0].id} items={g} sessionId={chat.sessionId} />
-            ) : (
-              <Item key={g.id} it={g} sessionId={chat.sessionId}>
-                {g.kind === 'tool' && byParent.get(g.id)?.map((c) => <Item key={c.id} it={c} sessionId={chat.sessionId} />)}
-              </Item>
-            ),
-          )}
+          <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+            {virtualizer.getVirtualItems().map((v) => {
+              const g = rows[v.index];
+              return (
+                <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full pb-3" style={{ transform: `translateY(${v.start}px)` }}>
+                  {Array.isArray(g) ? (
+                    <ToolGroup items={g} sessionId={chat.sessionId} />
+                  ) : (
+                    <Item it={g} sessionId={chat.sessionId}>
+                      {g.kind === 'tool' && byParent.get(g.id)?.map((c) => <Item key={c.id} it={c} sessionId={chat.sessionId} />)}
+                    </Item>
+                  )}
+                </div>
+              );
+            })}
+          </div>
           {!working && top.some((i) => i.kind === 'user') && ['assistant', 'result', 'tool'].includes(top.at(-1)?.kind ?? '') && (
             <div className="-mt-1 flex justify-start pl-7">
               <Button size="xs" variant="ghost" onClick={() => post({ type: 'retry' })} title="Send your last message again">
@@ -679,7 +706,8 @@ export function ChatView({ data }: { data: ChatData }) {
             onClick={() => {
               stick.current = true;
               setAtBottom(true);
-              end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+              virtualizer.scrollToIndex(rows.length - 1, { align: 'end' });
+              requestAnimationFrame(() => end.current?.scrollIntoView({ block: 'end' }));
             }}
             className="bg-popover text-popover-foreground hover:bg-accent absolute -top-11 left-1/2 z-30 inline-flex -translate-x-1/2 cursor-pointer items-center gap-1 rounded-full border px-3 py-1 text-[11.5px] shadow-md"
             aria-label={t('Jump to latest')}

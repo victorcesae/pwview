@@ -44,7 +44,7 @@ export interface ChatState {
   /** All tokens this chat used (input + output + cache), from each turn's usage. */
   tokens?: number;
   /** Context window usage after the last turn (for the ring next to the input). */
-  context?: { used: number; max: number; percentage: number; categories?: { name: string; tokens: number }[] };
+  context?: { used: number; max: number; percentage: number; detailed?: boolean; categories?: { id?: string; name: string; tokens: number; kind: 'used' | 'free' | 'buffer' | 'deferred' }[] };
   /** Which Claude account this session runs on (name from AgentLens, details from Claude Code). */
   account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string };
   host?: string;
@@ -213,6 +213,8 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
   }
   return { items, todos, title };
 }
+
+const toCategories = (u: any) => (u.categories ?? []).filter((c: any) => c.tokens > 0).map((c: any) => ({ id: c.id, name: c.name, tokens: c.tokens, kind: c.kind }));
 
 export interface ChatOptions {
   cwd: string;
@@ -440,6 +442,14 @@ export class ChatSession {
   async setModel(model: string) {
     await this.q?.setModel(model);
     this.state.model = model;
+    this.changed();
+  }
+
+  /** Exact per-category context breakdown (counts with the token API), for the context panel. */
+  async contextDetail() {
+    const u: any = await this.q?.getContextUsage({ detail: 'full' });
+    if (!u) return;
+    this.state.context = { used: u.totalTokens, max: u.maxTokens, percentage: u.percentage, detailed: true, categories: toCategories(u) };
     this.changed();
   }
 
@@ -677,7 +687,7 @@ export class ChatSession {
               used: u.totalTokens,
               max: u.maxTokens,
               percentage: u.percentage,
-              categories: (u.categories ?? []).filter((c: any) => c.kind === 'used' && c.tokens > 0).map((c: any) => ({ name: c.name, tokens: c.tokens })),
+              categories: toCategories(u),
             };
             this.changed();
           })

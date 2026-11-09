@@ -3,6 +3,7 @@
 import { Blocks, Bot, ListOrdered, Navigation, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, Square, SquareSlash, Zap, Gauge, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger, Switch } from '@/components/ui/dropdown-menu';
 import { Zoomable } from '@/components/Lightbox';
+import { ContextPanel } from '@/components/ContextPanel';
 import { useEffect, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
 import { RichInput, type RichInputHandle } from '@/components/RichInput';
@@ -325,7 +326,9 @@ export function Composer({ chat }: { chat: ChatState }) {
         </button>
 
         <div className="ml-auto flex items-center gap-1.5">
-          <ContextRing chat={chat} />
+          <ContextPanel chat={chat}>
+            <ContextRing chat={chat} />
+          </ContextPanel>
           {working && (
             <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
               <SelectTrigger aria-label="Delivery" title={P.hint}>

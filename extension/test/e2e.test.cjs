@@ -56,6 +56,10 @@ test('e2e: chat answers, streams, runs a tool, and delivers a queued message aft
     assert.ok(sawStreaming, 'text streamed in');
     await until(c, () => !!c.state.context);
     assert.ok(c.state.context.max > 0 && c.state.context.used > 0, 'context usage for the ring');
+    await c.contextDetail();
+    const kinds = new Set(c.state.context.categories.map((x) => x.kind));
+    assert.ok(c.state.context.detailed && kinds.has('used') && kinds.has('free'), 'exact per-category breakdown');
+    console.log('categories:', c.state.context.categories.map((x) => `${x.name} ${x.tokens}`).join(', '));
     console.log(`context: ${c.state.context.used} / ${c.state.context.max} tokens (${c.state.context.percentage.toFixed(1)}%)`);
 
     c.send('Use the Bash tool to run: echo agentlens-e2e  Then say "ran it".', [], 'later');

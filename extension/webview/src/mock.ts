@@ -169,3 +169,34 @@ const schema = `${P}/packages/db/schema.prisma`;
     ],
   };
 }
+
+// sample context breakdown (what Claude Code's getContextUsage returns)
+(chat as Extract<Data, { view: 'chat' }>).chat.context = {
+  used: 187_400,
+  max: 1_000_000,
+  percentage: 18.7,
+  detailed: true,
+  categories: [
+    { id: 'system_prompt', name: 'System prompt', tokens: 3_100, kind: 'used' },
+    { id: 'system_tools', name: 'System tools', tokens: 14_800, kind: 'used' },
+    { id: 'mcp_tools', name: 'MCP tools', tokens: 9_600, kind: 'used' },
+    { id: 'memory_files', name: 'Memory files', tokens: 4_200, kind: 'used' },
+    { id: 'skills', name: 'Skills', tokens: 2_700, kind: 'used' },
+    { id: 'messages', name: 'Messages', tokens: 153_000, kind: 'used' },
+    { id: 'mcp_tools_deferred', name: 'MCP tools (deferred)', tokens: 21_000, kind: 'deferred' },
+    { id: 'autocompact_buffer', name: 'Autocompact buffer', tokens: 45_000, kind: 'buffer' },
+    { id: 'free_space', name: 'Free space', tokens: 746_600, kind: 'free' },
+  ],
+};
+
+/** #long: a 2,000-message chat to check that only visible rows are rendered. */
+export function longChat(): Data {
+  const base = (chat as Extract<Data, { view: 'chat' }>).chat;
+  const items = [] as typeof base.items;
+  for (let i = 0; i < 2000; i++) {
+    if (i % 4 === 0) items.push({ kind: 'user', id: `u${i}`, text: `Message ${i}: please continue with step ${i / 4}`, images: [], ts: t(2000 - i) });
+    else if (i % 4 === 1) items.push({ kind: 'assistant', id: `a${i}`, text: `Answer ${i}. Here is **what I changed** and why, with some \`code\` and a list:\n\n- one\n- two` });
+    else items.push({ kind: 'tool', id: `t${i}`, name: i % 4 === 2 ? 'Read' : 'Edit', summary: `/repo/file${i}.ts`, file: `/repo/file${i}.ts`, input: { file_path: `/repo/file${i}.ts` }, status: 'done', patch: i % 4 === 3 ? changes[0].hunks : undefined });
+  }
+  return { view: 'chat', linked: [], chat: { ...base, status: 'idle', activity: undefined, queue: [], items } };
+}
