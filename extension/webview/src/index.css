@@ -221,3 +221,30 @@ pre,
   box-shadow: -3px 0 0 var(--warn), 0 0 0 1px color-mix(in srgb, var(--warn) 50%, transparent);
   background: color-mix(in srgb, var(--warn) 7%, transparent);
 }
+
+/* Code everywhere (answers, tool output, commands, cards): VS Code's own page styles give
+   <pre>/<code> a dim "preformatted" colour; use the normal text colour, and wrap long lines
+   (even long URLs) instead of scrolling sideways. Diffs opt out with .keep-lines. */
+pre,
+code {
+  color: inherit;
+  font-family: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+}
+pre:not(.keep-lines) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+pre::-webkit-scrollbar,
+.keep-lines::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+pre::-webkit-scrollbar-thumb,
+.keep-lines::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
+  border-radius: 8px;
+}
+pre::-webkit-scrollbar-track,
+.keep-lines::-webkit-scrollbar-track {
+  background: transparent;
+}

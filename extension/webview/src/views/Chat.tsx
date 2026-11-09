@@ -116,7 +116,7 @@ function ToolRow({ it, sessionId, children }: { it: Extract<ChatItem, { kind: 't
                 {it.result && (
                   <div className="border-t">
                     <div className="text-muted-foreground px-3 pt-1.5 text-[10.5px] font-medium tracking-wide uppercase">{t('Output')}</div>
-                    <pre className="text-muted-foreground max-h-72 overflow-auto px-3 pt-1 pb-2 font-mono text-[11.5px] whitespace-pre-wrap">{it.result}</pre>
+                    <pre className="text-foreground/85 max-h-72 overflow-auto px-3 pt-1 pb-2 font-mono text-[11.5px] whitespace-pre-wrap">{it.result}</pre>
                   </div>
                 )}
               </>
@@ -196,7 +196,7 @@ function ToolDetails({ it, sessionId }: { it: ToolItem; sessionId?: string }) {
       {it.result && (
         <div className="border-t">
           <div className="text-muted-foreground px-3 pt-1.5 text-[10.5px] font-medium tracking-wide uppercase">{t('Output')}</div>
-          <pre className="text-muted-foreground max-h-72 overflow-auto px-3 pt-1 pb-2 font-mono text-[11.5px] whitespace-pre-wrap">{it.result}</pre>
+          <pre className="text-foreground/85 max-h-72 overflow-auto px-3 pt-1 pb-2 font-mono text-[11.5px] whitespace-pre-wrap">{it.result}</pre>
         </div>
       )}
     </>

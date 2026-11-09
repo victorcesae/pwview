@@ -2,8 +2,6 @@
 
 **Steer your AI coding agents from your editor, made for developers who read the code.**
 
-> Formerly **AgentLens**. Settings, hook entries and data carry over on first start.
-
 Run as many Claude Code sessions as you like, in the terminal as usual. Steerhouse shows what each one is
 doing, which sub-agents it spawned, and every line it changed, with the real before/after. Comment on a
 line and the agent picks it up. Works in VS Code, Cursor, Windsurf and VSCodium, locally or over Remote-SSH

@@ -38,7 +38,7 @@ function inline(text: string, key: string): ReactNode[] {
     if (m.index > last) out.push(text.slice(last, m.index));
     const t = m[0];
     const k = `${key}-${i++}`;
-    if (m[1]) out.push(<code key={k} className="bg-muted rounded px-1 py-px font-mono text-[0.92em]">{t.slice(1, -1)}</code>);
+    if (m[1]) out.push(<code key={k} className="bg-muted rounded px-1 py-px font-mono text-[0.92em] [overflow-wrap:anywhere]">{t.slice(1, -1)}</code>);
     else if (m[2]) out.push(<strong key={k}>{t.slice(2, -2)}</strong>);
     else if (m[3]) {
       const [, label, href] = /\[([^\]]+)\]\(([^)\s]+)\)/.exec(t)!;

@@ -18,7 +18,7 @@ type SessionData = { info: SessionInfo; events: TimelineEvent[]; changes: Change
 export function HunkView({ hunks }: { hunks: Hunk[] }) {
   if (!hunks.length) return <div className="text-muted-foreground px-3 py-2 text-[12px]">{t('New file. Open the diff to see it all.')}</div>;
   return (
-    <div className="overflow-x-auto font-mono text-[12px] leading-[1.55]">
+    <div className="keep-lines overflow-x-auto font-mono text-[12px] leading-[1.55]">
       {hunks.map((h, i) => {
         let o = h.oldStart;
         let n = h.newStart;

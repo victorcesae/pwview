@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.2
+- Readable code everywhere: code blocks, tool and command output, inline code and background-command output use the normal text colour (not VS Code's dim code colour) and wrap long lines instead of scrolling sideways. Code blocks show their language and a Copy button.
+
 ## 1.0.1
 - Same as 1.0.0, republished under a new version (Open VSX keeps removed version numbers reserved).
 
