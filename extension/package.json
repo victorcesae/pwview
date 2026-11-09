@@ -2,7 +2,7 @@
   "name": "agentlens",
   "displayName": "AgentLens",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "0.9.4",
+  "version": "0.10.0",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -301,6 +301,12 @@
         "title": "%cmd.new.chat.here%",
         "category": "AgentLens",
         "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "agentlens.deleteSession",
+        "title": "%cmd.delete.session%",
+        "category": "AgentLens",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -456,6 +462,11 @@
           "command": "agentlens.newChatHere",
           "when": "view == agentlens.sessions && viewItem == fsfolder",
           "group": "inline@0"
+        },
+        {
+          "command": "agentlens.deleteSession",
+          "when": "view == agentlens.sessions && viewItem == session",
+          "group": "9_delete@1"
         }
       ],
       "comments/commentThread/context": [
@@ -518,6 +529,10 @@
         },
         {
           "command": "agentlens.openRules",
+          "when": "false"
+        },
+        {
+          "command": "agentlens.deleteSession",
           "when": "false"
         }
       ],
@@ -600,13 +615,18 @@
           "type": "boolean",
           "default": true,
           "description": "%setting.hide.sessions.that.ran.inside.the.system.temp.folder.scratch%"
+        },
+        "agentlens.notifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "%setting.notifications%"
         }
       }
     },
     "viewsWelcome": [
       {
         "view": "agentlens.prompts",
-        "contents": "Prompts are reusable instructions you can run in one click, interactive or headless (claude -p), with ${file}, ${selection} and ${input:ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦} variables.\n[Add Starter Prompts](command:agentlens.starterPrompts)\n[New Prompt](command:agentlens.newPrompt)\nProject prompts live in .agentlens/prompts/ (commit them to share with the team)."
+        "contents": "Prompts are reusable instructions you can run in one click, interactive or headless (claude -p), with ${file}, ${selection} and ${input:…} variables.\n[Add Starter Prompts](command:agentlens.starterPrompts)\n[New Prompt](command:agentlens.newPrompt)\nProject prompts live in .agentlens/prompts/ (commit them to share with the team)."
       },
       {
         "view": "agentlens.skills",
@@ -619,6 +639,12 @@
         "key": "ctrl+alt+v",
         "mac": "cmd+alt+v",
         "when": "terminalFocus"
+      },
+      {
+        "command": "agentlens.deleteSession",
+        "key": "delete",
+        "mac": "cmd+backspace",
+        "when": "focusedView == agentlens.sessions && listHasSelectionOrFocus"
       }
     ],
     "walkthroughs": [
@@ -707,7 +733,8 @@
     "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs",
     "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs",
     "package": "vsce package --no-dependencies",
-    "test:editor": "npm run build && node test/editor/run.cjs"
+    "test:editor": "npm run build && node test/editor/run.cjs",
+    "test:restore": "npm run build && node test/editor/restore.cjs"
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.319",

@@ -26,7 +26,7 @@ export function App() {
 
   const restoreKey = data?.view === 'chat' ? `${data.chat.sessionId}|${data.chat.cwd}|${data.chat.title}|${data.chat.account.name}` : '';
   useEffect(() => {
-    if (data?.view === 'chat' && data.chat.sessionId) saveState({ sessionId: data.chat.sessionId, cwd: data.chat.cwd, title: data.chat.title, account: data.chat.account.name });
+    if (data?.view === 'chat' && data.chat.cwd) saveState({ sessionId: data.chat.sessionId, cwd: data.chat.cwd, title: data.chat.title, account: data.chat.account.name });
   }, [restoreKey]);
 
   useEffect(() => {

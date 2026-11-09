@@ -1,4 +1,5 @@
 // Sessions the user linked together ("this chat should know what that session is doing").
+import { vendorOf } from './providers';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Session } from './engine';
@@ -51,4 +52,10 @@ export function briefing(s: Session): string {
     `Re-read it whenever you need to know what that session is doing now. Do not edit files it is changing without telling the developer.`,
   );
   return lines.join('\n');
+}
+
+/** Two sessions can be linked when they run on the same account with the same kind of model. */
+export function sameConnection(a: { account?: string; model?: string }, b: { account?: string; model?: string }): boolean {
+  const kind = (m?: string) => (!m || vendorOf(m) === 'anthropic' ? 'claude' : m.toLowerCase());
+  return (a.account ?? '') === (b.account ?? '') && kind(a.model) === kind(b.model);
 }

@@ -100,6 +100,8 @@ const PT: Record<string, string> = {
   'A classifier approves safe actions': 'Um classificador aprova ações seguras',
   'Never asks. Use with care': 'Nunca pergunta. Use com cuidado',
   Context: 'Contexto',
+  'Delete this session (moves it to the trash)': 'Excluir esta sessão (vai para a lixeira)',
+  'Delete session': 'Excluir sessão',
   'Folders this chat works in': 'Pastas em que este chat trabalha',
   'Working folder': 'Pasta de trabalho',
   'Also edited here': 'Também editou aqui',

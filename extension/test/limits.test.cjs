@@ -9,7 +9,7 @@ const assert = require('node:assert');
 const root = path.join(__dirname, '..');
 const out = path.join(os.tmpdir(), 'agentlens-limits-build');
 const stub = path.join(__dirname, 'vscode-stub.cjs');
-execSync(`npx esbuild src/chat.ts src/hostIcon.ts src/browser.ts src/tree.ts src/rules.ts --bundle --platform=node --format=cjs --outdir="${out}" --alias:vscode="${stub}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --log-level=error`, { cwd: root });
+execSync(`npx esbuild src/chat.ts src/hostIcon.ts src/browser.ts src/tree.ts src/rules.ts src/agents.ts src/links.ts src/accounts.ts --bundle --platform=node --format=cjs --outdir="${out}" --alias:vscode="${stub}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --log-level=error`, { cwd: root });
 const C = require(path.join(out, 'chat.js'));
 const H = require(path.join(out, 'hostIcon.js'));
 const B = require(path.join(out, 'browser.js'));
@@ -94,4 +94,43 @@ test('rules: user CLAUDE.md, project CLAUDE.md / CLAUDE.local.md always offered,
   Ru.ignoreLocal(root);
   Ru.ignoreLocal(root);
   assert.strictEqual(fs.readFileSync(path.join(root, '.gitignore'), 'utf8'), 'CLAUDE.local.md\n');
+});
+
+test('agents: other agent CLIs found on PATH; a plain "agent" only counts when it is Cursor\'s', () => {
+  const Ag = require(path.join(out, 'agents.js'));
+  const bins = { codex: '/usr/bin/codex', agent: '/usr/local/bin/agent', gemini: '/opt/gemini' };
+  assert.deepStrictEqual(Ag.installedAgents((b) => bins[b]).map((a) => [a.id, a.exe]), [['codex', '/usr/bin/codex'], ['gemini', '/opt/gemini']]);
+  const cursor = { agent: '/home/me/.local/share/cursor-agent/agent' };
+  assert.deepStrictEqual(Ag.installedAgents((b) => cursor[b]).map((a) => a.id), ['cursor']);
+  assert.deepStrictEqual(Ag.installedAgents(() => undefined), []);
+});
+
+test('links: only sessions on the same account and the same kind of model can be linked', () => {
+  const L = require(path.join(out, 'links.js'));
+  const claude = { account: 'default', model: 'claude-opus-5-5' };
+  assert.ok(L.sameConnection(claude, { account: 'default', model: 'claude-sonnet-4-5' }), 'Claude models on one account');
+  assert.ok(L.sameConnection(claude, { account: 'default', model: undefined }), 'model not known yet');
+  assert.ok(!L.sameConnection(claude, { account: 'work', model: 'claude-opus-5-5' }), 'another Claude account');
+  assert.ok(!L.sameConnection(claude, { account: 'default', model: 'llama3.1:8b' }), 'a provider model on the same config');
+  assert.ok(L.sameConnection({ account: 'default', model: 'llama3.1:8b' }, { account: 'default', model: 'Llama3.1:8B' }));
+});
+
+test('accounts: the signed-in email and organization come from Claude Code\'s .claude.json', () => {
+  const A = require(path.join(out, 'accounts.js'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentlens-acc-'));
+  const a = { id: 'work', name: 'Work', configDir: dir };
+  assert.strictEqual(A.accountIdentity(a), undefined, 'not signed in');
+  fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'dev@example.com', organizationName: 'Acme' } }));
+  assert.deepStrictEqual(A.accountIdentity(a), { email: 'dev@example.com', organization: 'Acme' });
+  assert.strictEqual(A.accountIdentity({ ...a, provider: { id: 'p', preset: 'ollama', baseUrl: 'http://x' } }), undefined, 'providers have no login');
+});
+
+test('texts: no garbled characters (encoding damage) in any translated or user-facing text', () => {
+  const files = ['package.json', 'package.nls.json', 'package.nls.pt-br.json', 'l10n/bundle.l10n.pt-br.json', 'webview/src/i18n.ts'];
+  for (const f of files) {
+    const text = fs.readFileSync(path.join(root, f), 'utf8');
+    const bad = text.match(/.{0,30}(?:Ã.|Â[^a-zA-Z]|â€|\uFFFD).{0,30}/);
+    assert.ok(!bad, `${f}: "${bad?.[0]}"`);
+    assert.ok(!text.startsWith('\uFEFF'), `${f} starts with a byte-order mark`);
+  }
 });

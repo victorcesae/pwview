@@ -56,7 +56,7 @@ export class Dashboard {
         retainContextWhenHidden: true,
         localResourceRoots: [root],
       });
-      this.panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon.svg');
+      this.panel.iconPath = { light: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon-light.svg'), dark: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon-dark.svg') };
       this.panel.webview.html = this.html(this.panel.webview, root);
       this.panel.webview.onDidReceiveMessage((m: FromWebview) => {
         if (m.type === 'ready') this.post();

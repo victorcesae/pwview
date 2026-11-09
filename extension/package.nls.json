@@ -69,5 +69,7 @@
   "cmd.edit.my.rules": "Edit My Rules (every project)",
   "cmd.edit.project.rules": "Edit Project Rules",
   "cmd.open.rules": "Open Rules File",
-  "cmd.new.chat.here": "New Chat Here"
+  "cmd.new.chat.here": "New Chat Here",
+  "cmd.delete.session": "Delete Session…",
+  "setting.notifications": "Notify when a chat you are not looking at finishes, or waits for an approval or an answer."
 }

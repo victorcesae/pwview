@@ -6,7 +6,7 @@ import { findPrUrls, PrTracker } from './prs';
 import { openUrl } from './browser';
 import { vendorOf } from './providers';
 import type { Session } from './engine';
-import { addLink, briefing, loadLinks, removeLink } from './links';
+import { addLink, briefing, loadLinks, removeLink, sameConnection } from './links';
 import { agentExecutable } from './util';
 import { accountEnv, type Account } from './accounts';
 
@@ -20,6 +20,7 @@ export type FromChat =
   | { type: 'loadEarlier'; all?: boolean }
   | { type: 'openUrl'; url: string }
   | { type: 'revealFolder'; path: string }
+  | { type: 'deleteSession' }
   | { type: 'contextDetail' }
   | { type: 'toggleMcp'; name: string; enabled: boolean }
   | { type: 'reconnectMcp'; name: string }
@@ -48,6 +49,10 @@ interface Open {
   saved?: string;
   /** PR links seen in this chat */
   prUrls?: Set<string>;
+  /** AgentLens account the chat runs on */
+  accountId?: string;
+  /** status at the last update, to notice "finished" and "needs you" */
+  lastStatus?: string;
 }
 
 /** PR links in an item's text (answers, tool output). */
@@ -64,6 +69,38 @@ export class Chats {
     private sessions: () => Session[],
     private openSession: (id: string) => void,
   ) {}
+
+  /** Tells you when a chat you're not looking at finishes or waits for an approval or an answer. */
+  private notify(o: Open) {
+    const s = o.chat.state;
+    const prev = o.lastStatus;
+    o.lastStatus = s.status;
+    if (prev === s.status || !vscode.workspace.getConfiguration('agentlens').get<boolean>('notifications', true)) return;
+    const watching = o.panel.active && o.panel.visible && vscode.window.state.focused;
+    if (watching) return;
+    const title = s.title.slice(0, 60);
+    const msg =
+      prev === 'working' && s.status === 'idle'
+        ? vscode.l10n.t('"{0}" finished.', title)
+        : s.status === 'waiting'
+          ? vscode.l10n.t('"{0}" needs you: an approval or an answer.', title)
+          : s.status === 'error'
+            ? vscode.l10n.t('"{0}" stopped with an error.', title)
+            : undefined;
+    if (!msg) return;
+    const open = vscode.l10n.t('Open');
+    (s.status === 'error' ? vscode.window.showErrorMessage : vscode.window.showInformationMessage)(msg, open).then((a) => a === open && o.panel.reveal());
+  }
+
+  /** Closes the chat showing this session, if any. */
+  closeSession(sessionId: string) {
+    this.find(sessionId)?.panel.dispose();
+  }
+
+  /** Open chats (folder, session, title): for tests. */
+  describe() {
+    return this.open.map((o) => ({ cwd: o.chat.state.cwd, sessionId: o.chat.state.sessionId, title: o.chat.state.title }));
+  }
 
   /** Session ids currently driven by an AgentLens chat (a resumed session belongs to the chat). */
   activeIds() {
@@ -115,7 +152,7 @@ export class Chats {
         localResourceRoots: [root],
       });
     if (opts.panel) panel.webview.options = { enableScripts: true, localResourceRoots: [root] };
-    panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon.svg');
+    panel.iconPath = { light: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon-light.svg'), dark: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon-dark.svg') };
     let timer: ReturnType<typeof setTimeout> | undefined;
     const transcript = opts.resume ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
     const history = transcript ? historyFromTranscript(transcript) : undefined;
@@ -127,7 +164,7 @@ export class Chats {
         this.post(entry);
       }, 40);
     });
-    const entry: Open = { chat, panel };
+    const entry: Open = { chat, panel, accountId: opts.account?.id };
     this.open.push(entry);
     panel.webview.html = html(panel.webview, root);
     panel.webview.onDidReceiveMessage((m: FromChat) => this.onMessage(entry, m));
@@ -155,6 +192,7 @@ export class Chats {
   private post(o: Open) {
     const s = o.chat.state;
     this.savePrefs(o);
+    this.notify(o);
     o.panel.title = s.title.slice(0, 40);
     // tab icon: the model's vendor mark (Claude, GPT, Llama…)
     const vendor = s.model ? vendorOf(s.model) : s.account.gateway ? 'other' : 'anthropic';
@@ -240,6 +278,8 @@ export class Chats {
         return c.setUltracode(m.on).catch((e) => vscode.window.showWarningMessage(`AgentLens: ultracode not available: ${e?.message ?? e}`));
       case 'setMode':
         return c.setPermissionMode(m.mode);
+      case 'deleteSession':
+        return c.state.sessionId && vscode.commands.executeCommand('agentlens.deleteSession', c.state.sessionId);
       case 'revealFolder':
         return vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(m.path));
       case 'openUrl':
@@ -254,10 +294,20 @@ export class Chats {
         if (c.state.sessionId) removeLink(c.state.sessionId, m.id);
         return this.post(o);
       case 'link': {
+        // only sessions on the same account, with the same kind of model
+        const me = { account: o.accountId ?? this.sessions().find((s) => s.info.id === c.state.sessionId)?.info.account, model: c.state.model };
         const others = this.sessions().filter((s) => s.info.id !== c.state.sessionId);
+        const same = others.filter((s) => sameConnection(s.info, me));
+        if (!same.length) {
+          vscode.window.showInformationMessage(others.length ? vscode.l10n.t('No other session uses the same account and model provider ({0} on other accounts).', others.length) : vscode.l10n.t('No other session to link.'));
+          return;
+        }
         const pick = await vscode.window.showQuickPick(
-          others.map((s) => ({ label: s.info.title, description: `${s.info.state} · ${s.info.project.split(/[\\/]/).pop()}`, s })),
-          { placeHolder: 'Link which session? This agent will see what it is doing.' },
+          same.map((s) => ({ label: s.info.title, description: `${s.info.state} · ${s.info.project.split(/[\\/]/).pop()}`, s })),
+          {
+            placeHolder: vscode.l10n.t('Link which session? This agent will see what it is doing.'),
+            title: same.length < others.length ? vscode.l10n.t('Same account only · {0} sessions on other accounts hidden', others.length - same.length) : undefined,
+          },
         );
         if (!pick) return;
         if (c.state.sessionId) addLink(c.state.sessionId, pick.s.info.id);

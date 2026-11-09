@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import { AgentInfo, Change, Engine, HotFile, Session, State } from './engine';
 import { norm } from './paths';
 import { projectRules, userRules, type RuleFile } from './rules';
-import { listAccounts } from './accounts';
+import { accountIdentity, listAccounts, preferredAccount, type Account } from './accounts';
 import { modelLabel } from './pricing';
 import { vendorOf } from './providers';
 import { ago, clip, rel } from './util';
@@ -19,6 +19,8 @@ export type Node =
   | { kind: 'changes'; s: Session; agentId?: string; list: Change[]; via?: string }
   | { kind: 'change'; s: Session; c: Change; via?: string }
   /** the project's folders and files, like the Explorer; files agents changed are marked */
+  | { kind: 'accounts' }
+  | { kind: 'account'; a: Account }
   | { kind: 'rules'; scope: 'user' | 'project'; root?: string }
   | { kind: 'rule'; scope: 'user' | 'project'; r: RuleFile }
   | { kind: 'files'; root: string; s?: Session; sessions: Session[]; via?: string }
@@ -101,7 +103,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         out.push({ kind: 'hint', text: h === 'some' ? 'Update hooks to enable steering & send now' : 'Enable messages to agents (steer, queue, send now)', command: 'agentlens.installHooks', icon: 'warning' });
       const hot = Engine.hotFiles(sessions);
       if (hot.length) out.push({ kind: 'hot', files: hot });
-      out.push({ kind: 'rules', scope: 'user' });
+      out.push({ kind: 'accounts' }, { kind: 'rules', scope: 'user' });
       const roots = this.workspaceRoots();
       const byProject = new Map<string, Session[]>();
       for (const s of sessions) (byProject.get(s.info.project) ?? byProject.set(s.info.project, []).get(s.info.project)!).push(s);
@@ -126,6 +128,12 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         const rules: Node[] = fs.existsSync(node.path) ? [{ kind: 'rules', scope: 'project', root: node.path }] : [];
         return [...rules, ...files, ...node.sessions.map((s): Node => ({ kind: 'session', s }))];
       }
+      case 'accounts':
+        return [
+          ...listAccounts().map((a): Node => ({ kind: 'account', a })),
+          { kind: 'hint', text: vscode.l10n.t('Add a Claude account…'), command: 'agentlens.addAccount', icon: 'add' },
+          { kind: 'hint', text: vscode.l10n.t('Add a model provider (Ollama, OpenRouter…)…'), command: 'agentlens.addProvider', icon: 'server' },
+        ];
       case 'rules': {
         const list = node.scope === 'user' ? userRules() : projectRules(node.root!);
         return list.map((r): Node => ({ kind: 'rule', scope: node.scope, r }));
@@ -223,6 +231,33 @@ $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
         const it = new vscode.TreeItem('Changes', C.Collapsed);
         it.iconPath = new vscode.ThemeIcon('diff');
         it.description = String(node.list.length);
+        return it;
+      }
+      case 'accounts': {
+        const it = new vscode.TreeItem(vscode.l10n.t('Accounts'), C.Collapsed);
+        it.id = 'accounts';
+        it.iconPath = new vscode.ThemeIcon('accounts-view-bar-icon');
+        it.description = String(listAccounts().length);
+        it.tooltip = vscode.l10n.t('Claude accounts and model providers AgentLens can run chats with');
+        return it;
+      }
+      case 'account': {
+        const a = node.a;
+        const who = accountIdentity(a);
+        const it = new vscode.TreeItem(a.name, C.None);
+        it.id = 'account:' + a.id;
+        it.iconPath = mediaRoot ? vscode.Uri.joinPath(mediaRoot, 'vendors', `${a.provider ? vendorOf(a.provider.model) : 'anthropic'}.svg`) : new vscode.ThemeIcon('account');
+        const isDefault = preferredAccount().id === a.id;
+        it.description = [
+          a.provider ? `${a.provider.model ?? ''} · ${a.provider.baseUrl.replace(/^https?:\/\//, '')}` : (who?.email ?? vscode.l10n.t('not signed in')),
+          who?.organization && !a.provider ? who.organization : '',
+          isDefault ? vscode.l10n.t('default') : '',
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        it.tooltip = [a.name, a.provider ? a.provider.baseUrl : a.configDir, who?.email].filter(Boolean).join('\n');
+        it.contextValue = a.provider ? 'account-provider' : who ? 'account-claude' : 'account-signedout';
+        if (!a.provider && !who) it.command = { command: 'agentlens.login', title: 'Log in' };
         return it;
       }
       case 'rules': {

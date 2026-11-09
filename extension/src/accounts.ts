@@ -85,3 +85,16 @@ export function addProvider(p: Omit<Provider, 'id'>): Account {
   save({ ...s, accounts: [...s.accounts, acc] });
   return acc;
 }
+
+/** Who is signed in to a Claude account (from Claude Code's own .claude.json), if anyone. */
+export function accountIdentity(a: Account): { email?: string; organization?: string } | undefined {
+  if (a.provider) return undefined;
+  const isDefault = a.id === defaultAccount().id && !process.env.CLAUDE_CONFIG_DIR;
+  const file = isDefault ? path.join(os.homedir(), '.claude.json') : path.join(a.configDir, '.claude.json');
+  try {
+    const o = JSON.parse(fs.readFileSync(file, 'utf8')).oauthAccount;
+    return o?.emailAddress ? { email: o.emailAddress, organization: o.organizationName } : undefined;
+  } catch {
+    return undefined;
+  }
+}

@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { editRules, openRules } from './rules';
+import { modelLabel } from './pricing';
+import { installedAgents, runCliAgent } from './agents';
 import { addComment, cancelComment, editComment, loadComments, Mode } from './comments';
 import { changeDetail, Engine, Session } from './engine';
 import { hooksStatus, installHooks, installHookScript } from './hooks';
@@ -14,8 +16,8 @@ import { registerDoctor, syncSetupContext } from './doctor';
 import { attachedSessions, resolveTerminals, terminalFor, typeInto } from './terminals';
 import { Chats } from './chatPanel';
 import { usageReport } from './usage';
-import { addLink, briefing } from './links';
-import { PRESETS, listModels, secretKey } from './providers';
+import { addLink, briefing, sameConnection } from './links';
+import { PRESETS, listModels, secretKey, vendorOf } from './providers';
 import { addAccount, addProvider, listAccounts, preferredAccount, removeAccount, setPreferred, accountEnv, type Account } from './accounts';
 import { Node, SessionsTree, setMediaRoot } from './tree';
 import { ago, clip, runAgent } from './util';
@@ -35,6 +37,27 @@ const tempRoots = (() => {
 })();
 const isTempProject = (p: string) => tempRoots.some((r) => norm(p) === r || norm(p).startsWith(r + '/'));
 
+/**
+ * Test-only (env vars, used by test/editor/restore.cjs): open a chat then close the window
+ * normally, or report which chat tabs came back after a relaunch.
+ */
+function restoreTestHooks(chats: { describe(): unknown }) {
+  const open = process.env.AGENTLENS_TEST_OPEN_CHAT;
+  const report = process.env.AGENTLENS_TEST_REPORT;
+  if (open)
+    setTimeout(async () => {
+      // "resume:<session id>" resumes that session in a chat; otherwise a new chat in that folder
+      if (open.startsWith('resume:')) await vscode.commands.executeCommand('agentlens.resumeSession', open.slice(7));
+      else await vscode.commands.executeCommand('agentlens.newChatHere', { kind: 'project', path: open });
+      setTimeout(() => vscode.commands.executeCommand('workbench.action.closeWindow'), 4000);
+    }, 2000);
+  if (report)
+    setTimeout(() => {
+      require('fs').writeFileSync(report, JSON.stringify({ tabs: vscode.window.tabGroups.all.flatMap((g) => g.tabs).map((t) => ({ label: t.label, viewType: (t.input as any)?.viewType })), chats: chats.describe() }));
+      vscode.commands.executeCommand('workbench.action.closeWindow');
+    }, 8000);
+}
+
 export function activate(ctx: vscode.ExtensionContext) {
   const engine = new Engine(() => {
     const seen = new Set<string>();
@@ -45,16 +68,46 @@ export function activate(ctx: vscode.ExtensionContext) {
   /** Env for an account, with a provider's API key read from VS Code's secure storage. */
   const envFor = async (a: Account) => accountEnv(a, a.provider?.hasKey ? await ctx.secrets.get(secretKey(a.provider.id)) : undefined);
   const accountOf = (id: string) => listAccounts().find((a) => a.id === id) ?? listAccounts()[0];
-  async function pickAccount(): Promise<Account | undefined> {
+
+  /**
+   * New chat: which agent and account. Claude accounts and model providers run in the AgentLens
+   * chat; other agents installed here (Cursor Agent, Codex…) open in a terminal. Asked whenever
+   * there is more than one choice; the last one used comes first.
+   */
+  async function pickAgent(cwd: string): Promise<Account | undefined> {
     const all = listAccounts();
-    if (all.length === 1) return all[0];
-    const pref = preferredAccount();
-    const pick = await vscode.window.showQuickPick(
-      [...all].sort((a, b) => Number(b.id === pref.id) - Number(a.id === pref.id)).map((a) => ({ label: a.name, description: a.id === pref.id ? vscode.l10n.t('default') : a.configDir, a })),
-      { placeHolder: vscode.l10n.t('Which Claude account should this session use?') },
-    );
-    if (pick) setPreferred(pick.a.id);
-    return pick?.a;
+    const clis = installedAgents();
+    if (all.length === 1 && !clis.length) return all[0];
+    const last = ctx.globalState.get<string>('agentlens.lastAgent') ?? preferredAccount().id;
+    type Item = vscode.QuickPickItem & { a?: Account; cli?: (typeof clis)[number]; add?: string };
+    const media = vscode.Uri.joinPath(ctx.extensionUri, 'media', 'vendors');
+    const items: Item[] = [
+      ...all.map((a): Item => ({
+        label: a.provider ? `${a.name}` : `Claude · ${a.name}`,
+        description: a.provider ? `${a.provider.model ?? ''} · ${a.provider.baseUrl}` : vscode.l10n.t('AgentLens chat'),
+        iconPath: vscode.Uri.joinPath(media, `${a.provider ? vendorOf(a.provider.model) : 'anthropic'}.svg`),
+        a,
+      })),
+      ...clis.map((c): Item => ({ label: c.name, description: vscode.l10n.t('opens in a terminal'), detail: c.exe, iconPath: vscode.Uri.joinPath(media, `${c.vendor}.svg`), cli: c })),
+      { label: '', kind: vscode.QuickPickItemKind.Separator },
+      { label: '$(add) ' + vscode.l10n.t('Add a Claude account…'), add: 'agentlens.addAccount' },
+      { label: '$(server) ' + vscode.l10n.t('Add a model provider (Ollama, OpenRouter…)…'), add: 'agentlens.addProvider' },
+    ];
+    const key = (i: Item) => i.a?.id ?? (i.cli ? 'cli:' + i.cli.id : '');
+    items.sort((x, y) => Number(key(y) === last) - Number(key(x) === last));
+    const pick = await vscode.window.showQuickPick(items, { title: vscode.l10n.t('New chat in {0}', path.basename(cwd)), placeHolder: vscode.l10n.t('Which agent should work here?') });
+    if (!pick) return undefined;
+    if (pick.add) {
+      await vscode.commands.executeCommand(pick.add);
+      return undefined;
+    }
+    ctx.globalState.update('agentlens.lastAgent', key(pick));
+    if (pick.cli) {
+      runCliAgent(pick.cli, cwd, vscode.Uri.joinPath(ctx.extensionUri, 'media'));
+      return undefined;
+    }
+    setPreferred(pick.a!.id);
+    return pick.a;
   }
   const cfg = () => vscode.workspace.getConfiguration('agentlens');
   let sessions: Session[] = [];
@@ -74,6 +127,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   const treeView = vscode.window.createTreeView('agentlens.sessions', {
     treeDataProvider: tree,
     showCollapseAll: true,
+    canSelectMany: true,
     dragAndDropController: {
       dropMimeTypes: ['files', 'text/uri-list'],
       dragMimeTypes: [],
@@ -328,14 +382,14 @@ export function activate(ctx: vscode.ExtensionContext) {
     const folders = vscode.workspace.workspaceFolders ?? [];
     let cwd = folders[0]?.uri.fsPath;
     if (folders.length > 1) {
-      const pick = await vscode.window.showWorkspaceFolderPick({ placeHolder: 'Project for the new agent session' });
+      const pick = await vscode.window.showWorkspaceFolderPick({ placeHolder: vscode.l10n.t('Project for the new agent session') });
       if (!pick) return;
       cwd = pick.uri.fsPath;
     }
     if (!cwd) return vscode.window.showWarningMessage('Open a folder first.');
-    const prompt = await vscode.window.showInputBox({ prompt: 'What should the agent do?', placeHolder: 'Leave empty to just open a session' });
+    const prompt = await vscode.window.showInputBox({ prompt: vscode.l10n.t('What should the agent do?'), placeHolder: vscode.l10n.t('Leave empty to just open a session') });
     if (prompt === undefined) return;
-    const account = await pickAccount();
+    const account = await pickAgent(cwd);
     if (!account) return;
     if (surface() === 'terminal') runAgent(`${clip(prompt || 'agent', 30)}`, cwd, prompt ? [prompt] : [], await envFor(account));
     else chats.start({ cwd, prompt: prompt || undefined, account, env: await envFor(account) });
@@ -344,9 +398,20 @@ export function activate(ctx: vscode.ExtensionContext) {
   async function linkSession(id: string) {
     const s = find(id);
     if (!s) return;
+    // only sessions on the same account, with the same kind of model (Claude, or the same provider model)
+    const others = sessions.filter((x) => x.info.id !== id);
+    const same = others.filter((x) => sameConnection(x.info, s.info));
+    const hidden = others.length - same.length;
+    if (!same.length) {
+      vscode.window.showInformationMessage(hidden ? vscode.l10n.t('No other session uses the same account and model provider ({0} on other accounts).', hidden) : vscode.l10n.t('No other session to link.'));
+      return;
+    }
     const pick = await vscode.window.showQuickPick(
-      sessions.filter((x) => x.info.id !== id).map((x) => ({ label: x.info.title, description: `${x.info.state} · ${path.basename(x.info.project)}`, x })),
-      { placeHolder: `Link which session to "${clip(s.info.title, 40)}"? Its agent will see what that session is doing.` },
+      same.map((x) => ({ label: x.info.title, description: `${x.info.state} · ${path.basename(x.info.project)}${x.info.model ? ' · ' + modelLabel(x.info.model) : ''}`, x })),
+      {
+        placeHolder: vscode.l10n.t('Link which session to "{0}"? Its agent will see what that session is doing.', clip(s.info.title, 40)),
+        title: hidden ? vscode.l10n.t('Same account only · {0} sessions on other accounts hidden', hidden) : undefined,
+      },
     );
     if (!pick) return;
     if (!chats.linkInto(id, pick.x)) {
@@ -424,12 +489,40 @@ export function activate(ctx: vscode.ExtensionContext) {
     // Reload Window: reopen the chats that were open, in their tabs, with their settings
     vscode.window.registerWebviewPanelSerializer('agentlens.chat', {
       async deserializeWebviewPanel(panel, state: { sessionId?: string; cwd?: string; title?: string; account?: string } | undefined) {
-        if (!state?.sessionId || !state.cwd) return panel.dispose();
+        if (!state?.cwd) return panel.dispose();
+        if (!state.sessionId) {
+          // a chat that had no message yet: open it again, fresh, in the same folder
+          const account = listAccounts().find((a) => a.name === state.account) ?? listAccounts()[0];
+          return chats.start({ cwd: state.cwd, account, env: await envFor(account), panel });
+        }
         if (!sessions.length) await refresh(true);
         const s = find(state.sessionId);
         const account = s ? accountOf(s.info.account) : (listAccounts().find((a) => a.name === state.account) ?? listAccounts()[0]);
         chats.start({ cwd: s?.info.project ?? state.cwd, resume: state.sessionId, title: s?.info.title ?? state.title, account, env: await envFor(account), panel });
       },
+    }),
+    // Delete sessions (several when selected together): confirm, then move the conversation and its
+    // sub-agents to the system trash, so it can be recovered.
+    vscode.commands.registerCommand('agentlens.deleteSession', async (x: unknown, selected?: unknown[]) => {
+      const ids = [...new Set((selected?.length ? selected : [x]).map(sessionArg).filter((v): v is string => !!v))];
+      const list = ids.map(find).filter((s): s is Session => !!s);
+      if (!list.length) return;
+      const what = list.length === 1 ? `"${clip(list[0].info.title, 60)}"` : vscode.l10n.t('{0} sessions', list.length);
+      const working = list.filter((s) => s.info.state === 'working').length;
+      const ok = await vscode.window.showWarningMessage(
+        vscode.l10n.t('Delete {0}?', what),
+        { modal: true, detail: vscode.l10n.t('The conversation, its sub-agents and its change history move to the trash (Recycle Bin), where you can restore them.') + (working ? '\n\n' + vscode.l10n.t('{0} of them is still working: its chat is closed first.', working) : '') },
+        vscode.l10n.t('Move to Trash'),
+      );
+      if (!ok) return;
+      for (const s of list) {
+        chats.closeSession(s.info.id);
+        const dir = s.path.replace(/\.jsonl$/, '');
+        for (const p of [s.path, dir])
+          if (fs.existsSync(p)) await vscode.workspace.fs.delete(vscode.Uri.file(p), { recursive: true, useTrash: true }).then(undefined, (e) => vscode.window.showErrorMessage(String(e?.message ?? e)));
+      }
+      vscode.window.setStatusBarMessage(vscode.l10n.t('$(trash) AgentLens: moved {0} to the trash', what), 5000);
+      refresh(true);
     }),
     vscode.commands.registerCommand('agentlens.resumeSession', async (x: unknown) => {
       const s = find(sessionArg(x) ?? '');
@@ -446,12 +539,12 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('agentlens.newChatHere', (n?: { kind?: string; path?: string } | vscode.Uri) => {
       const cwd = n instanceof vscode.Uri ? n.fsPath : n?.path;
       if (!cwd) return vscode.commands.executeCommand('agentlens.newChat');
-      pickAccount().then(async (account) => account && chats.start({ cwd, account, env: await envFor(account) }));
+      pickAgent(cwd).then(async (account) => account && chats.start({ cwd, account, env: await envFor(account) }));
     }),
     vscode.commands.registerCommand('agentlens.newChat', () => {
       const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!cwd) return vscode.window.showWarningMessage('Open a folder first.');
-      pickAccount().then(async (account) => account && chats.start({ cwd, account, env: await envFor(account) }));
+      if (!cwd) return vscode.window.showWarningMessage(vscode.l10n.t('Open a folder first.'));
+      pickAgent(cwd).then(async (account) => account && chats.start({ cwd, account, env: await envFor(account) }));
     }),
     vscode.commands.registerCommand('agentlens.manageConnectors', async (cwd?: string) => {
       const dir = cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -575,6 +668,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     treeView.badge = n ? { value: n, tooltip: `${n} agent session(s) working` } : undefined;
   }
   refresh(true);
+  restoreTestHooks(chats);
   let timer = setInterval(refresh, cfg().get<number>('pollSeconds', 3) * 1000);
   ctx.subscriptions.push(
     { dispose: () => clearInterval(timer) },

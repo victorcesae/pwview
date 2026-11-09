@@ -23,6 +23,7 @@ export type ToExtension =
   | { type: 'overview' }
   | { type: 'openUrl'; url: string }
   | { type: 'revealFolder'; path: string }
+  | { type: 'deleteSession' }
   | { type: 'openChange'; sessionId: string; changeId: string }
   | { type: 'openFile'; path: string }
   | { type: 'resume'; id: string }
@@ -68,6 +69,7 @@ export type ToChat =
   | { type: 'loadEarlier'; all?: boolean }
   | { type: 'openUrl'; url: string }
   | { type: 'revealFolder'; path: string }
+  | { type: 'deleteSession' }
   | { type: 'contextDetail' }
   | { type: 'toggleMcp'; name: string; enabled: boolean }
   | { type: 'reconnectMcp'; name: string }

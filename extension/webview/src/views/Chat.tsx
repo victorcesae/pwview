@@ -1,4 +1,4 @@
-import { Ban, Bot, ChevronUp, Search, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
+import { Ban, Bot, ChevronUp, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
@@ -719,6 +719,11 @@ export function ChatView({ data }: { data: ChatData }) {
         <Button size="xs" variant="ghost" onClick={() => post({ type: 'link' })} title={t('Let this agent see what another session is doing')}>
           <Link2 /> {t('Link session')}
         </Button>
+        {chat.sessionId && (
+          <Button size="xs" variant="ghost" onClick={() => post({ type: 'deleteSession' })} title={t('Delete this session (moves it to the trash)')} aria-label={t('Delete session')}>
+            <Trash2 />
+          </Button>
+        )}
       </header>
       {searchOpen && (
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-1.5" role="search">
