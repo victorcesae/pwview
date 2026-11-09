@@ -14,6 +14,8 @@ import { cn } from '@/lib/utils';
 
 export interface RichInputHandle {
   getMarkdown(): string;
+  /** adds text at the cursor, as text */
+  insertText(text: string): void;
   /** the text exactly as typed, without Markdown escapes */
   getText(): string;
   setMarkdown(md: string): void;
@@ -120,15 +122,8 @@ export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput({
         }
         return false;
       },
-      handleDrop: (_view, event) => {
-        const files = [...((event as DragEvent).dataTransfer?.files ?? [])];
-        if (files.length && cb.current.onFiles) {
-          event.preventDefault();
-          cb.current.onFiles(files);
-          return true;
-        }
-        return false;
-      },
+      // drops are the composer's to handle: a dropped file would otherwise land here as a raw URI
+      handleDrop: () => true,
     },
     onUpdate: ({ editor }) => cb.current.onChange?.(md(editor)),
   });
@@ -142,6 +137,7 @@ export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput({
 
   useImperativeHandle(ref, () => ({
     getMarkdown: () => (editor ? md(editor).trim() : ''),
+    insertText: (text: string) => editor?.chain().focus().insertContent({ type: 'text', text }).run(),
     getText: () => editor?.getText({ blockSeparator: '\n' }) ?? '',
     setMarkdown: (m: string) => editor?.commands.setContent(m),
     clear: () => editor?.commands.clearContent(true),

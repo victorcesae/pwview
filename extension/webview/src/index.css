@@ -264,3 +264,12 @@ pre code {
   padding: 0.05em 0.35em;
   border-radius: 4px;
 }
+
+/* the hint stays on one line: in a narrow chat, wrapped text ran under the toolbar */
+.rich-input p.is-editor-empty:first-child::before {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
+}

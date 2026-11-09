@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.10
+- Open and Stop Live Browser from the command palette act on the chat in front, not on the workspace's first folder.
+- The chat box's hint stays on one line in a narrow chat.
+- The VS Code mark instead of the letters VS over Remote-SSH.
+- New Chat's pickers keep the keyboard: the Get Started page took it the first time, and closed them.
+- **Add files to a chat**: Add to Chat when you right-click a file (Explorer, editor tab, Sessions tree), or Shift+drag it onto the chat. Without Shift, VS Code itself opens the file: extensions can't change that.
+- Follow in terminal is a read-only view with no shell, so other extensions can't type into it (the Python extension's `source .venv/bin/activate`).
+
 ## 1.0.9
 - Messages go as typed: Shift+Enter no longer sends a backslash, and `my_file` or `<div>` are no longer changed.
 - Follow in terminal: one terminal per command, named after its chat, and it looks in the chat's own session first.

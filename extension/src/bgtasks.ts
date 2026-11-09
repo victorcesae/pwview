@@ -135,16 +135,6 @@ export function guessStatus(t: BgTask, sessionWorking: boolean, now = Date.now()
   }
 }
 
-/** A shell command that follows the output file in a terminal (like tail -f). */
-export function followCommand(file: string, platform = process.platform, label = ''): { shell: string; args: string[] } {
-  if (platform === 'win32') {
-    const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
-    return { shell: 'powershell.exe', args: ['-NoProfile', '-NoLogo', '-Command', `${label ? `Write-Host ${q(label)}; ` : ''}Get-Content -LiteralPath ${q(file)} -Tail 200 -Wait`] };
-  }
-  const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
-  return { shell: '/bin/sh', args: ['-c', `${label ? `printf '%s\\n' ${q(label)}; ` : ''}tail -n 200 -F ${q(file)}`] };
-}
-
 /** Every string inside a record value, joined (to find task notifications wherever they are). */
 export function textsOf(x: unknown, depth = 0): string {
   if (typeof x === 'string') return x;

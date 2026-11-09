@@ -105,6 +105,24 @@ export class Chats {
     for (const o of this.open) o.chat.handOverQueue();
   }
 
+  private front() {
+    return this.open.find((x) => x.panel.active) ?? this.open.find((x) => x.panel.visible) ?? this.open.at(-1);
+  }
+
+  /** The folder of the chat in front, if any is open. */
+  frontCwd() {
+    return this.front()?.chat.state.cwd;
+  }
+
+  /** Puts files in the prompt of the chat in front, or else the last one opened. False if none is open. */
+  insertPaths(paths: string[]) {
+    const o = this.front();
+    if (!o) return false;
+    o.panel.reveal();
+    this.send(o, { type: 'insertPaths', paths });
+    return true;
+  }
+
   /** Called with every chat that starts. */
   onStart?: (cwd: string, chat: ChatSession) => void;
 

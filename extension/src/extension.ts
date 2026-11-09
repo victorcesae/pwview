@@ -9,11 +9,11 @@ import { lanAddress, RemoteServer } from './remote';
 import { migrateFromAgentLens } from './migrate';
 import { canTrash, registerFileActions, removePath } from './fileActions';
 import { registerCodeCompletion } from './codeCompletion';
+import { followPty } from './follow';
 import { pickFolder } from './folders';
 import { setShuttingDown } from './relayClient';
 import { Pwview } from './pwview';
 import { Scm, type ScmFile } from './scm';
-import { followCommand } from './bgtasks';
 import { claudeDir } from './paths';
 import { MCP_PRESETS, mcpAddArgs, runClaude, sdkConfig, splitCommand, validName, type McpPreset, type McpScope, type McpServer } from './mcp';
 import { addComment, cancelComment, editComment, loadComments, Mode } from './comments';
@@ -137,7 +137,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     ];
     const key = (i: Item) => i.a?.id ?? (i.cli ? 'cli:' + (i.cursor?.id ?? i.cli.id) : '');
     items.sort((x, y) => Number(key(y) === last) - Number(key(x) === last));
-    const pick = await vscode.window.showQuickPick(items, { title: vscode.l10n.t('New chat in {0}', path.basename(cwd)), placeHolder: vscode.l10n.t('Which agent should work here?') });
+    const pick = await vscode.window.showQuickPick(items, { title: vscode.l10n.t('New chat in {0}', path.basename(cwd)), placeHolder: vscode.l10n.t('Which agent should work here?'), ignoreFocusOut: true });
     if (!pick) return undefined;
     if (pick.add) {
       await vscode.commands.executeCommand(pick.add);
@@ -195,8 +195,11 @@ export function activate(ctx: vscode.ExtensionContext) {
   registerCodeCompletion(ctx);
   handOverQueues = () => chats.handOverQueues();
   const pwview = new Pwview(ctx);
-  chats.onStart = (cwd, chat) => void pwview.attach(cwd, chat);
-  const browserFolder = (n?: { path?: string } | string) => (typeof n === 'string' ? n : n?.path) ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  chats.onStart = (cwd, chat) => {
+    // ticks the guide's step. Not on the command: that makes the guide take the keyboard from the pickers
+    void vscode.commands.executeCommand('setContext', 'steerhouse.chatStarted', true);
+    void pwview.attach(cwd, chat);
+  };
   const surface = () => cfg().get<string>('defaultSurface', 'chat');
   registerLibrary(ctx);
   registerSkills(ctx);
@@ -740,6 +743,15 @@ export function activate(ctx: vscode.ExtensionContext) {
     // "New chat here" on a project or folder in the Sessions tree (or a folder in the Explorer)
     // Your default shell in that folder (from a chat, a project or a folder in the tree)
     // Watch a background command's output in a terminal, as it is written (like tail -f)
+    // right-click a file: dragging onto a chat only works with Shift held (VS Code's rule for pages)
+    vscode.commands.registerCommand('steerhouse.addToChat', async (x?: vscode.Uri | { path?: string }, selected?: unknown[]) => {
+      const pathOf = (n: unknown) => (n instanceof vscode.Uri ? n.fsPath : (n as { path?: string } | undefined)?.path);
+      const paths = [...new Set((selected?.length ? selected : [x ?? vscode.window.activeTextEditor?.document.uri]).map(pathOf).filter((p): p is string => !!p))];
+      if (!paths.length) return;
+      if (chats.insertPaths(paths)) return;
+      const open = vscode.l10n.t('New Chat');
+      if ((await vscode.window.showInformationMessage(vscode.l10n.t('Open a chat first, then add the file to it.'), open)) === open) vscode.commands.executeCommand('steerhouse.newChat');
+    }),
     vscode.commands.registerCommand('steerhouse.followTask', (x?: FollowTarget | { task?: FollowTarget }) => {
       const t = x && 'task' in x ? x.task : (x as FollowTarget | undefined);
       if (!t?.outputFile) return vscode.window.showWarningMessage(vscode.l10n.t('This command has no output file.'));
@@ -748,8 +760,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (open && open.exitStatus === undefined) return open.show();
       const what = clip(t.description || t.command || 'output', 30);
       const label = `${t.chatTitle ? clip(t.chatTitle, 60) + ': ' : ''}${t.description || t.command || ''}`;
-      const f = followCommand(t.outputFile, process.platform, label);
-      const term = vscode.window.createTerminal({ name: `▶ ${t.chatTitle ? clip(t.chatTitle, 20) + ' · ' : ''}${what}`, shellPath: f.shell, shellArgs: f.args, iconPath: new vscode.ThemeIcon('debug-console') });
+      const term = vscode.window.createTerminal({ name: `▶ ${t.chatTitle ? clip(t.chatTitle, 20) + ' · ' : ''}${what}`, pty: followPty(t.outputFile, label), iconPath: new vscode.ThemeIcon('debug-console') });
       following.set(t.outputFile, term);
       term.show();
     }),
@@ -774,11 +785,12 @@ export function activate(ctx: vscode.ExtensionContext) {
       })();
     }),
     vscode.commands.registerCommand('steerhouse.pwview.open', async (n?: { path?: string } | string) => {
-      const cwd = browserFolder(n) ?? (await pickFolder(ctx));
+      // the browser of the chat in front: other folders have their own
+      const cwd = (typeof n === 'string' ? n : n?.path) ?? chats.frontCwd() ?? (await pickFolder(ctx));
       if (cwd) await pwview.open(cwd);
     }),
     vscode.commands.registerCommand('steerhouse.pwview.stop', async (n?: { path?: string } | string) => {
-      const cwd = browserFolder(n);
+      const cwd = (typeof n === 'string' ? n : n?.path) ?? chats.frontCwd() ?? (await pickFolder(ctx));
       if (cwd) await pwview.stop(cwd);
     }),
     // Connectors: add an MCP server (popular or your own) for the team, just you here, or everywhere

@@ -42,7 +42,7 @@ export async function pickFolder(ctx: vscode.ExtensionContext): Promise<string |
     { label: '', kind: vscode.QuickPickItemKind.Separator },
     { label: '$(folder-opened) ' + vscode.l10n.t('Browse…') },
   ];
-  const pick = await vscode.window.showQuickPick(items, { title: vscode.l10n.t('New chat'), placeHolder: vscode.l10n.t('Which folder or repository should it work in?'), matchOnDescription: true });
+  const pick = await vscode.window.showQuickPick(items, { title: vscode.l10n.t('New chat'), placeHolder: vscode.l10n.t('Which folder or repository should it work in?'), matchOnDescription: true, ignoreFocusOut: true });
   if (!pick) return undefined;
   const dir = pick.dir ?? (await browse());
   if (dir) await ctx.globalState.update(lastKey, dir);

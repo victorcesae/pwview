@@ -82,7 +82,8 @@ const PT: Record<string, string> = {
   '{0} image(s)': '{0} imagem(ns)',
   // composer
   'Message the agent while it works…': 'Fale com o agente enquanto ele trabalha…',
-  'Ask, plan, or give a task…  (/ for commands, ! to run in your shell)': 'Pergunte, planeje ou dê uma tarefa…  (/ para comandos, ! para executar no shell)',
+  'Ask, plan, or give a task…  (/ commands, ! shell, Shift+drag files here)': 'Pergunte, planeje ou dê uma tarefa…  (/ comandos, ! shell, Shift+arraste arquivos aqui)',
+  'Only images can be dropped from outside VS Code. For other files, use the Explorer.': 'De fora do VS Code, só é possível soltar imagens. Para outros arquivos, use o Explorer.',
   'Runs now in your shell, in {0}. The agent sees the output with your next message.': 'Executa agora no seu shell, em {0}. O agente vê a saída na sua próxima mensagem.',
   'exit {0}': 'saída {0}',
   'Add images (or paste / drop them)': 'Adicionar imagens (ou cole / solte)',

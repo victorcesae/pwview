@@ -1,4 +1,5 @@
 {
+  "cmd.add.to.chat": "Adicionar ao chat",
   "setting.keep.chats.running": "Os chats continuam trabalhando quando o VS Code recarrega ou fecha e se reconectam quando você os reabre. Sem ninguém conectado, um chat para 15 minutos depois de terminar, ou após 24 horas se ainda estiver esperando. Fechar a aba de um chat o interrompe.",
   "cmd.code.completion.toggle": "Ativar ou desativar a conclusão de código",
   "setting.code.completion.enabled": "Sugestões de código em cinza no editor, aceitas com Tab. Envia o código ao redor do cursor para o provedor escolhido enquanto você digita.",

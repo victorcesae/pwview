@@ -5,7 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Zoomable } from '@/components/Lightbox';
 import { UsagePanel } from '@/components/UsagePanel';
 import { prettyModel } from '@/views/toolSummary';
-import { atQuery, shellCommand, withFile } from '@/views/completion';
+import { atQuery, droppedPaths, mention, shellCommand, withFile } from '@/views/completion';
 import { useEffect, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
 import { RichInput, type RichInputHandle } from '@/components/RichInput';
@@ -183,8 +183,19 @@ export function Composer({ chat }: { chat: ChatState }) {
     input.current?.focus();
   };
 
+  const addPaths = (paths: string[]) => input.current?.insertText(paths.map((p) => mention(p, chat.cwd)).join(' ') + ' ');
+  const addPathsRef = useRef(addPaths);
+  addPathsRef.current = addPaths;
+  useEffect(() => {
+    const on = (e: MessageEvent) => e.data?.type === 'insertPaths' && addPathsRef.current(e.data.paths);
+    window.addEventListener('message', on);
+    return () => window.removeEventListener('message', on);
+  }, []);
+  const [dropNote, setDropNote] = useState('');
   const addFiles = async (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'));
+    // from the computer's own file manager there is no path the agent could open (over SSH, not even the same machine)
+    setDropNote(files.length > imgs.length ? t('Only images can be dropped from outside VS Code. For other files, use the Explorer.') : '');
     if (imgs.length) {
       const read = await Promise.all(imgs.map(readImage));
       setImages((p) => [...p, ...read]);
@@ -308,9 +319,12 @@ export function Composer({ chat }: { chat: ChatState }) {
       onDrop={(e) => {
         e.preventDefault();
         setOver(false);
+        const paths = droppedPaths((type) => e.dataTransfer.getData(type));
+        if (paths.length) return addPaths(paths);
         addFiles([...e.dataTransfer.files]);
       }}
     >
+      {dropNote && <div className="text-muted-foreground px-1 text-[11.5px]">{dropNote}</div>}
       {isShell && (
         <div className="text-muted-foreground flex items-center gap-1.5 px-1 text-[11.5px]">
           <SquareTerminal className="size-3.5 shrink-0" />
@@ -375,7 +389,7 @@ export function Composer({ chat }: { chat: ChatState }) {
       )}
       <RichInput
         ref={input}
-        placeholder={working ? t('Message the agent while it works…') : t('Ask, plan, or give a task…  (/ for commands, ! to run in your shell)')}
+        placeholder={working ? t('Message the agent while it works…') : t('Ask, plan, or give a task…  (/ commands, ! shell, Shift+drag files here)')}
         onChange={(m) => {
           setText(m);
           setSel(0);

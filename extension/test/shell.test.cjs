@@ -187,3 +187,55 @@ test('commands the agent waits on: live output from the session folder, then the
     else process.env.CLAUDE_CODE_TMPDIR = saved;
   }
 });
+
+test('dropping files: paths from VS Code, written relative to the chat folder', () => {
+  const get = (o) => (type) => o[type] ?? '';
+  assert.deepStrictEqual(C.droppedPaths(get({ 'application/vnd.code.uri-list': 'vscode-remote://ssh-remote%2Bhost/home/me/app/src/a%20b.ts\r\nfile:///home/me/x.ts' })), ['/home/me/app/src/a b.ts', '/home/me/x.ts']);
+  assert.deepStrictEqual(C.droppedPaths(get({ 'text/uri-list': '# comment\nfile:///c%3A/w/a.ts' })), ['c:/w/a.ts']);
+  assert.deepStrictEqual(C.droppedPaths(get({ codefiles: '["/w/a.ts"]' })), ['/w/a.ts']);
+  assert.deepStrictEqual(C.droppedPaths(get({ 'text/uri-list': 'https://example.com/a' })), [], 'a web link is not a file');
+  assert.deepStrictEqual(C.droppedPaths(get({})), []);
+  assert.strictEqual(C.mention('/home/me/app/src/a.ts', '/home/me/app'), '`src/a.ts`');
+  assert.strictEqual(C.mention('/home/me/other/a.ts', '/home/me/app'), '`/home/me/other/a.ts`');
+  assert.strictEqual(C.mention('/home/me/app-2/a.ts', '/home/me/app'), '`/home/me/app-2/a.ts`', 'a similar name is not inside');
+  assert.strictEqual(C.mention('C:\\w\\src\\a.ts', 'c:\\w'), '`src/a.ts`');
+});
+
+test('follow view: shows output as written, ignores typing, says when the file is gone', async () => {
+  const fOut = path.join(os.tmpdir(), 'steerhouse-follow-build');
+  execSync(`npx esbuild src/follow.ts --bundle --platform=node --format=cjs --outdir="${fOut}" --alias:vscode="${path.join(__dirname, 'vscode-stub.cjs')}" --log-level=error`, { cwd: root });
+  const F = require(path.join(fOut, 'follow.js'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-follow-'));
+  const file = path.join(dir, 'x.output');
+  fs.writeFileSync(file, 'one\nolá ');
+  const pty = F.followPty(file, 'My chat: npm test');
+  let shown = '';
+  let closed = false;
+  pty.onDidWrite((s) => (shown += s));
+  pty.onDidClose(() => (closed = true));
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  pty.open();
+  assert.match(shown, /My chat: npm test/);
+  assert.match(shown, /one\r\nolá /, 'terminal line ends');
+  // a character split across two writes stays whole
+  const fd = fs.openSync(file, 'a');
+  const e = Buffer.from('é');
+  fs.writeSync(fd, e.subarray(0, 1));
+  await wait(600);
+  fs.writeSync(fd, e.subarray(1));
+  fs.writeSync(fd, Buffer.from('\ntwo\n'));
+  fs.closeSync(fd);
+  await wait(600);
+  assert.match(shown, /olá é\r\ntwo\r\n/);
+  const before = shown;
+  pty.handleInput('source /x/.venv/bin/activate\r');
+  await wait(50);
+  assert.strictEqual(shown, before, 'what other extensions type goes nowhere');
+  assert.ok(!closed);
+  fs.rmSync(file);
+  await wait(600);
+  assert.match(shown, /command has finished/);
+  pty.handleInput('\x03');
+  assert.ok(closed, 'Ctrl+C closes the view');
+  pty.close();
+});

@@ -2,7 +2,7 @@
   "name": "steerhouse",
   "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -267,6 +267,12 @@
         "command": "steerhouse.codeCompletion.toggle",
         "title": "%cmd.code.completion.toggle%",
         "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.addToChat",
+        "title": "%cmd.add.to.chat%",
+        "category": "Steerhouse",
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "steerhouse.renameAccount",
@@ -742,6 +748,11 @@
           "group": "9_delete@1"
         },
         {
+          "command": "steerhouse.addToChat",
+          "when": "view == steerhouse.sessions && viewItem =~ /^fs(file|folder)$/",
+          "group": "steerhouse@0"
+        },
+        {
           "command": "steerhouse.pwview.open",
           "when": "view == steerhouse.sessions && viewItem =~ /^project\\b/",
           "group": "3_browser@1"
@@ -885,6 +896,13 @@
           "command": "steerhouse.scm.openView",
           "when": "view == steerhouse.sessions && viewItem =~ /^scm\\b/",
           "group": "2_view@1"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "steerhouse.addToChat",
+          "when": "resourceScheme == file || resourceScheme == vscode-remote",
+          "group": "steerhouse@0"
         }
       ],
       "comments/commentThread/context": [
@@ -1081,6 +1099,10 @@
         }
       ],
       "explorer/context": [
+        {
+          "command": "steerhouse.addToChat",
+          "group": "steerhouse@0"
+        },
         {
           "command": "steerhouse.newChatHere",
           "when": "explorerResourceIsFolder",
@@ -1283,7 +1305,7 @@
               "markdown": "media/walkthrough/4-chat.md"
             },
             "completionEvents": [
-              "onCommand:steerhouse.newChat"
+              "onContext:steerhouse.chatStarted"
             ]
           },
           {
@@ -1335,6 +1357,8 @@
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs",
     "test:restore": "npm run build && node test/editor/restore.cjs",
+    "test:usage": "npm run build && xvfb-run -a -s '-screen 0 1400x900x24' node test/editor/usage.cjs",
+    "test:usage:agent": "npm run build && USAGE_SCENARIO=$PWD/test/editor/usage-agent.cjs xvfb-run -a -s '-screen 0 1400x900x24' node test/editor/usage.cjs",
     "vscode:prepublish": "npm run build"
   },
   "devDependencies": {
@@ -1362,6 +1386,7 @@
     "clsx": "2.1.1",
     "esbuild": "0.25.5",
     "lucide-react": "0.511.0",
+    "playwright-core": "^1.65.0",
     "radix-ui": "1.4.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",

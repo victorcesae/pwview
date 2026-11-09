@@ -168,6 +168,25 @@ async function run() {
       server.close();
     }
   });
+  await check('follow in terminal: a read-only view with no shell', async () => {
+    const fsx = require('fs'), pathx = require('path'), osx = require('os');
+    const file = pathx.join(fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'steerhouse-follow-')), 'x.output');
+    fsx.writeFileSync(file, 'hello');
+    const before = vscode.window.terminals.length;
+    await vscode.commands.executeCommand('steerhouse.followTask', { outputFile: file, description: 'test', chatTitle: 'My chat' });
+    await vscode.commands.executeCommand('steerhouse.followTask', { outputFile: file, description: 'test', chatTitle: 'My chat' });
+    await wait(500);
+    assert.strictEqual(vscode.window.terminals.length, before + 1, 'following twice reuses the terminal');
+    const term = vscode.window.terminals.at(-1);
+    assert.match(term.name, /My chat/);
+    assert.ok(term.creationOptions.pty, 'no shell for other extensions to type into');
+    term.dispose();
+  });
+  await check('add to chat: the command exists and is on the right-click menus', async () => {
+    assert.ok(commands.includes('steerhouse.addToChat'));
+    const menus = pkg.contributes.menus;
+    for (const where of ['explorer/context', 'editor/title/context', 'view/item/context']) assert.ok(menus[where].some((m) => m.command === 'steerhouse.addToChat'), where);
+  });
   await check('check setup runs', async () => {
     await vscode.commands.executeCommand('steerhouse.refresh');
   });

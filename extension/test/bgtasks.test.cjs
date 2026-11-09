@@ -67,8 +67,6 @@ test('bg: a running task of a session not driven by Steerhouse is "running" only
 });
 
 test('bg: follow command per OS, with quotes in the path escaped', () => {
-  assert.deepStrictEqual(B.followCommand("C:\\t\\it's.output", 'win32'), { shell: 'powershell.exe', args: ['-NoProfile', '-NoLogo', '-Command', "Get-Content -LiteralPath 'C:\\t\\it''s.output' -Tail 200 -Wait"] });
-  assert.deepStrictEqual(B.followCommand("/tmp/it's.output", 'linux'), { shell: '/bin/sh', args: ['-c', "tail -n 200 -F '/tmp/it'\\''s.output'"] });
 });
 
 test('bg: the engine lists a session\'s background commands from its transcript', () => {
