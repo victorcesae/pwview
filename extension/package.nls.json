@@ -81,5 +81,17 @@
   "cmd.remote.access": "Open on Phone…",
   "cmd.open.terminal.here": "Open Terminal Here",
   "cmd.follow.task": "Follow in Terminal",
-  "cmd.open.task.file": "Open Output"
+  "cmd.open.task.file": "Open Output",
+  "cmd.fs-openToSide": "Open to the Side",
+  "cmd.fs-revealInExplorer": "Reveal in Explorer (all actions)",
+  "cmd.fs-revealInOS": "Reveal in File Explorer",
+  "cmd.fs-newFile": "New File…",
+  "cmd.fs-newFolder": "New Folder…",
+  "cmd.fs-findInFolder": "Find in Folder…",
+  "cmd.fs-selectForCompare": "Select for Compare",
+  "cmd.fs-compareWithSelected": "Compare with Selected",
+  "cmd.fs-copyPath": "Copy Path",
+  "cmd.fs-copyRelativePath": "Copy Relative Path",
+  "cmd.fs-rename": "Rename…",
+  "cmd.fs-delete": "Delete"
 }

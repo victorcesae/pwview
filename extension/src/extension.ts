@@ -7,6 +7,7 @@ import { installedAgents, runCliAgent } from './agents';
 import { addWorktree, removeWorktree, repoRoot, slug, validBranch, worktreeInfo } from './worktree';
 import { lanAddress, RemoteServer } from './remote';
 import { migrateFromAgentLens } from './migrate';
+import { registerFileActions } from './fileActions';
 import { followCommand } from './bgtasks';
 import { claudeDir } from './paths';
 import { MCP_PRESETS, mcpAddArgs, runClaude, sdkConfig, splitCommand, validName, type McpPreset, type McpScope, type McpServer } from './mcp';
@@ -872,6 +873,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
   refresh(true);
   restoreTestHooks(chats);
+  registerFileActions(ctx, () => tree.refresh());
   let timer = setInterval(refresh, cfg().get<number>('pollSeconds', 3) * 1000);
   ctx.subscriptions.push(
     { dispose: () => clearInterval(timer) },

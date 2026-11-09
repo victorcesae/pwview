@@ -86,3 +86,18 @@ test('tree: a project that is a worktree says so (main repo and branch)', async 
   assert.match(item.contextValue, /\bworktree\b/);
   assert.strictEqual(item.iconPath.id, 'git-branch');
 });
+
+test('file actions: relative path from the right workspace folder; new names checked', () => {
+  execSync(`npx esbuild src/fileActions.ts --bundle --platform=node --format=cjs --outdir="${path.join(os.tmpdir(), 'steerhouse-fa-build')}" --alias:vscode="${path.join(__dirname, 'vscode-stub.cjs')}" --log-level=error`, { cwd: root });
+  const F = require(path.join(os.tmpdir(), 'steerhouse-fa-build', 'fileActions.js'));
+  assert.strictEqual(F.relativeTo('C:\\w\\app\\src\\a.ts', ['C:\\w', 'C:\\w\\app']), 'src/a.ts', 'the closest folder wins');
+  assert.strictEqual(F.relativeTo('/w/app/src', ['/w/app']), 'src');
+  assert.strictEqual(F.relativeTo('/other/x.ts', ['/w/app']), '/other/x.ts');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-fa-'));
+  fs.writeFileSync(path.join(dir, 'taken.ts'), '');
+  assert.strictEqual(F.checkNewName(dir, 'new.ts'), undefined);
+  assert.strictEqual(F.checkNewName(dir, 'sub/new.ts'), undefined, 'nested paths are fine');
+  assert.ok(F.checkNewName(dir, '  '), 'empty');
+  assert.ok(F.checkNewName(dir, 'taken.ts'), 'exists');
+  assert.ok(F.checkNewName(dir, '../escape.ts'), 'outside the folder');
+});

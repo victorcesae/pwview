@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3
+- The readable code blocks from 1.0.2 now really ship: packaging rebuilds first (the 1.0.2 package had the previous chat page).
+- Right-click on files and folders in the Sessions tree, like the Explorer: Open to the Side, Reveal in Explorer (every other extension's actions are there), Reveal in File Explorer, Open in Terminal, New File / Folder, Find in Folder, Select for Compare / Compare with Selected, Copy Path / Relative Path, Rename (F2), Delete (to the trash), New Chat Here, New Chat in a Worktree.
+
 ## 1.0.2
 - Readable code everywhere: code blocks, tool and command output, inline code and background-command output use the normal text colour (not VS Code's dim code colour) and wrap long lines instead of scrolling sideways. Code blocks show their language and a Copy button.
 

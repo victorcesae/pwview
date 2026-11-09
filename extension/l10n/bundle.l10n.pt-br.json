@@ -161,5 +161,14 @@
   "stopped": "parado",
   "maybe stopped": "talvez parado",
   "Output": "Saída",
-  "{0} running": "{0} rodando"
+  "{0} running": "{0} rodando",
+  "Enter a name": "Digite um nome",
+  "Use a name inside this folder": "Use um nome dentro desta pasta",
+  "{0} already exists here": "{0} já existe aqui",
+  "New folder in {0}": "Nova pasta em {0}",
+  "New file in {0}": "Novo arquivo em {0}",
+  "$(diff) Selected {0} for compare": "$(diff) {0} selecionado para comparar",
+  "Rename {0}": "Renomear {0}",
+  "Delete the folder {0} and everything in it?": "Excluir a pasta {0} e tudo dentro dela?",
+  "It moves to the trash (Recycle Bin), where you can restore it.": "Vai para a lixeira, de onde você pode restaurar."
 }

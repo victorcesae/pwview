@@ -81,5 +81,17 @@
   "cmd.remote.access": "Abrir no celular…",
   "cmd.open.terminal.here": "Abrir terminal aqui",
   "cmd.follow.task": "Acompanhar no terminal",
-  "cmd.open.task.file": "Abrir saída"
+  "cmd.open.task.file": "Abrir saída",
+  "cmd.fs-openToSide": "Abrir ao Lado",
+  "cmd.fs-revealInExplorer": "Revelar no Explorador (todas as ações)",
+  "cmd.fs-revealInOS": "Revelar no Explorador de Arquivos",
+  "cmd.fs-newFile": "Novo Arquivo…",
+  "cmd.fs-newFolder": "Nova Pasta…",
+  "cmd.fs-findInFolder": "Localizar na Pasta…",
+  "cmd.fs-selectForCompare": "Selecionar para Comparar",
+  "cmd.fs-compareWithSelected": "Comparar com o Selecionado",
+  "cmd.fs-copyPath": "Copiar o Caminho",
+  "cmd.fs-copyRelativePath": "Copiar Caminho Relativo",
+  "cmd.fs-rename": "Renomear…",
+  "cmd.fs-delete": "Excluir"
 }

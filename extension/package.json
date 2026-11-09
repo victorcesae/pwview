@@ -2,7 +2,7 @@
   "name": "steerhouse",
   "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -369,6 +369,66 @@
         "title": "%cmd.open.task.file%",
         "category": "Steerhouse",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "steerhouse.fs.openToSide",
+        "title": "%cmd.fs-openToSide%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.fs.revealInExplorer",
+        "title": "%cmd.fs-revealInExplorer%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.fs.revealInOS",
+        "title": "%cmd.fs-revealInOS%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.fs.newFile",
+        "title": "%cmd.fs-newFile%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.fs.newFolder",
+        "title": "%cmd.fs-newFolder%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.fs.findInFolder",
+        "title": "%cmd.fs-findInFolder%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.fs.selectForCompare",
+        "title": "%cmd.fs-selectForCompare%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.fs.compareWithSelected",
+        "title": "%cmd.fs-compareWithSelected%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.fs.copyPath",
+        "title": "%cmd.fs-copyPath%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.fs.copyRelativePath",
+        "title": "%cmd.fs-copyRelativePath%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.fs.rename",
+        "title": "%cmd.fs-rename%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.fs.delete",
+        "title": "%cmd.fs-delete%",
+        "category": "Steerhouse"
       }
     ],
     "menus": {
@@ -579,6 +639,81 @@
           "command": "steerhouse.followTask",
           "when": "view == steerhouse.sessions && viewItem == bgtask",
           "group": "inline@1"
+        },
+        {
+          "command": "steerhouse.fs.openToSide",
+          "when": "view == steerhouse.sessions && viewItem == fsfile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "steerhouse.fs.revealInExplorer",
+          "when": "view == steerhouse.sessions && viewItem =~ /^fs(file|folder)$/",
+          "group": "navigation@2"
+        },
+        {
+          "command": "steerhouse.fs.revealInOS",
+          "when": "view == steerhouse.sessions && viewItem =~ /^fs(file|folder)$/",
+          "group": "navigation@3"
+        },
+        {
+          "command": "steerhouse.fs.newFile",
+          "when": "view == steerhouse.sessions && viewItem == fsfolder",
+          "group": "1_new@1"
+        },
+        {
+          "command": "steerhouse.fs.newFolder",
+          "when": "view == steerhouse.sessions && viewItem == fsfolder",
+          "group": "1_new@2"
+        },
+        {
+          "command": "steerhouse.fs.findInFolder",
+          "when": "view == steerhouse.sessions && viewItem == fsfolder",
+          "group": "4_search@1"
+        },
+        {
+          "command": "steerhouse.fs.selectForCompare",
+          "when": "view == steerhouse.sessions && viewItem == fsfile",
+          "group": "3_compare@1"
+        },
+        {
+          "command": "steerhouse.fs.compareWithSelected",
+          "when": "view == steerhouse.sessions && viewItem == fsfile && steerhouse.compareSelected",
+          "group": "3_compare@2"
+        },
+        {
+          "command": "steerhouse.fs.copyPath",
+          "when": "view == steerhouse.sessions && viewItem =~ /^fs(file|folder)$/",
+          "group": "6_copypath@1"
+        },
+        {
+          "command": "steerhouse.fs.copyRelativePath",
+          "when": "view == steerhouse.sessions && viewItem =~ /^fs(file|folder)$/",
+          "group": "6_copypath@2"
+        },
+        {
+          "command": "steerhouse.fs.rename",
+          "when": "view == steerhouse.sessions && viewItem =~ /^fs(file|folder)$/",
+          "group": "7_modification@1"
+        },
+        {
+          "command": "steerhouse.fs.delete",
+          "when": "view == steerhouse.sessions && viewItem =~ /^fs(file|folder)$/",
+          "group": "7_modification@2"
+        },
+        {
+          "command": "steerhouse.openTerminalHere",
+          "when": "view == steerhouse.sessions && viewItem =~ /^fs(file|folder)$/",
+          "group": "navigation@4"
+        },
+        {
+          "command": "steerhouse.newChatHere",
+          "when": "view == steerhouse.sessions && viewItem == fsfolder",
+          "group": "steerhouse@1"
+        },
+        {
+          "command": "steerhouse.newChatInWorktree",
+          "when": "view == steerhouse.sessions && viewItem == fsfolder",
+          "group": "steerhouse@2"
         }
       ],
       "comments/commentThread/context": [
@@ -673,6 +808,54 @@
         },
         {
           "command": "steerhouse.openTaskFile",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.fs.openToSide",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.fs.revealInExplorer",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.fs.revealInOS",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.fs.newFile",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.fs.newFolder",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.fs.findInFolder",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.fs.selectForCompare",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.fs.compareWithSelected",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.fs.copyPath",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.fs.copyRelativePath",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.fs.rename",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.fs.delete",
           "when": "false"
         }
       ],
@@ -790,6 +973,11 @@
         "key": "delete",
         "mac": "cmd+backspace",
         "when": "focusedView == steerhouse.sessions && listHasSelectionOrFocus"
+      },
+      {
+        "command": "steerhouse.fs.rename",
+        "key": "f2",
+        "when": "focusedView == steerhouse.sessions && viewItem =~ /^fs(file|folder)$/"
       }
     ],
     "walkthroughs": [
@@ -879,7 +1067,8 @@
     "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs test/e2e-fork.test.cjs test/e2e-bg.test.cjs",
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs",
-    "test:restore": "npm run build && node test/editor/restore.cjs"
+    "test:restore": "npm run build && node test/editor/restore.cjs",
+    "vscode:prepublish": "npm run build"
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.319",
