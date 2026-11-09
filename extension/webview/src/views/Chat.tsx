@@ -14,6 +14,7 @@ import { Composer, PRIORITY } from './Composer';
 import { LightboxProvider, Zoomable } from '@/components/Lightbox';
 import { fileOf, groupTools, inp, KIND, stat, summarizeTools, type ToolItem } from './toolSummary';
 import { SideRail } from '@/components/SideRail';
+import { WorkFolders } from '@/components/WorkFolders';
 import { HostMark, hostName, VendorMark, vendorName, vendorOf } from '@/components/VendorMark';
 import { t } from '@/i18n';
 
@@ -691,7 +692,9 @@ export function ChatView({ data }: { data: ChatData }) {
           {chat.host && <span className="text-muted-foreground text-[10px]">+</span>}
           <VendorMark vendor={vendorOf(shownModel)} />
         </span>
-        <h1 className="min-w-0 flex-1 truncate text-[14px] font-semibold">{chat.title}</h1>
+        <h1 className="min-w-0 truncate text-[14px] font-semibold">{chat.title}</h1>
+        <WorkFolders chat={chat} />
+        <span className="flex-1" />
         {chat.status === 'starting' && (
           <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11.5px]" role="status">
             <Loader2 className="size-3.5 animate-spin" /> {t('Starting Claude Code…')}

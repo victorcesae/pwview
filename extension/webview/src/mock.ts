@@ -241,9 +241,9 @@ export function multiChat(): Data {
   ];
   // as right after a resume: Claude Code has not reported the model yet
   const prs = {
-    'https://github.com/nzero-labs/api-gateway/pull/214': { state: 'merged' as const, title: 'Rename quote status to approvalStatus' },
+    'https://github.com/nzero-labs/api-gateway/pull/214': { state: 'merged' as const, title: 'Rename quote status to approvalStatus', tasks: { done: 3, total: 3 }, review: 'approved' as const, checks: [{"workflow":"CI","name":"test","state":"pass" as const,"url":"https://github.com/x/actions/runs/1"}, {"workflow":"CI","name":"lint","state":"pass" as const,"url":"https://github.com/x/actions/runs/1"}] },
     'https://github.com/nzero-labs/shared-ui/pull/57': { state: 'closed' as const, title: 'QuoteBadge: approvalStatus prop' },
-    'https://github.com/NZero-Labs/intranet-v5/pull/1288': { state: 'open' as const, title: 'Use approvalStatus in quotes' },
+    'https://github.com/NZero-Labs/intranet-v5/pull/1288': { state: 'open' as const, title: 'Use approvalStatus in quotes', tasks: { done: 2, total: 5 }, review: 'required' as const, checks: [{"workflow":"CI","name":"unit tests","state":"pass" as const,"url":"https://github.com/x/actions/runs/1"}, {"workflow":"CI","name":"e2e (playwright)","state":"fail" as const,"url":"https://github.com/x/actions/runs/1"}, {"workflow":"CI","name":"build","state":"pending" as const,"url":"https://github.com/x/actions/runs/1"}, {"workflow":"Deploy","name":"preview","state":"skipped" as const,"url":"https://github.com/x/actions/runs/1"}] },
   };
   return { view: 'chat', linked: [], chat: { ...base, model: undefined, host: 'Visual Studio Code', cwd: W, title: 'Rename quote status across repos', status: 'idle', activity: undefined, queue: [], todos: [], items, limits, prs } };
 }

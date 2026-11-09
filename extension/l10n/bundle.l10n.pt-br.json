@@ -34,5 +34,12 @@
   "Project rules (alternate location)": "Regras do projeto (local alternativo)",
   "Cursor rule": "Regra do Cursor",
   "Open a folder to edit its project rules.": "Abra uma pasta para editar as regras do projeto.",
-  "Project rules · {0}": "Regras do projeto · {0}"
+  "Project rules · {0}": "Regras do projeto · {0}",
+  "Files": "Arquivos",
+  "{0} changed by this session": "{0} alterados por esta sessão",
+  "{0} changed by agents": "{0} alterados por agentes",
+  "{0} changed": "{0} alterados",
+  "{0} sessions": "{0} sessões",
+  "{0} working": "{0} trabalhando",
+  "this workspace": "este workspace"
 }

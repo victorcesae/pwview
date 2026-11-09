@@ -181,8 +181,9 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         const it = new vscode.TreeItem(path.basename(node.path) || node.path, node.current ? C.Expanded : C.Collapsed);
         it.iconPath = new vscode.ThemeIcon(node.current ? 'root-folder-opened' : 'folder');
         const working = node.sessions.filter((s) => s.info.state === 'working').length;
-        it.description = `${node.sessions.length} sessions${working ? ` · ${working} working` : ''}${node.current ? ' · this workspace' : ''}`;
+        it.description = [vscode.l10n.t('{0} sessions', node.sessions.length), working ? vscode.l10n.t('{0} working', working) : '', node.current ? vscode.l10n.t('this workspace') : ''].filter(Boolean).join(' · ');
         it.tooltip = node.path;
+        it.contextValue = 'project';
         return it;
       }
       case 'session': {
@@ -247,10 +248,10 @@ $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
       }
       case 'files': {
         const changed = changedFiles(node.sessions);
-        const it = new vscode.TreeItem('Files', C.Collapsed);
+        const it = new vscode.TreeItem(vscode.l10n.t('Files'), C.Collapsed);
         it.id = `${node.via ?? ''}|files:${node.s?.info.id ?? ''}:${node.root}`;
         it.iconPath = new vscode.ThemeIcon('files');
-        it.description = changed.size ? `${changed.size} changed by ${node.s ? 'this session' : 'agents'}` : '';
+        it.description = changed.size ? (node.s ? vscode.l10n.t('{0} changed by this session', changed.size) : vscode.l10n.t('{0} changed by agents', changed.size)) : '';
         it.tooltip = node.root;
         return it;
       }
@@ -262,14 +263,14 @@ $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
         it.resourceUri = vscode.Uri.file(node.path); // file-type icons and git colors from the theme
         if (node.dir) {
           const inside = [...changed.keys()].filter((f) => f.startsWith(key + '/')).length;
-          if (inside) it.description = `${inside} changed`;
+          if (inside) it.description = vscode.l10n.t('{0} changed', inside);
         } else {
           const c = changed.get(key);
           if (c) it.description = `+${c.added} −${c.removed} · ${c.edits} edit${c.edits > 1 ? 's' : ''}`;
           it.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(node.path)] };
         }
         it.tooltip = node.path;
-        it.contextValue = node.dir ? 'folder' : 'file';
+        it.contextValue = node.dir ? 'fsfolder' : 'fsfile';
         return it;
       }
       case 'change': {

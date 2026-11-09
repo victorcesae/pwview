@@ -52,6 +52,17 @@ async function run() {
     const tabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs).map((t) => t.label);
     assert.ok(vscode.window.tabGroups.all.flatMap((g) => g.tabs).some((t) => t.input?.viewType?.endsWith('agentlens.chat')), `tabs: ${tabs.join(', ')}`);
   });
+  await check('new chat here opens a chat in that folder', async () => {
+    const dir = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'agentlens-here-'));
+    const before = vscode.window.tabGroups.all.flatMap((g) => g.tabs).filter((t) => t.input?.viewType?.endsWith('agentlens.chat')).length;
+    vscode.commands.executeCommand('agentlens.newChatHere', { kind: 'project', path: dir });
+    // one account: no picker; several: pick the first
+    await wait(800);
+    await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem').then(undefined, () => {});
+    await wait(2500);
+    const after = vscode.window.tabGroups.all.flatMap((g) => g.tabs).filter((t) => t.input?.viewType?.endsWith('agentlens.chat')).length;
+    assert.strictEqual(after, before + 1);
+  });
   await check('check setup runs', async () => {
     await vscode.commands.executeCommand('agentlens.refresh');
   });

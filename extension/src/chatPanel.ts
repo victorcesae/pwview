@@ -19,6 +19,7 @@ export type FromChat =
   | { type: 'interrupt' }
   | { type: 'loadEarlier'; all?: boolean }
   | { type: 'openUrl'; url: string }
+  | { type: 'revealFolder'; path: string }
   | { type: 'contextDetail' }
   | { type: 'toggleMcp'; name: string; enabled: boolean }
   | { type: 'reconnectMcp'; name: string }
@@ -239,6 +240,8 @@ export class Chats {
         return c.setUltracode(m.on).catch((e) => vscode.window.showWarningMessage(`AgentLens: ultracode not available: ${e?.message ?? e}`));
       case 'setMode':
         return c.setPermissionMode(m.mode);
+      case 'revealFolder':
+        return vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(m.path));
       case 'openUrl':
         return openUrl(m.url);
       case 'openFile':

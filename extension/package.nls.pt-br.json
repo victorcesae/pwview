@@ -68,5 +68,6 @@
   "setting.browserPath": "Executável do navegador usado quando agentlens.browser é \"custom\" (caminho completo ou nome no PATH, ex.: brave).",
   "cmd.edit.my.rules": "Editar minhas regras (todos os projetos)",
   "cmd.edit.project.rules": "Editar regras do projeto",
-  "cmd.open.rules": "Abrir arquivo de regras"
+  "cmd.open.rules": "Abrir arquivo de regras",
+  "cmd.new.chat.here": "Novo chat aqui"
 }

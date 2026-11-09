@@ -2,7 +2,7 @@
   "name": "agentlens",
   "displayName": "AgentLens",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "0.9.2",
+  "version": "0.9.4",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -295,6 +295,12 @@
         "command": "agentlens.openRules",
         "title": "%cmd.open.rules%",
         "category": "AgentLens"
+      },
+      {
+        "command": "agentlens.newChatHere",
+        "title": "%cmd.new.chat.here%",
+        "category": "AgentLens",
+        "icon": "$(comment-discussion)"
       }
     ],
     "menus": {
@@ -440,6 +446,16 @@
           "command": "agentlens.editUserRules",
           "when": "view == agentlens.sessions && viewItem == rules-user",
           "group": "inline@1"
+        },
+        {
+          "command": "agentlens.newChatHere",
+          "when": "view == agentlens.sessions && viewItem == project",
+          "group": "inline@0"
+        },
+        {
+          "command": "agentlens.newChatHere",
+          "when": "view == agentlens.sessions && viewItem == fsfolder",
+          "group": "inline@0"
         }
       ],
       "comments/commentThread/context": [
@@ -509,6 +525,13 @@
         {
           "command": "agentlens.pasteImage",
           "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "agentlens.newChatHere",
+          "when": "explorerResourceIsFolder",
+          "group": "agentlens@1"
         }
       ]
     },
@@ -583,7 +606,7 @@
     "viewsWelcome": [
       {
         "view": "agentlens.prompts",
-        "contents": "Prompts are reusable instructions you can run in one click, interactive or headless (claude -p), with ${file}, ${selection} and ${input:â€¦} variables.\n[Add Starter Prompts](command:agentlens.starterPrompts)\n[New Prompt](command:agentlens.newPrompt)\nProject prompts live in .agentlens/prompts/ (commit them to share with the team)."
+        "contents": "Prompts are reusable instructions you can run in one click, interactive or headless (claude -p), with ${file}, ${selection} and ${input:ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦} variables.\n[Add Starter Prompts](command:agentlens.starterPrompts)\n[New Prompt](command:agentlens.newPrompt)\nProject prompts live in .agentlens/prompts/ (commit them to share with the team)."
       },
       {
         "view": "agentlens.skills",

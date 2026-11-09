@@ -92,3 +92,56 @@ test('resumed chat: shows the model of the last answer before Claude Code report
   const again = new C.ChatSession({ cwd: '/r', resume: 's', history: h, prefs: { model: 'haiku' } }, () => {});
   assert.strictEqual(again.state.model, 'haiku');
 });
+
+test('prs: task list in the description (code blocks ignored, numbered lists too)', () => {
+  const body = ['## Plan', '- [x] API field', '- [ ] shared badge', '* [X] web app', '1. [ ] docs', '', '```md', '- [ ] not a task', '```', 'text [ ] not a task'].join('\n');
+  assert.deepStrictEqual(P.prTasks(body), { done: 2, total: 4 });
+  assert.strictEqual(P.prTasks('no tasks here'), undefined);
+  assert.strictEqual(P.prTasks(undefined), undefined);
+});
+
+test('prs: CI checks from gh (Actions jobs and commit statuses), newest run of a job wins', () => {
+  const checks = P.toChecks([
+    { __typename: 'CheckRun', name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion: 'FAILURE', detailsUrl: 'u1' },
+    { __typename: 'CheckRun', name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion: 'SUCCESS', detailsUrl: 'u2' },
+    { __typename: 'CheckRun', name: 'build', workflowName: 'CI', status: 'IN_PROGRESS', conclusion: '' },
+    { __typename: 'CheckRun', name: 'label', workflowName: 'Triage', status: 'COMPLETED', conclusion: 'SKIPPED' },
+    { __typename: 'CheckRun', name: 'e2e', workflowName: 'CI', status: 'COMPLETED', conclusion: 'TIMED_OUT' },
+    { __typename: 'StatusContext', context: 'vercel', state: 'PENDING', targetUrl: 'v' },
+  ]);
+  assert.deepStrictEqual(checks.map((c) => [c.name, c.state]), [['test', 'pass'], ['build', 'pending'], ['label', 'skipped'], ['e2e', 'fail'], ['vercel', 'pending']]);
+  assert.strictEqual(checks[0].url, 'u2');
+  assert.strictEqual(P.checksSummary(checks), 'fail');
+  assert.strictEqual(P.checksSummary(checks.filter((c) => c.state !== 'fail')), 'pending');
+  assert.strictEqual(P.checksSummary([{ name: 'a', state: 'pass' }, { name: 'b', state: 'skipped' }]), 'pass');
+  assert.strictEqual(P.toChecks([]), undefined);
+});
+
+test('prs: the chat is repainted when CI finishes or a task is ticked, not when nothing changed', async () => {
+  let st = { state: 'open', checks: [{ name: 'test', state: 'pending' }], tasks: { done: 1, total: 3 } };
+  let changes = 0;
+  const t = new P.PrTracker(() => changes++, async () => ({ ...JSON.parse(JSON.stringify(st)), checked: Date.now() }));
+  const u = 'https://github.com/a/b/pull/2';
+  await t.check(u);
+  await t.check(u);
+  assert.strictEqual(changes, 1);
+  st.checks[0].state = 'pass';
+  await t.check(u);
+  assert.strictEqual(changes, 2);
+  st.tasks.done = 2;
+  await t.check(u);
+  assert.strictEqual(changes, 3);
+  t.dispose();
+});
+
+test('prs (real GitHub): open PR with Actions checks and review decision', { skip: !online && 'gh not logged in' }, async () => {
+  const s = await P.prStatus('https://github.com/cli/cli/pull/1');
+  assert.strictEqual(s.state, 'merged');
+  const open = JSON.parse(execSync('gh pr list -R cli/cli --state open --limit 1 --json url', { encoding: 'utf8' }))[0];
+  if (!open) return;
+  const o = await P.prStatus(open.url);
+  assert.ok(['open', 'draft'].includes(o.state));
+  assert.ok(Array.isArray(o.checks) && o.checks.length > 0, 'has CI checks');
+  for (const c of o.checks) assert.ok(['pass', 'fail', 'pending', 'skipped'].includes(c.state) && c.name);
+  assert.ok(o.checks.some((c) => c.workflow), 'Actions jobs carry their workflow name');
+});

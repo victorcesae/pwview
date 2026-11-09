@@ -442,6 +442,12 @@ export function activate(ctx: vscode.ExtensionContext) {
       const s = find(sessionArg(x) ?? '');
       if (s) runAgent(`${clip(s.info.title, 30)}`, s.info.project, ['--resume', s.info.id], await envFor(accountOf(s.info.account)));
     }),
+    // "New chat here" on a project or folder in the Sessions tree (or a folder in the Explorer)
+    vscode.commands.registerCommand('agentlens.newChatHere', (n?: { kind?: string; path?: string } | vscode.Uri) => {
+      const cwd = n instanceof vscode.Uri ? n.fsPath : n?.path;
+      if (!cwd) return vscode.commands.executeCommand('agentlens.newChat');
+      pickAccount().then(async (account) => account && chats.start({ cwd, account, env: await envFor(account) }));
+    }),
     vscode.commands.registerCommand('agentlens.newChat', () => {
       const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!cwd) return vscode.window.showWarningMessage('Open a folder first.');
