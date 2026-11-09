@@ -8,6 +8,7 @@ import { findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMetho
 import { openUrl } from './browser';
 import { findUrls } from './bgtasks';
 import { completeFiles } from './folders';
+import { saveUpload } from './uploads';
 import { isShuttingDown } from './relayClient';
 import { vendorOf } from './providers';
 import type { Session } from './engine';
@@ -31,6 +32,7 @@ export type FromChat =
   | { type: 'openTerminal' }
   | { type: 'openBrowser' }
   | { type: 'completeFiles'; query: string }
+  | { type: 'uploadFile'; name: string; data: Uint8Array }
   | { type: 'shell'; command: string }
   | { type: 'stopShell'; id: string }
   | { type: 'setTabCompletion'; on: boolean }
@@ -487,6 +489,12 @@ export class Chats {
         return c.runShell(m.command);
       case 'stopShell':
         return c.stopShell(m.id);
+      case 'uploadFile':
+        try {
+          return this.send(o, { type: 'insertPaths', paths: [saveUpload(m.name, m.data)] });
+        } catch (e) {
+          return vscode.window.showErrorMessage(vscode.l10n.t('Could not add {0}: {1}', m.name, String((e as Error)?.message ?? e)));
+        }
       case 'completeFiles': {
         const files = await completeFiles(c.state.cwd, m.query).catch(() => []);
         return this.send(o, { type: 'fileCompletions', query: m.query, files });

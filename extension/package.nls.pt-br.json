@@ -3,7 +3,7 @@
   "setting.keep.chats.running": "Os chats continuam trabalhando quando o VS Code recarrega ou fecha e se reconectam quando você os reabre. Sem ninguém conectado, um chat para 15 minutos depois de terminar, ou após 24 horas se ainda estiver esperando. Fechar a aba de um chat o interrompe.",
   "cmd.code.completion.toggle": "Ativar ou desativar a conclusão de código",
   "setting.code.completion.enabled": "Sugestões de código em cinza no editor, aceitas com Tab. Envia o código ao redor do cursor para o provedor escolhido enquanto você digita.",
-  "setting.code.completion.provider": "Id do provedor de modelos que sugere código. Definido pelo comando que ativa a conclusão de código.",
+  "setting.code.completion.provider": "Id do que sugere código: uma assinatura do Claude ou um provedor de modelos. Definido pelo comando que ativa a conclusão de código.",
   "setting.code.completion.model": "Modelo para as sugestões, se não for o modelo de chat do provedor. Um modelo pequeno e rápido funciona melhor.",
   "setting.code.completion.delay": "Pausa na digitação, em milissegundos, antes de pedir uma sugestão.",
   "setting.tab.completion": "Na caixa do chat, digite @ para encontrar arquivos e pressione Tab para completá-los, além de /comandos e do prompt sugerido.",

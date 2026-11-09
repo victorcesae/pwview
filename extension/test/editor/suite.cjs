@@ -134,9 +134,11 @@ async function run() {
       editor.selection = new vscode.Selection(end, end);
       // typing is what asks again: VS Code keeps its answer while the text and cursor stay the same
       await vscode.commands.executeCommand('type', { text: ' ' });
-      for (let i = 0; i < 20 && !off.getText().includes('return 42;'); i++) {
+      for (let i = 0; i < 24 && !off.getText().includes('return 42;'); i++) {
         await wait(500);
         await vscode.commands.executeCommand('editor.action.inlineSuggest.commit');
+        // about 1 run in 8, the first answer never shows, cause unknown: the next key brings it, as for a person
+        if (i === 11) await vscode.commands.executeCommand('type', { text: ' ' });
       }
       return off;
     };

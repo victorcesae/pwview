@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import type { ChatState, Effort, PermissionMode, Priority, ToChat } from '@/types';
 
 const post = (m: ToChat) => postAny(m as never);
+const MAX_UPLOAD = 100 * 1024 * 1024;
 
 export const PRIORITY: Record<Priority, { label: string; icon: React.ComponentType<{ className?: string }>; hint: string }> = {
   next: { label: 'Steer', icon: Navigation, hint: 'Picked up at its next step, without stopping' },
@@ -93,7 +94,7 @@ function PlusMenu({ chat, onFiles, onSlash }: { chat: ChatState; onFiles: () => 
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top">
         <DropdownMenuItem onSelect={onFiles}>
-          <Paperclip /> {t('Add images')}
+          <Paperclip /> {t('Attach files…')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => post({ type: 'setTabCompletion', on: chat.tabCompletion === false })} title={t('Tab completes @files, /commands and the suggested prompt')}>
           <CornerDownRight /> {chat.tabCompletion === false ? t('Turn Tab completion on') : t('Turn Tab completion off')}
@@ -194,8 +195,18 @@ export function Composer({ chat }: { chat: ChatState }) {
   const [dropNote, setDropNote] = useState('');
   const addFiles = async (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'));
-    // from the computer's own file manager there is no path the agent could open (over SSH, not even the same machine)
-    setDropNote(files.length > imgs.length ? t('Only images can be dropped from outside VS Code. For other files, use the Explorer.') : '');
+    // anything else from this computer: the agent can't open a path here, so the content is copied over
+    setDropNote('');
+    for (const f of files.filter((x) => !x.type.startsWith('image/'))) {
+      if (f.size > MAX_UPLOAD) {
+        setDropNote(t('{0} is too large to add (over 100 MB).', f.name));
+        continue;
+      }
+      // a dropped folder can't be read like this
+      const data = await f.arrayBuffer().catch(() => undefined);
+      if (data) post({ type: 'uploadFile', name: f.name, data: new Uint8Array(data) });
+      else setDropNote(t('{0} could not be read. Folders can\'t be added this way: add the files inside.', f.name));
+    }
     if (imgs.length) {
       const read = await Promise.all(imgs.map(readImage));
       setImages((p) => [...p, ...read]);
@@ -428,7 +439,10 @@ export function Composer({ chat }: { chat: ChatState }) {
       />
 
       <div className="flex flex-wrap items-center gap-0.5 border-t pt-1.5">
-        <input ref={fileInput} type="file" accept="image/*" multiple className="hidden" onChange={(e) => addFiles([...(e.target.files ?? [])])} />
+        <input ref={fileInput} type="file" multiple className="hidden" data-attach onChange={(e) => {
+          addFiles([...(e.target.files ?? [])]);
+          e.target.value = ''; // the same file can be added again
+        }} />
         <PlusMenu chat={chat} onFiles={() => fileInput.current?.click()} onSlash={(c) => pickSlash(c)} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

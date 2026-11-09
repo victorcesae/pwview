@@ -8,7 +8,7 @@ const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
 const out = path.join(os.tmpdir(), 'steerhouse-completion-build');
-execSync(`npx esbuild src/codeCompletion.ts --bundle --platform=node --format=cjs --outdir="${out}" --alias:vscode="${path.join(__dirname, 'vscode-stub.cjs')}" --log-level=error`, { cwd: root });
+execSync(`npx esbuild src/codeCompletion.ts --bundle --platform=node --format=cjs --outdir="${out}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --alias:vscode="${path.join(__dirname, 'vscode-stub.cjs')}" --log-level=error`, { cwd: root });
 const C = require(path.join(out, 'codeCompletion.js'));
 
 test('sensitive files are never sent', () => {
@@ -117,4 +117,28 @@ test('a server error reaches the status bar, not the editor', async (t) => {
   e.onStatus = (err) => seen.push(err);
   assert.strictEqual(await ask(e, doc('let x'), 5), undefined);
   assert.match(seen[0], /Fake: HTTP 401/);
+});
+
+test('a subscription answers through its account, waits for a real pause, and is cleaned like the others', async () => {
+  const asked = [];
+  const source = { id: 'claude:default', name: 'Claude', account: 'default' };
+  const e = new C.CodeCompletion(() => ({ enabled: true, provider: 'claude:default', model: '', delayMs: 0 }), () => [source], async () => undefined, async (account, model, user) => {
+    asked.push({ account, user });
+    return { text: '```js\nreturn 42;\n```', cut: false };
+  });
+  const t0 = Date.now();
+  const items = await ask(e, doc('function f() {'), 14);
+  assert.ok(Date.now() - t0 >= C.SUBSCRIPTION_MIN_DELAY_MS - 20, 'waits even when the setting says 0');
+  assert.strictEqual(items[0].insertText, 'return 42;');
+  assert.strictEqual(asked[0].account, 'default');
+  assert.match(asked[0].user, /<CURSOR>/);
+  // typing during the pause sends nothing
+  const token = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose() {} }) };
+  const pending = ask(e, doc('let other'), 9, {}, token);
+  token.isCancellationRequested = true;
+  assert.strictEqual(await pending, undefined);
+  assert.strictEqual(asked.length, 1);
+  // a sensitive file never reaches it
+  assert.strictEqual(await ask(e, doc('TOKEN=', '/w/.env'), 6), undefined);
+  assert.strictEqual(asked.length, 1);
 });

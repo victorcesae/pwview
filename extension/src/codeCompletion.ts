@@ -2,14 +2,33 @@
 // model provider, because it sends the code around the cursor to that provider as they type.
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { listAccounts } from './accounts';
+import { accountEnv, accountIdentity, listAccounts } from './accounts';
 import { PRESETS, secretKey, type Provider } from './providers';
+import { SubscriptionCompleter } from './subscriptionCompletion';
+import { agentExecutable } from './util';
 
 const PREFIX_CHARS = 6000;
 const SUFFIX_CHARS = 2000;
 const MAX_TOKENS = 256;
 const MAX_LINES = 20;
-const TIMEOUT_MS = 10_000;
+const TIMEOUT_MS = 15_000;
+
+export interface CompletionReply {
+  text: string;
+  cut: boolean;
+}
+
+/** Where suggestions come from: a model provider, or a Claude account's own subscription. */
+export interface SubscriptionSource {
+  id: string;
+  name: string;
+  account: string;
+}
+export type CompletionSource = Provider | SubscriptionSource;
+const isSubscription = (s: CompletionSource): s is SubscriptionSource => 'account' in s;
+
+/** Each suggestion from a subscription spends the plan's limits: wait for a real pause in typing. */
+export const SUBSCRIPTION_MIN_DELAY_MS = 700;
 
 export interface CompletionSettings {
   enabled: boolean;
@@ -61,7 +80,7 @@ export function cleanCompletion(reply: string, prefix: string, suffix: string, c
 }
 
 /** One completion from an Anthropic-compatible endpoint (what every provider preset speaks). */
-export async function requestCompletion(p: Provider, key: string | undefined, model: string, system: string, user: string, signal: AbortSignal): Promise<{ text: string; cut: boolean }> {
+export async function requestCompletion(p: Provider, key: string | undefined, model: string, system: string, user: string, signal: AbortSignal): Promise<CompletionReply> {
   const token = key ?? PRESETS.find((x) => x.id === p.preset)?.localToken ?? '';
   const res = await fetch(`${p.baseUrl.replace(/\/+$/, '')}/v1/messages`, {
     method: 'POST',
@@ -85,8 +104,9 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
 
   constructor(
     private settings: () => CompletionSettings,
-    private providers: () => Provider[],
+    private providers: () => CompletionSource[],
     private secret: (id: string) => Thenable<string | undefined>,
+    private subscription?: (account: string, model: string, user: string, signal: AbortSignal) => Promise<CompletionReply>,
   ) {}
 
   async provideInlineCompletionItems(doc: vscode.TextDocument, pos: vscode.Position, context: vscode.InlineCompletionContext, token: vscode.CancellationToken): Promise<vscode.InlineCompletionItem[] | undefined> {
@@ -106,13 +126,16 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
     if (this.last?.key === key) text = this.last.text;
     else {
       // wait for a pause in typing: VS Code cancels this request on the next key, so nothing is sent
-      await new Promise((r) => setTimeout(r, Math.max(0, s.delayMs)));
+      await new Promise((r) => setTimeout(r, Math.max(isSubscription(provider) ? SUBSCRIPTION_MIN_DELAY_MS : 0, s.delayMs)));
       if (token.isCancellationRequested) return;
       const abort = new AbortController();
       const timer = setTimeout(() => abort.abort(), TIMEOUT_MS);
       const sub = token.onCancellationRequested(() => abort.abort());
       try {
-        const reply = await requestCompletion(provider, provider.hasKey ? await this.secret(provider.id) : undefined, s.model, SYSTEM, userPrompt(doc.languageId, path.basename(doc.uri.fsPath), prefix, suffix), abort.signal);
+        const user = userPrompt(doc.languageId, path.basename(doc.uri.fsPath), prefix, suffix);
+        const reply = isSubscription(provider)
+          ? await this.subscription!(provider.account, s.model, user, abort.signal)
+          : await requestCompletion(provider, provider.hasKey ? await this.secret(provider.id) : undefined, s.model, SYSTEM, user, abort.signal);
         text = cleanCompletion(reply.text, prefix, suffix, reply.cut);
         this.last = { key, text };
         this.onStatus?.();
@@ -132,8 +155,33 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
 export function registerCodeCompletion(ctx: vscode.ExtensionContext) {
   const section = () => vscode.workspace.getConfiguration('steerhouse.codeCompletion');
   const settings = (): CompletionSettings => ({ enabled: section().get('enabled', false), provider: section().get('provider', ''), model: section().get('model', ''), delayMs: section().get('delayMs', 350) });
-  const providers = () => listAccounts().flatMap((a) => (a.provider ? [a.provider] : []));
-  const engine = new CodeCompletion(settings, providers, (id) => ctx.secrets.get(secretKey(id)));
+  // the subscriptions first: they are already there, no key or server to set up
+  const providers = (): CompletionSource[] => {
+    const accounts = listAccounts();
+    return [
+      ...accounts.flatMap((a): CompletionSource[] => (!a.provider && accountIdentity(a) ? [{ id: `claude:${a.id}`, name: vscode.l10n.t('Claude subscription · {0}', a.name), account: a.id }] : [])),
+      ...accounts.flatMap((a): CompletionSource[] => (a.provider ? [a.provider] : [])),
+    ];
+  };
+  const completers = new Map<string, SubscriptionCompleter>();
+  const completerFor = (id: string) => {
+    let c = completers.get(id);
+    if (!c) {
+      const account = listAccounts().find((a) => a.id === id);
+      if (!account) throw new Error(`no account ${id}`);
+      c = new SubscriptionCompleter(agentExecutable(), accountEnv(account), ctx.globalStorageUri.fsPath);
+      completers.set(id, c);
+    }
+    return c;
+  };
+  const stopCompleters = () => {
+    for (const c of completers.values()) c.dispose();
+    completers.clear();
+  };
+  const engine = new CodeCompletion(settings, providers, (id) => ctx.secrets.get(secretKey(id)), (account, model, user, signal) => {
+    require('fs').mkdirSync(ctx.globalStorageUri.fsPath, { recursive: true });
+    return completerFor(account).complete(model, user, signal);
+  });
 
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 49);
   item.command = 'steerhouse.codeCompletion.toggle';
@@ -153,13 +201,16 @@ export function registerCodeCompletion(ctx: vscode.ExtensionContext) {
     const list = providers();
     if (!list.length) {
       const add = vscode.l10n.t('Add a Provider');
-      if ((await vscode.window.showInformationMessage(vscode.l10n.t('Code completion needs a model provider (Ollama, OpenRouter…). Add one, then turn it on again.'), add)) === add) await vscode.commands.executeCommand('steerhouse.addProvider');
+      if ((await vscode.window.showInformationMessage(vscode.l10n.t('Code completion needs a Claude login or a model provider (Ollama, OpenRouter…). Add one, then turn it on again.'), add)) === add) await vscode.commands.executeCommand('steerhouse.addProvider');
       return;
     }
-    const picked = await vscode.window.showQuickPick(list.map((p) => ({ label: p.name, description: p.baseUrl, p })), { title: vscode.l10n.t('Code completion'), placeHolder: vscode.l10n.t('Which provider should suggest code?') });
+    const picked = await vscode.window.showQuickPick(list.map((p) => ({ label: p.name, description: isSubscription(p) ? vscode.l10n.t('slower, counts toward your plan limits') : p.baseUrl, p })), { ignoreFocusOut: true, title: vscode.l10n.t('Code completion'), placeHolder: vscode.l10n.t('Which provider should suggest code?') });
     if (!picked) return;
-    if (!isLocal(picked.p)) {
-      const on = vscode.l10n.t('Turn On');
+    const on = vscode.l10n.t('Turn On');
+    if (isSubscription(picked.p)) {
+      const ok = await vscode.window.showWarningMessage(vscode.l10n.t('Use your Claude subscription for suggestions?'), { modal: true, detail: vscode.l10n.t('When you pause typing, the code around your cursor goes to Claude, like in a chat. Each suggestion counts toward your plan limits and takes 1 to 3 seconds. A provider is faster. Files like .env and private keys are never sent.') }, on);
+      if (ok !== on) return;
+    } else if (!isLocal(picked.p)) {
       const ok = await vscode.window.showWarningMessage(vscode.l10n.t('Send your code to {0}?', picked.p.name), { modal: true, detail: vscode.l10n.t('As you type, the code around your cursor goes to {0}, and each suggestion may cost money. Files like .env and private keys are never sent.', picked.p.baseUrl) }, on);
       if (ok !== on) return;
     }
@@ -171,6 +222,11 @@ export function registerCodeCompletion(ctx: vscode.ExtensionContext) {
     item,
     vscode.languages.registerInlineCompletionItemProvider({ scheme: 'file' }, engine),
     vscode.commands.registerCommand('steerhouse.codeCompletion.toggle', toggle),
-    vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('steerhouse.codeCompletion') && paint()),
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (!e.affectsConfiguration('steerhouse.codeCompletion')) return;
+      stopCompleters(); // the model or the account may have changed, and when off nothing stays warm
+      paint();
+    }),
+    { dispose: stopCompleters },
   );
 }

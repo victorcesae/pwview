@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.11
+- **Code completion with your Claude subscription**, through Claude Code, on Haiku. No key or server to set up, but slower than a provider (1 to 3 s after you pause), and each suggestion counts toward your plan limits.
+- **Add any file from your own computer** to a chat: Attach files… in the + menu, or Shift+drag it from your file manager. Over Remote-SSH the content is copied to the remote machine (up to 100 MB, kept 7 days) and the prompt gets that path.
+
 ## 1.0.10
 - Open and Stop Live Browser from the command palette act on the chat in front, not on the workspace's first folder.
 - The chat box's hint stays on one line in a narrow chat.

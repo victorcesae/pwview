@@ -83,7 +83,6 @@ const PT: Record<string, string> = {
   // composer
   'Message the agent while it works…': 'Fale com o agente enquanto ele trabalha…',
   'Ask, plan, or give a task…  (/ commands, ! shell, Shift+drag files here)': 'Pergunte, planeje ou dê uma tarefa…  (/ comandos, ! shell, Shift+arraste arquivos aqui)',
-  'Only images can be dropped from outside VS Code. For other files, use the Explorer.': 'De fora do VS Code, só é possível soltar imagens. Para outros arquivos, use o Explorer.',
   'Runs now in your shell, in {0}. The agent sees the output with your next message.': 'Executa agora no seu shell, em {0}. O agente vê a saída na sua próxima mensagem.',
   'exit {0}': 'saída {0}',
   'Add images (or paste / drop them)': 'Adicionar imagens (ou cole / solte)',
@@ -233,7 +232,9 @@ const PT: Record<string, string> = {
   'Jump to latest': 'Ir para o fim',
   Add: 'Adicionar',
   'Add files, commands, connectors': 'Adicionar arquivos, comandos, conectores',
-  'Add images': 'Adicionar imagens',
+  'Attach files…': 'Anexar arquivos…',
+  '{0} is too large to add (over 100 MB).': '{0} é grande demais para adicionar (mais de 100 MB).',
+  "{0} could not be read. Folders can't be added this way: add the files inside.": '{0} não pôde ser lido. Pastas não podem ser adicionadas assim: adicione os arquivos de dentro.',
   'The output is no longer available.': 'A saída não está mais disponível.',
   'Tab completes @files, /commands and the suggested prompt': 'Tab completa @arquivos, /comandos e o prompt sugerido',
   'Turn Tab completion on': 'Ativar conclusão com Tab',

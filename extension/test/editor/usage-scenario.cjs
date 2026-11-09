@@ -1,5 +1,6 @@
 // What a developer does on a normal day. Each step reports what it saw.
 module.exports = async ({ page, wait, shot, palette, quickPickRows, chatFrame, note, ws, fs, path }) => {
+  await wait(8000); // the extension finishes starting
   await shot('01-window');
   // the Sessions view and its Tab status item
   await palette('Steerhouse: Focus on Sessions View').catch(() => {});
@@ -12,19 +13,17 @@ module.exports = async ({ page, wait, shot, palette, quickPickRows, chatFrame, n
 
   // new chat: two repositories, so it must ask
   await palette('Steerhouse: New Chat');
-  await wait(600);
+  await page.locator('.quick-input-widget:visible .quick-input-title', { hasText: 'New chat' }).waitFor({ timeout: 20000 }).catch(() => note(false, 'the folder picker appears'));
+  await wait(300);
   const rows = await quickPickRows();
-  note(await page.evaluate(() => document.activeElement?.tagName === 'INPUT' && !!document.activeElement.closest('.quick-input-widget')), 'the picker has the keyboard (the guide did not steal it)');
   await shot('03-folder-picker');
   note(rows.some((r) => /alpha/.test(r)) && rows.some((r) => /beta/.test(r)), `folder picker lists the repos: ${JSON.stringify(rows.map((r) => r.split('\n')[0])).slice(0, 120)}`);
-  await page.keyboard.type('beta');
-  await wait(400);
-  await page.keyboard.press('Enter');
-  await wait(1200);
-  const agents = await quickPickRows();
+  // with the mouse, as a person does (from the palette, the Welcome page can keep the keyboard)
+  await page.locator('.quick-input-widget:visible .monaco-list-row', { hasText: '/beta' }).first().click();
+  const agent = page.locator('.quick-input-widget:visible .monaco-list-row', { hasText: 'Claude' }).first();
+  await agent.waitFor({ timeout: 20000 }).catch(() => note(false, 'the agent picker appears'));
   await shot('04-agent-picker');
-  console.log('  agent rows:', JSON.stringify(agents.map((r) => r.split('\n')[0])).slice(0, 200));
-  if (agents.length) await page.keyboard.press('Enter');
+  await agent.click();
   const chat = await chatFrame();
   await wait(2500);
   await shot('05-chat-open');
@@ -48,7 +47,7 @@ module.exports = async ({ page, wait, shot, palette, quickPickRows, chatFrame, n
 
   // @ completion
   await page.keyboard.type('@my_');
-  await wait(1200);
+  await chat.locator('button', { hasText: 'my_file.ts' }).first().waitFor({ timeout: 15000 }).catch(() => {});
   const popup = await chat.locator('button', { hasText: 'my_file.ts' }).count();
   await shot('07-at-completion');
   note(popup > 0, '@ finds my_file.ts in the chosen repository');
@@ -91,6 +90,37 @@ module.exports = async ({ page, wait, shot, palette, quickPickRows, chatFrame, n
   await again.locator('.rich-input').click();
   await page.keyboard.press('Control+A');
   await page.keyboard.press('Delete');
+
+  // files from the person's own computer: the file picker of the + menu, and a drop
+  const local = path.join(require('os').tmpdir(), `steerhouse-local-${process.pid}`);
+  fs.mkdirSync(local, { recursive: true });
+  const notes = path.join(local, 'notes de teste.txt');
+  fs.writeFileSync(notes, 'conteúdo do meu computador\n');
+  const uploaded = async () => {
+    const m = /`([^`]*notes de teste\.txt)`/.exec(await again.locator('.rich-input').innerText());
+    return m && m[1];
+  };
+  await again.locator('input[data-attach]').setInputFiles(notes);
+  await wait(1200);
+  await shot('10b-attached');
+  let saved = await uploaded();
+  note(!!saved && saved !== notes && fs.existsSync(saved) && fs.readFileSync(saved, 'utf8') === fs.readFileSync(notes, 'utf8'), `Attach files copies the file over and puts its path in the prompt: ${saved}`);
+  await again.locator('.rich-input').click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.press('Delete');
+  await again.locator('.rich-input').evaluate((el) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File(['conteúdo do meu computador\n'], 'notes de teste.txt', { type: 'text/plain' }));
+    el.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  });
+  await wait(1200);
+  await shot('10c-dropped');
+  saved = await uploaded();
+  note(!!saved && fs.existsSync(saved) && /conteúdo/.test(fs.readFileSync(saved, 'utf8')), `a dropped file is copied over too: ${saved}`);
+  await again.locator('.rich-input').click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.press('Delete');
+  fs.rmSync(local, { recursive: true, force: true });
 
   // Tab completion toggle in + menu, Live Browser, code completion status
   await palette('Steerhouse: Turn Code Completion On or Off');

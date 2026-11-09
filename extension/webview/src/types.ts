@@ -27,6 +27,7 @@ export type ToExtension =
   | { type: 'openTerminal' }
   | { type: 'openBrowser' }
   | { type: 'completeFiles'; query: string }
+  | { type: 'uploadFile'; name: string; data: Uint8Array }
   | { type: 'shell'; command: string }
   | { type: 'stopShell'; id: string }
   | { type: 'setTabCompletion'; on: boolean }
@@ -92,6 +93,7 @@ export type ToChat =
   | { type: 'openTerminal' }
   | { type: 'openBrowser' }
   | { type: 'completeFiles'; query: string }
+  | { type: 'uploadFile'; name: string; data: Uint8Array }
   | { type: 'shell'; command: string }
   | { type: 'stopShell'; id: string }
   | { type: 'setTabCompletion'; on: boolean }

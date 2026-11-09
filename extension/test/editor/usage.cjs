@@ -34,7 +34,7 @@ async function main() {
   repo('beta');
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-usage-ud-'));
   fs.mkdirSync(path.join(userData, 'User'), { recursive: true });
-  fs.writeFileSync(path.join(userData, 'User', 'settings.json'), JSON.stringify({ 'steerhouse.hideTempSessions': false, 'workbench.startupEditor': 'none', 'security.workspace.trust.enabled': false, 'window.titleBarStyle': 'custom' }));
+  fs.writeFileSync(path.join(userData, 'User', 'settings.json'), JSON.stringify({ 'steerhouse.hideTempSessions': false, 'workbench.startupEditor': 'none', 'security.workspace.trust.enabled': false, 'window.titleBarStyle': 'custom', 'window.dialogStyle': 'custom' }));
   const port = 9900 + Math.floor(Math.random() * 90);
   const extDir = path.join(ext, '.vscode-test', 'extensions-en');
   const code = cp.spawn(exe, [ws, `--extensionDevelopmentPath=${ext}`, '--user-data-dir', userData, '--extensions-dir', extDir, '--no-sandbox', '--disable-gpu', '--skip-welcome', '--skip-release-notes', '--new-window', `--remote-debugging-port=${port}`], { stdio: 'ignore' });
