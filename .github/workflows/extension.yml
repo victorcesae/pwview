@@ -29,6 +29,10 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # chats need the Claude Code CLI on PATH to open (no login is needed for these checks)
+      - name: Install Claude Code
+        if: runner.os == 'Linux'
+        run: npm install -g @anthropic-ai/claude-code
       - name: Editor tests (real VS Code)
         if: runner.os == 'Linux'
         run: xvfb-run -a npm run test:editor
