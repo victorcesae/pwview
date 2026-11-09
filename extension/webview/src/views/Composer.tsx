@@ -222,7 +222,7 @@ export function Composer({ chat }: { chat: ChatState }) {
               <button
                 onClick={() => setImages(images.filter((_, j) => j !== i))}
                 className="bg-background absolute -top-1.5 -right-1.5 grid size-5 cursor-pointer place-items-center rounded-full border opacity-0 group-hover:opacity-100"
-                aria-label="Remove image"
+                aria-label={t('Remove image')}
               >
                 <X className="size-3" />
               </button>
@@ -331,7 +331,7 @@ export function Composer({ chat }: { chat: ChatState }) {
           <UsagePanel chat={chat} />
           {working && (
             <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
-              <SelectTrigger aria-label="Delivery" title={P.hint}>
+              <SelectTrigger aria-label={t('Delivery')} title={P.hint}>
                 <P.icon />
                 <SelectValue />
               </SelectTrigger>

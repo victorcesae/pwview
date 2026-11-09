@@ -712,7 +712,7 @@ export function ChatView({ data }: { data: ChatData }) {
         <Button size="xs" variant="ghost" onClick={() => (setSearchOpen((o) => !o), requestAnimationFrame(() => searchInput.current?.focus()))} title={t('Search (Ctrl+F)')} aria-label={t('Search')}>
           <Search />
         </Button>
-        <Button size="xs" variant="ghost" onClick={() => post({ type: 'link' })} title="Let this agent see what another session is doing">
+        <Button size="xs" variant="ghost" onClick={() => post({ type: 'link' })} title={t('Let this agent see what another session is doing')}>
           <Link2 /> {t('Link session')}
         </Button>
       </header>
@@ -759,7 +759,7 @@ export function ChatView({ data }: { data: ChatData }) {
               <button className="max-w-56 cursor-pointer truncate hover:underline" title={l.activity} onClick={() => post({ type: 'openSession', id: l.id })}>
                 {l.title}
               </button>
-              <button className="text-muted-foreground hover:text-foreground cursor-pointer opacity-0 group-hover:opacity-100" onClick={() => post({ type: 'unlink', id: l.id })} aria-label="Unlink">
+              <button className="text-muted-foreground hover:text-foreground cursor-pointer opacity-0 group-hover:opacity-100" onClick={() => post({ type: 'unlink', id: l.id })} aria-label={t('Unlink')}>
                 <X className="size-3" />
               </button>
             </span>
@@ -817,7 +817,7 @@ export function ChatView({ data }: { data: ChatData }) {
           </div>
           {!working && top.some((i) => i.kind === 'user') && ['assistant', 'result', 'tool'].includes(top.at(-1)?.kind ?? '') && (
             <div className="-mt-1 flex justify-start pl-7">
-              <Button size="xs" variant="ghost" onClick={() => post({ type: 'retry' })} title="Send your last message again">
+              <Button size="xs" variant="ghost" onClick={() => post({ type: 'retry' })} title={t('Send your last message again')}>
                 <RotateCcw /> {t('Try again')}
               </Button>
             </div>

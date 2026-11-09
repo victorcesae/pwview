@@ -1,5 +1,6 @@
+import { t } from '@/i18n';
 import { useEffect, useState } from 'react';
-import { inVsCode, listen, onDevMessage, post } from './bridge';
+import { inVsCode, listen, onDevMessage, post, saveState } from './bridge';
 import { TooltipProvider } from './components/ui/tooltip';
 import * as mock from './mock';
 import type { ChatItem, Data } from './types';
@@ -22,6 +23,11 @@ export function App() {
     window.addEventListener('message', onToast);
     return () => window.removeEventListener('message', onToast);
   }, []);
+
+  const restoreKey = data?.view === 'chat' ? `${data.chat.sessionId}|${data.chat.cwd}|${data.chat.title}|${data.chat.account.name}` : '';
+  useEffect(() => {
+    if (data?.view === 'chat' && data.chat.sessionId) saveState({ sessionId: data.chat.sessionId, cwd: data.chat.cwd, title: data.chat.title, account: data.chat.account.name });
+  }, [restoreKey]);
 
   useEffect(() => {
     if (!inVsCode) return;
@@ -66,7 +72,7 @@ export function App() {
     };
   }, []);
 
-  if (!data) return <div className="text-muted-foreground p-6">Loading sessions…</div>;
+  if (!data) return <div className="text-muted-foreground p-6">{t('Loading sessions…')}</div>;
   if (data.view === 'chat') return <ChatView data={data} />;
   return (
     <TooltipProvider>

@@ -379,3 +379,11 @@ test('bundle: dist/extension.js loads and exports activate', () => {
     Module._load = orig;
   }
 });
+
+test('chat: a resumed session starts with the settings it had (model, effort, mode, fast, ultracode)', () => {
+  const c = new ChatSession({ cwd: '/r', resume: 'sid', prefs: { model: 'claude-opus-5-5', effort: 'max', permissionMode: 'acceptEdits', fastMode: true, ultracode: true } }, () => {});
+  const s = c.state;
+  assert.deepStrictEqual([s.model, s.effort, s.permissionMode, s.fastMode, s.ultracode], ['claude-opus-5-5', 'max', 'acceptEdits', true, true]);
+  const d = new ChatSession({ cwd: '/r' }, () => {});
+  assert.deepStrictEqual([d.state.effort, d.state.permissionMode, d.state.fastMode, d.state.ultracode], [undefined, 'default', false, false]);
+});

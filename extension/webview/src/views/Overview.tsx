@@ -61,7 +61,7 @@ function HotFiles({ hot, sessions }: { hot: HotFile[]; sessions: SessionInfo[] }
           <CardTitle className="flex items-center gap-2">
             <Link2 className="text-warn size-4" /> {t('Linked changes')}
           </CardTitle>
-          <CardDescription className="mt-1">The same files were changed by more than one session. Check that the changes fit together.</CardDescription>
+          <CardDescription className="mt-1">{t('The same files were changed by more than one session. Check that the changes fit together.')}</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
@@ -125,8 +125,8 @@ export function Overview({ data }: { data: { sessions: SessionInfo[]; hot: HotFi
           <CardContent className="flex flex-wrap items-center gap-3">
             <ShieldAlert className="text-warn size-4" />
             <div className="min-w-0 flex-1">
-              <div className="font-medium">Comments can't reach agents yet</div>
-              <div className="text-muted-foreground text-[12px]">Install two Claude Code hooks so the comments you leave on changes are handed to the agent.</div>
+              <div className="font-medium">{t('Comments can\'t reach agents yet')}</div>
+              <div className="text-muted-foreground text-[12px]">{t('Install two Claude Code hooks so the comments you leave on changes are handed to the agent.')}</div>
             </div>
             <Button size="sm" variant="secondary" onClick={() => post({ type: 'installHooks' })}>
               Enable comment delivery
@@ -187,7 +187,7 @@ export function Overview({ data }: { data: { sessions: SessionInfo[]; hot: HotFi
       {!sessions.length && (
         <Card>
           <CardContent className="text-muted-foreground py-10 text-center">
-            No agent sessions in the last days. Start one with <b>New session</b> or run <code>claude</code> in a terminal.
+            No agent sessions in the last days. Start one with <b>{t('New session')}</b> {t('or run')} <code>claude</code> {t('in a terminal.')}
           </CardContent>
         </Card>
       )}

@@ -68,7 +68,7 @@ export function MessagesTab({ data }: { data: Data }) {
       >
         <CardContent className="flex flex-col gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="bg-muted inline-flex rounded-lg p-[3px]" role="radiogroup" aria-label="Delivery">
+            <div className="bg-muted inline-flex rounded-lg p-[3px]" role="radiogroup" aria-label={t('Delivery')}>
               {(Object.keys(MODE_INFO) as Mode[]).map((m) => {
                 const I = MODE_INFO[m].icon;
                 return (
@@ -107,7 +107,7 @@ export function MessagesTab({ data }: { data: Data }) {
               }
             }}
             onKeyDown={(e) => (e.metaKey || e.ctrlKey) && e.key === 'Enter' && send()}
-            placeholder="Message for this agent. Paste or drop screenshots here too…"
+            placeholder={t('Message for this agent. Paste or drop screenshots here too…')}
           />
           {images.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -117,7 +117,7 @@ export function MessagesTab({ data }: { data: Data }) {
                   <button
                     onClick={() => setImages(images.filter((_, j) => j !== i))}
                     className="bg-background absolute -top-1.5 -right-1.5 grid size-5 cursor-pointer place-items-center rounded-full border opacity-0 group-hover:opacity-100"
-                    aria-label="Remove image"
+                    aria-label={t('Remove image')}
                   >
                     <X className="size-3" />
                   </button>
@@ -139,7 +139,7 @@ export function MessagesTab({ data }: { data: Data }) {
 
       {pending.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h3 className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">Waiting to be delivered</h3>
+          <h3 className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">{t('Waiting to be delivered')}</h3>
           {pending.map((c) => (
             <MessageRow key={c.id} c={c} project={data.info.project} />
           ))}
@@ -185,7 +185,7 @@ function MessageRow({ c, project }: { c: Comment; project: string }) {
             </Button>
           )}
           {c.status === 'pending' && (
-            <Button size="xs" variant="secondary" onClick={() => post({ type: 'promoteComment', commentId: c.id })} title="Interrupt and send it now">
+            <Button size="xs" variant="secondary" onClick={() => post({ type: 'promoteComment', commentId: c.id })} title={t('Interrupt and send it now')}>
               <Zap /> Send now
             </Button>
           )}

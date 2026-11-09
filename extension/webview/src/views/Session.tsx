@@ -16,7 +16,7 @@ import { t } from '@/i18n';
 type SessionData = { info: SessionInfo; events: TimelineEvent[]; changes: Change[]; comments: Comment[]; terminal?: boolean; linkedTitles: Record<string, string> };
 
 export function HunkView({ hunks }: { hunks: Hunk[] }) {
-  if (!hunks.length) return <div className="text-muted-foreground px-3 py-2 text-[12px]">New file. Open the diff to see it all.</div>;
+  if (!hunks.length) return <div className="text-muted-foreground px-3 py-2 text-[12px]">{t('New file. Open the diff to see it all.')}</div>;
   return (
     <div className="overflow-x-auto font-mono text-[12px] leading-[1.55]">
       {hunks.map((h, i) => {
@@ -50,7 +50,7 @@ function ChangeCard({ c, info, agentName }: { c: Change; info: SessionInfo; agen
   return (
     <div className="overflow-hidden rounded-lg border">
       <div className="flex items-start gap-3 px-3 py-2.5">
-        <button className="text-muted-foreground hover:text-foreground mt-0.5 cursor-pointer" onClick={() => setOpen(!open)} aria-label="Toggle preview">
+        <button className="text-muted-foreground hover:text-foreground mt-0.5 cursor-pointer" onClick={() => setOpen(!open)} aria-label={t('Toggle preview')}>
           {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
         </button>
         <div className="min-w-0 flex-1">
@@ -67,7 +67,7 @@ function ChangeCard({ c, info, agentName }: { c: Change; info: SessionInfo; agen
           {c.why && <p className="text-muted-foreground mt-1.5 line-clamp-3 text-[12px] whitespace-pre-wrap">{c.why}</p>}
         </div>
         <div className="flex shrink-0 gap-1.5">
-          <Button size="xs" onClick={() => post({ type: 'openChange', sessionId: info.id, changeId: c.id })}>Open diff</Button>
+          <Button size="xs" onClick={() => post({ type: 'openChange', sessionId: info.id, changeId: c.id })}>{t('Open diff')}</Button>
         </div>
       </div>
       {open && (
@@ -85,7 +85,7 @@ function ChangesTab({ data, agentNames }: { data: SessionData; agentNames: Recor
     for (const c of [...data.changes].reverse()) m.set(c.file, [...(m.get(c.file) ?? []), c]);
     return [...m.entries()];
   }, [data.changes]);
-  if (!groups.length) return <Empty>No file changes in this session yet.</Empty>;
+  if (!groups.length) return <Empty>{t('No file changes in this session yet.')}</Empty>;
   return (
     <div className="flex flex-col gap-4">
       {groups.map(([file, list]) => (
@@ -140,7 +140,7 @@ function Timeline({ data, agentNames, focus, setFocus }: { data: SessionData; ag
           </Badge>
         )}
       </div>
-      {!events.length && <Empty>Nothing here yet.</Empty>}
+      {!events.length && <Empty>{t('Nothing here yet.')}</Empty>}
       <ol className="relative flex flex-col">
         {events.map(({ e, i }) => {
           const c = e.refId ? changes.get(e.refId) : undefined;
@@ -198,7 +198,7 @@ function Timeline({ data, agentNames, focus, setFocus }: { data: SessionData; ag
                     <button
                       className="text-muted-foreground hover:text-foreground mt-1 inline-flex cursor-pointer items-center gap-1 text-[11px]"
                       onClick={() => post({ type: 'savePrompt', text: e.text })}
-                      title="Save this prompt so you can run it again in one click"
+                      title={t('Save this prompt so you can run it again in one click')}
                     >
                       <BookmarkPlus className="size-3" /> {t('Save as prompt')}
                     </button>
@@ -214,7 +214,7 @@ function Timeline({ data, agentNames, focus, setFocus }: { data: SessionData; ag
 }
 
 function AgentsTab({ info, onFocus }: { info: SessionInfo; onFocus: (id: string) => void }) {
-  if (!info.agents.length) return <Empty>This session didn't start any sub-agents.</Empty>;
+  if (!info.agents.length) return <Empty>{t('This session didn\'t start any sub-agents.')}</Empty>;
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {info.agents.map((a) => (
@@ -249,7 +249,7 @@ export function SessionView({ data, focusAgent }: { data: SessionData; focusAgen
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start gap-3">
-        <Button size="icon" variant="ghost" onClick={() => post({ type: 'overview' })} aria-label="All sessions">
+        <Button size="icon" variant="ghost" onClick={() => post({ type: 'overview' })} aria-label={t('All sessions')}>
           <ArrowLeft />
         </Button>
         <div className="min-w-0 flex-1">
@@ -271,7 +271,7 @@ export function SessionView({ data, focusAgent }: { data: SessionData; focusAgen
           <Button size="sm" variant="secondary" onClick={() => setTab('comments')}>
             <MessageSquarePlus /> {t('Message / steer')}
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => post({ type: 'linkSession', id: info.id })} title="Let this session's agent see what another session is doing">
+          <Button size="sm" variant="ghost" onClick={() => post({ type: 'linkSession', id: info.id })} title={t('Let this session\'s agent see what another session is doing')}>
             <Link2 /> {t('Link')}
           </Button>
           <Tooltip>
@@ -280,7 +280,7 @@ export function SessionView({ data, focusAgent }: { data: SessionData; focusAgen
                 <SquareTerminal /> {t('Open in chat')}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Continue this session in an AgentLens chat</TooltipContent>
+            <TooltipContent>{t('Continue this session in an AgentLens chat')}</TooltipContent>
           </Tooltip>
         </div>
       </div>
@@ -296,7 +296,7 @@ export function SessionView({ data, focusAgent }: { data: SessionData; focusAgen
         <Card className="border-warn/30 bg-warn/5">
           <CardContent className="flex flex-wrap items-center gap-2 py-2.5">
             <Link2 className="text-warn size-4" />
-            <span className="text-[12px]">Changes files that these sessions also changed:</span>
+            <span className="text-[12px]">{t('Changes files that these sessions also changed:')}</span>
             {info.linked.map((id) => (
               <Button key={id} size="xs" variant="outline" onClick={() => post({ type: 'openSession', id })}>
                 {(data.linkedTitles[id] ?? id).slice(0, 40)}

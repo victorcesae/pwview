@@ -295,6 +295,17 @@ export interface ChatOptions {
   /** editor the chat runs in (Visual Studio Code, Cursor…) */
   host?: string;
   hostIcon?: string;
+  /** settings saved from the last time this session was open (applied at start) */
+  prefs?: ChatPrefs;
+}
+
+/** What a chat remembers per session: restored when it is resumed or the window reloads. */
+export interface ChatPrefs {
+  model?: string;
+  effort?: Effort;
+  permissionMode?: PermissionMode;
+  fastMode?: boolean;
+  ultracode?: boolean;
 }
 
 export class ChatSession {
@@ -321,9 +332,11 @@ export class ChatSession {
       cwd: opts.cwd,
       title: opts.title ?? 'New chat',
       models: [],
-      permissionMode: opts.permissionMode ?? 'default',
-      fastMode: false,
-      ultracode: false,
+      permissionMode: opts.prefs?.permissionMode ?? opts.permissionMode ?? 'default',
+      model: opts.prefs?.model,
+      effort: opts.prefs?.effort,
+      fastMode: !!opts.prefs?.fastMode,
+      ultracode: !!opts.prefs?.ultracode,
       status: 'starting',
       todos: opts.history?.todos ?? [],
       items: opts.history ? [...opts.history.items.slice(-HISTORY_PAGE), { kind: 'system', id: uid(), text: 'Resumed: earlier conversation above' }] : [],
@@ -349,7 +362,7 @@ export class ChatSession {
       options: {
         cwd: this.opts.cwd,
         resume: this.opts.resume,
-        model: this.opts.model,
+        model: this.opts.prefs?.model ?? this.opts.model,
         permissionMode: this.state.permissionMode,
         includePartialMessages: true,
         abortController: this.abort,
@@ -372,6 +385,10 @@ export class ChatSession {
         this.changed();
       })
       .catch(() => {});
+    // the settings this session had last time
+    const p = this.opts.prefs;
+    if (p && (p.effort || p.fastMode || p.ultracode))
+      this.q.applyFlagSettings({ ...(p.effort ? { effortLevel: p.effort } : {}), ...(p.fastMode ? { fastMode: true } : {}), ...(p.ultracode ? { ultracode: true } : {}) } as any).catch(() => {});
     // ready now (init only arrives with the first message); resumed chats get their context at once
     this.state.status = 'idle';
     this.q.getContextUsage({ detail: 'summary' }).then((u: any) => {

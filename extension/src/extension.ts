@@ -421,6 +421,16 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('agentlens.comment.send', (r: vscode.CommentReply) => sendComment(r)),
     vscode.commands.registerCommand('agentlens.comment.queue', (r: vscode.CommentReply) => sendComment(r, 'queue')),
     vscode.commands.registerCommand('agentlens.comment.now', (r: vscode.CommentReply) => sendComment(r, 'now')),
+    // Reload Window: reopen the chats that were open, in their tabs, with their settings
+    vscode.window.registerWebviewPanelSerializer('agentlens.chat', {
+      async deserializeWebviewPanel(panel, state: { sessionId?: string; cwd?: string; title?: string; account?: string } | undefined) {
+        if (!state?.sessionId || !state.cwd) return panel.dispose();
+        if (!sessions.length) await refresh(true);
+        const s = find(state.sessionId);
+        const account = s ? accountOf(s.info.account) : (listAccounts().find((a) => a.name === state.account) ?? listAccounts()[0]);
+        chats.start({ cwd: s?.info.project ?? state.cwd, resume: state.sessionId, title: s?.info.title ?? state.title, account, env: await envFor(account), panel });
+      },
+    }),
     vscode.commands.registerCommand('agentlens.resumeSession', async (x: unknown) => {
       const s = find(sessionArg(x) ?? '');
       if (!s) return;

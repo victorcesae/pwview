@@ -1,6 +1,6 @@
 // Hosts AgentLens chats: one webview panel per ChatSession.
 import * as vscode from 'vscode';
-import { ChatSession, historyFromTranscript, Priority } from './chat';
+import { ChatSession, historyFromTranscript, Priority, type ChatPrefs } from './chat';
 import { hostIcon } from './hostIcon';
 import { openUrl } from './browser';
 import { vendorOf } from './providers';
@@ -42,6 +42,8 @@ interface Open {
   sent?: { items: Map<string, string>; order: string[] };
   /** vendor whose mark is the tab icon */
   vendor?: string;
+  /** last settings saved for its session */
+  saved?: string;
 }
 
 export class Chats {
@@ -62,10 +64,31 @@ export class Chats {
     return this.open.find((o) => o.chat.state.sessionId === sessionId);
   }
 
-  start(opts: { cwd: string; resume?: string; title?: string; prompt?: string; account?: Account; env?: Record<string, string> }) {
+  private static PREFS = 'agentlens.chatPrefs';
+  /** Settings per session id, so a resumed chat (or one reopened by Reload Window) keeps them. */
+  prefsOf(sessionId?: string): ChatPrefs | undefined {
+    return sessionId ? this.ctx.globalState.get<Record<string, ChatPrefs & { at: number }>>(Chats.PREFS, {})[sessionId] : undefined;
+  }
+  private savePrefs(o: Open) {
+    const s = o.chat.state;
+    if (!s.sessionId) return;
+    const p: ChatPrefs = { model: s.model, effort: s.effort, permissionMode: s.permissionMode, fastMode: s.fastMode, ultracode: s.ultracode };
+    const key = JSON.stringify(p);
+    if (o.saved === key) return;
+    o.saved = key;
+    const all = { ...this.ctx.globalState.get<Record<string, ChatPrefs & { at: number }>>(Chats.PREFS, {}), [s.sessionId]: { ...p, at: Date.now() } };
+    // keep the 300 most recent sessions
+    const keep = Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 300);
+    this.ctx.globalState.update(Chats.PREFS, Object.fromEntries(keep));
+  }
+
+  start(opts: { cwd: string; resume?: string; title?: string; prompt?: string; account?: Account; env?: Record<string, string>; panel?: vscode.WebviewPanel }) {
     if (opts.resume) {
       const existing = this.find(opts.resume);
-      if (existing) return existing.panel.reveal();
+      if (existing) {
+        opts.panel?.dispose();
+        return existing.panel.reveal();
+      }
     }
     const exe = agentExecutable();
     if (!exe) {
@@ -73,16 +96,20 @@ export class Chats {
       return;
     }
     const root = vscode.Uri.joinPath(this.ctx.extensionUri, 'dist', 'webview');
-    const panel = vscode.window.createWebviewPanel('agentlens.chat', opts.title ?? 'AgentLens chat', vscode.ViewColumn.Active, {
-      enableScripts: true,
-      retainContextWhenHidden: true,
-      localResourceRoots: [root],
-    });
+    // a tab VS Code brought back after Reload Window is reused in place
+    const panel =
+      opts.panel ??
+      vscode.window.createWebviewPanel('agentlens.chat', opts.title ?? 'AgentLens chat', vscode.ViewColumn.Active, {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [root],
+      });
+    if (opts.panel) panel.webview.options = { enableScripts: true, localResourceRoots: [root] };
     panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon.svg');
     let timer: ReturnType<typeof setTimeout> | undefined;
     const transcript = opts.resume ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
     const history = transcript ? historyFromTranscript(transcript) : undefined;
-    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.account?.provider?.model }, () => {
+    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.account?.provider?.model }, () => {
       // throttle streaming updates to ~25 fps
       if (timer) return;
       timer = setTimeout(() => {
@@ -117,6 +144,7 @@ export class Chats {
 
   private post(o: Open) {
     const s = o.chat.state;
+    this.savePrefs(o);
     o.panel.title = s.title.slice(0, 40);
     // tab icon: the model's vendor mark (Claude, GPT, Llama…)
     const vendor = s.model ? vendorOf(s.model) : s.account.gateway ? 'other' : 'anthropic';
