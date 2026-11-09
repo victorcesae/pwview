@@ -222,6 +222,9 @@ fn chromium_in(build: &Path) -> Option<PathBuf> {
     CANDIDATES.iter().map(|c| build.join(c)).find(|p| p.is_file())
 }
 
+/// The browser's disk cache, per project.
+const CACHE_BYTES: u64 = 100 * 1024 * 1024;
+
 /// How long to wait for another process that is starting the browser (it may be downloading it).
 const UP_LOCK_MAX: Duration = Duration::from_secs(600);
 
@@ -539,6 +542,8 @@ fn start_services(ctx: &Ctx, mode: Mode, browser: &Path, state: &mut State) -> R
         format!("--user-data-dir={}", profile.display()),
         "--no-first-run".into(),
         "--no-default-browser-check".into(),
+        // the profile is kept per project: without a cap its cache grows to gigabytes
+        format!("--disk-cache-size={CACHE_BYTES}"),
         format!("--window-size={w},{h}"),
         "--window-position=0,0".into(),
     ];
