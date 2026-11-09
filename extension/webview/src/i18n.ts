@@ -201,6 +201,7 @@ const PT: Record<string, string> = {
   'Slash commands': 'Comandos de barra',
   Connectors: 'Conectores',
   'Manage connectors': 'Gerenciar conectores',
+  'Add MCP server…': 'Adicionar servidor MCP…',
   'No connectors in this session yet': 'Nenhum conector nesta sessão ainda',
   Reconnect: 'Reconectar',
   'Starting Claude Code…': 'Iniciando o Claude Code…',

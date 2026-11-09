@@ -1,6 +1,6 @@
 // The prompt area: rich-text input, images, Steer/Queue/Send now, model / effort / mode pickers,
 // a context-usage ring, and a neutral look that follows the editor theme.
-import { Blocks, Bot, ListOrdered, Navigation, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, Square, SquareSlash, Zap, Gauge, X } from 'lucide-react';
+import { Blocks, Bot, ListOrdered, Navigation, Paperclip, Plus, Send, ShieldCheck, Sparkles, Square, SquareSlash, Zap, Gauge, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger, Switch } from '@/components/ui/dropdown-menu';
 import { Zoomable } from '@/components/Lightbox';
 import { UsagePanel } from '@/components/UsagePanel';
@@ -114,7 +114,7 @@ function PlusMenu({ chat, onFiles, onSlash }: { chat: ChatState; onFiles: () => 
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-72">
             <DropdownMenuItem onSelect={() => post({ type: 'manageConnectors' })}>
-              <Settings2 /> {t('Manage connectors')}
+              <Plus /> {t('Add MCP server…')}
             </DropdownMenuItem>
             {chat.mcp.length > 0 && <DropdownMenuSeparator />}
             {chat.mcp.length === 0 && <DropdownMenuLabel>{t('No connectors in this session yet')}</DropdownMenuLabel>}

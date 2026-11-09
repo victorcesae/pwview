@@ -589,6 +589,15 @@ export class ChatSession {
     await this.q?.toggleMcpServer(name, enabled);
     await this.refreshMcp();
   }
+  /** servers added to this session while it runs (the SDK replaces this whole set each time) */
+  private dynamicMcp: Record<string, any> = {};
+  /** Connects a new MCP server to this running session (it is also saved for future sessions). */
+  async addMcp(name: string, config: Record<string, unknown>) {
+    this.dynamicMcp[name] = config;
+    const r: any = await this.q?.setMcpServers(this.dynamicMcp);
+    await this.refreshMcp();
+    return r;
+  }
   async reconnectMcp(name: string) {
     await this.q?.reconnectMcpServer(name);
     await this.refreshMcp();

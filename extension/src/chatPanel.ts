@@ -92,6 +92,14 @@ export class Chats {
     (s.status === 'error' ? vscode.window.showErrorMessage : vscode.window.showInformationMessage)(msg, open).then((a) => a === open && o.panel.reveal());
   }
 
+  /** Connects a new MCP server to the open chats in that folder. */
+  async addMcp(cwd: string, name: string, config: Record<string, unknown>) {
+    const key = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const here = this.open.filter((o) => key(o.chat.state.cwd) === key(cwd));
+    await Promise.all(here.map((o) => o.chat.addMcp(name, config).catch(() => undefined)));
+    return here.length;
+  }
+
   /** Closes the chat showing this session, if any. */
   closeSession(sessionId: string) {
     this.find(sessionId)?.panel.dispose();
