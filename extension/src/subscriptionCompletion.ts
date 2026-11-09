@@ -26,7 +26,11 @@ export class SubscriptionCompleter {
         maxTurns: 1,
         permissionMode: 'dontAsk',
         cwd: this.cwd,
-        env: { ...process.env, ...this.env, CLAUDE_CODE_MAX_OUTPUT_TOKENS: '256' },
+        // no thinking (it delays the first character), and the text as it is written
+        thinking: { type: 'disabled' },
+        includePartialMessages: true,
+        // no telemetry or update checks competing with the request
+        env: { ...process.env, ...this.env, CLAUDE_CODE_MAX_OUTPUT_TOKENS: '256', MAX_THINKING_TOKENS: '0', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
       },
     });
   }
@@ -44,9 +48,18 @@ export class SubscriptionCompleter {
     signal.addEventListener('abort', stop, { once: true });
     let text = '';
     let cut = false;
+    const kinds = new Map<number, string>();
     try {
       for await (const m of q) {
-        if (m.type === 'assistant') {
+        // the suggestion is ready when its text block ends: no need to wait for Claude Code's report
+        if (m.type === 'stream_event') {
+          const e: any = m.event;
+          if (e.type === 'content_block_start') kinds.set(e.index, e.content_block?.type);
+          if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta') text += e.delta.text;
+          if (e.type === 'content_block_stop' && kinds.get(e.index) === 'text' && text) break;
+          continue;
+        }
+        if (m.type === 'assistant' && !text) {
           text += m.message.content.flatMap((c) => (c.type === 'text' ? [c.text] : [])).join('');
           cut = m.message.stop_reason === 'max_tokens';
         }

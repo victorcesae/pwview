@@ -2,7 +2,7 @@
   "name": "steerhouse",
   "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -1193,7 +1193,7 @@
         },
         "steerhouse.codeCompletion.delayMs": {
           "type": "number",
-          "default": 350,
+          "default": 250,
           "minimum": 0,
           "description": "%setting.code.completion.delay%"
         },

@@ -28,7 +28,7 @@ export type CompletionSource = Provider | SubscriptionSource;
 const isSubscription = (s: CompletionSource): s is SubscriptionSource => 'account' in s;
 
 /** Each suggestion from a subscription spends the plan's limits: wait for a real pause in typing. */
-export const SUBSCRIPTION_MIN_DELAY_MS = 700;
+export const SUBSCRIPTION_MIN_DELAY_MS = 250;
 
 export interface CompletionSettings {
   enabled: boolean;
@@ -154,7 +154,7 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
 
 export function registerCodeCompletion(ctx: vscode.ExtensionContext) {
   const section = () => vscode.workspace.getConfiguration('steerhouse.codeCompletion');
-  const settings = (): CompletionSettings => ({ enabled: section().get('enabled', false), provider: section().get('provider', ''), model: section().get('model', ''), delayMs: section().get('delayMs', 350) });
+  const settings = (): CompletionSettings => ({ enabled: section().get('enabled', false), provider: section().get('provider', ''), model: section().get('model', ''), delayMs: section().get('delayMs', 250) });
   // the subscriptions first: they are already there, no key or server to set up
   const providers = (): CompletionSource[] => {
     const accounts = listAccounts();

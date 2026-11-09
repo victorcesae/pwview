@@ -21,6 +21,7 @@ export const CLI_AGENTS: CliAgent[] = [
   { id: 'gemini', name: 'Gemini CLI', bins: ['gemini'], vendor: 'google', login: 'gemini' },
   { id: 'opencode', name: 'OpenCode', bins: ['opencode'], vendor: 'other', login: 'opencode auth login' },
   { id: 'grok', name: 'Grok Build', bins: ['grok'], vendor: 'xai', login: 'grok login' },
+
 ];
 
 /** The agents found on PATH, with the executable that runs each. */
@@ -30,6 +31,7 @@ export function installedAgents(find: (bin: string) => string | undefined = whic
     // "agent" is a common name: only count it as Cursor's when it lives in a Cursor folder
     const exe = a.bins.map((b) => find(b)).find((p, i) => p && (a.bins[i] !== 'agent' || /cursor/i.test(p)));
     if (exe) out.push({ ...a, exe });
+    
   }
   return out;
 }
