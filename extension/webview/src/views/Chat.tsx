@@ -1,6 +1,6 @@
-import { Ban, Bot, ChevronUp, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
+import { Ban, Bot, ChevronUp, Search, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
 import { StateDot, ToolIcon } from '@/components/common';
 import { Markdown } from '@/components/Markdown';
@@ -245,7 +245,7 @@ function ToolGroup({ items, sessionId }: { items: ToolItem[]; sessionId?: string
   return (
     <div>
       <button onClick={() => setOpen(!open)} className={cn('text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 text-left text-[13px]', open && 'bg-background sticky top-0 z-20 w-full py-1')}>
-        {running && <Loader2 className="text-working size-3.5 animate-spin" />}
+        {running && <span className="bg-working size-1.5 shrink-0 animate-pulse rounded-full" aria-label={t('Working…')} />}
         {failed && !running && <X className="text-removed size-3.5" />}
         <span>{summarizeTools(items)}</span>
         {(total.add > 0 || total.del > 0) && (
@@ -469,9 +469,7 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
       if (!it.text.trim() && !it.streaming) return null;
       return (
         <div className="flex gap-2.5">
-          <div className="bg-primary text-primary-foreground mt-0.5 grid size-5 shrink-0 place-items-center rounded-md">
-            <Bot className="size-3" />
-          </div>
+          <AgentAvatar />
           <div className="min-w-0 flex-1">
             <Markdown text={it.text} />
             {it.streaming && <span className="bg-foreground/70 ml-0.5 inline-block h-3.5 w-1.5 animate-pulse align-middle" />}
@@ -560,6 +558,41 @@ function QueuedRow({ q }: { q: ChatState['queue'][number] }) {
   );
 }
 
+/** Searchable text of a transcript row. */
+function rowText(g: ChatItem | ToolItem[]): string {
+  if (Array.isArray(g)) return g.map((it) => `${it.name} ${it.summary} ${it.file ?? ''} ${it.result ?? ''}`).join(' ');
+  switch (g.kind) {
+    case 'user':
+    case 'assistant':
+    case 'system':
+    case 'result':
+      return g.text;
+    case 'tool':
+      return `${g.name} ${g.summary} ${g.result ?? ''}`;
+    case 'permission':
+      return `${g.tool} ${g.summary}`;
+    case 'plan':
+      return g.plan;
+    case 'question':
+      return g.questions.map((q) => q.question).join(' ');
+  }
+}
+
+/** Which model and editor this chat runs on, for the answer avatars. */
+const AgentCtx = createContext<{ model?: string; host?: string }>({});
+
+/** The model's mark (Claude, GPT, Llama…) with a small editor badge (Cursor, VS Code…). */
+function AgentAvatar() {
+  const { model, host } = useContext(AgentCtx);
+  const vendor = vendorOf(model);
+  return (
+    <span className="relative mt-0.5 inline-flex h-5 shrink-0 self-start" title={`${vendorName(vendor)}${model ? ' · ' + model : ''}${host ? ' · ' + hostName(host) : ''}`}>
+      <VendorMark vendor={vendor} className="size-5 rounded-md text-[9px]" />
+      {host && <HostMark host={host} className="ring-background absolute -right-1.5 -bottom-1 size-3 rounded-[3px] text-[5px] ring-2" />}
+    </span>
+  );
+}
+
 // ---------------------------------------------------------------- page
 
 export function ChatView({ data }: { data: ChatData }) {
@@ -595,6 +628,46 @@ export function ChatView({ data }: { data: ChatData }) {
     },
   });
 
+  // ---- search (Ctrl+F)
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [cursor, setCursor] = useState(0);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [] as number[];
+    return rows.flatMap((g, i) => (rowText(g).toLowerCase().includes(q) ? [i] : []));
+  }, [rows, query]);
+  const matchSet = useMemo(() => new Set(matches), [matches]);
+  const current = matches.length ? matches[Math.min(cursor, matches.length - 1)] : -1;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setSearchOpen(true);
+        requestAnimationFrame(() => searchInput.current?.select());
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  useEffect(() => {
+    if (current < 0) return;
+    stick.current = false;
+    setAtBottom(false);
+    virtualizer.scrollToIndex(current, { align: 'center' });
+  }, [current]);
+  const step = (d: number) => matches.length && setCursor((c) => (c + d + matches.length) % matches.length);
+
+  // ---- load earlier history, keeping your place
+  const pendingEarlier = useRef<number | null>(null);
+  useEffect(() => {
+    if (pendingEarlier.current === null) return;
+    const added = rows.length - pendingEarlier.current;
+    pendingEarlier.current = null;
+    if (added > 0) virtualizer.scrollToIndex(added, { align: 'start' });
+  }, [rows.length]);
+
   // follow new output while you're at the bottom
   const lastText = chat.items.at(-1)?.kind === 'assistant' ? (chat.items.at(-1) as { text: string }).text.length : 0;
   useEffect(() => {
@@ -607,6 +680,7 @@ export function ChatView({ data }: { data: ChatData }) {
 
   return (
     <LightboxProvider>
+    <AgentCtx.Provider value={{ model: chat.model, host: chat.host }}>
     <div className="flex h-screen flex-col">
       <header className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
         <StateDot state={working ? 'working' : chat.status === 'idle' ? 'recent' : 'idle'} />
@@ -634,10 +708,47 @@ export function ChatView({ data }: { data: ChatData }) {
             {chat.tokens ? `${chat.tokens >= 1e6 ? (chat.tokens / 1e6).toFixed(1) + 'M' : (chat.tokens / 1e3).toFixed(1) + 'k'} ${t('tokens')} · ` : ''}${chat.costUsd.toFixed(2)}
           </span>
         )}
+        <Button size="xs" variant="ghost" onClick={() => (setSearchOpen((o) => !o), requestAnimationFrame(() => searchInput.current?.focus()))} title={t('Search (Ctrl+F)')} aria-label={t('Search')}>
+          <Search />
+        </Button>
         <Button size="xs" variant="ghost" onClick={() => post({ type: 'link' })} title="Let this agent see what another session is doing">
           <Link2 /> {t('Link session')}
         </Button>
       </header>
+      {searchOpen && (
+        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-1.5" role="search">
+          <Search className="text-muted-foreground size-3.5" />
+          <input
+            ref={searchInput}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setCursor(0);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') step(e.shiftKey ? -1 : 1);
+              if (e.key === 'Escape') setSearchOpen(false);
+            }}
+            placeholder={t('Search this chat…')}
+            className="min-w-40 flex-1 bg-transparent text-[12.5px] outline-none"
+          />
+          <span className="text-muted-foreground text-[11px] tabular-nums">{query.trim() ? (matches.length ? `${Math.min(cursor, matches.length - 1) + 1} / ${matches.length}` : t('No matches')) : ''}</span>
+          <Button size="xs" variant="ghost" onClick={() => step(-1)} disabled={!matches.length} aria-label={t('Previous match')}>
+            <ChevronUp />
+          </Button>
+          <Button size="xs" variant="ghost" onClick={() => step(1)} disabled={!matches.length} aria-label={t('Next match')}>
+            <ChevronDown />
+          </Button>
+          {chat.earlier > 0 && (
+            <Button size="xs" variant="outline" onClick={() => post({ type: 'loadEarlier', all: true })}>
+              {t('Include {0} earlier', chat.earlier)}
+            </Button>
+          )}
+          <Button size="xs" variant="ghost" onClick={() => setSearchOpen(false)} aria-label={t('Close search')}>
+            <X />
+          </Button>
+        </div>
+      )}
       {linked.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-b px-4 py-1.5">
           <span className="text-muted-foreground text-[11px]">{t('Linked:')}</span>
@@ -672,11 +783,25 @@ export function ChatView({ data }: { data: ChatData }) {
               <div className="mt-1 text-[12px]">{chat.cwd}</div>
             </div>
           )}
+          {chat.earlier > 0 && (
+            <div className="flex justify-center pb-3">
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => {
+                  pendingEarlier.current = rows.length;
+                  post({ type: 'loadEarlier' });
+                }}
+              >
+                <ChevronUp /> {t('Load earlier messages ({0} more)', chat.earlier)}
+              </Button>
+            </div>
+          )}
           <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
             {virtualizer.getVirtualItems().map((v) => {
               const g = rows[v.index];
               return (
-                <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full pb-3" style={{ transform: `translateY(${v.start}px)` }}>
+                <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className={cn('absolute top-0 left-0 w-full pb-3', matchSet.has(v.index) && 'search-hit', v.index === current && 'search-current')} style={{ transform: `translateY(${v.start}px)` }}>
                   {Array.isArray(g) ? (
                     <ToolGroup items={g} sessionId={chat.sessionId} />
                   ) : (
@@ -733,6 +858,7 @@ export function ChatView({ data }: { data: ChatData }) {
         <Composer chat={chat} />
       </div>
     </div>
+    </AgentCtx.Provider>
     </LightboxProvider>
   );
 }

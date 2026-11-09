@@ -41,6 +41,8 @@ export interface ChatState {
   /** connectors (MCP servers) available in this session */
   mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[];
   costUsd: number;
+  /** history items not loaded yet (older than what is shown) */
+  earlier: number;
   /** All tokens this chat used (input + output + cache), from each turn's usage. */
   tokens?: number;
   /** Context window usage after the last turn (for the ring next to the input). */
@@ -216,6 +218,9 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
 
 const toCategories = (u: any) => (u.categories ?? []).filter((c: any) => c.tokens > 0).map((c: any) => ({ id: c.id, name: c.name, tokens: c.tokens, kind: c.kind }));
 
+/** How many history items a resumed chat shows at first, and loads per "Load earlier". */
+export const HISTORY_PAGE = 300;
+
 export interface ChatOptions {
   cwd: string;
   executable?: string;
@@ -259,7 +264,8 @@ export class ChatSession {
       ultracode: false,
       status: 'starting',
       todos: opts.history?.todos ?? [],
-      items: opts.history ? [...opts.history.items, { kind: 'system', id: uid(), text: 'Resumed: earlier conversation above' }] : [],
+      items: opts.history ? [...opts.history.items.slice(-HISTORY_PAGE), { kind: 'system', id: uid(), text: 'Resumed: earlier conversation above' }] : [],
+      earlier: Math.max(0, (opts.history?.items.length ?? 0) - HISTORY_PAGE),
       queue: [],
       slashCommands: [],
       mcp: [],
@@ -303,6 +309,12 @@ export class ChatSession {
         this.changed();
       })
       .catch(() => {});
+    // ready now (init only arrives with the first message); resumed chats get their context at once
+    this.state.status = 'idle';
+    this.q.getContextUsage({ detail: 'summary' }).then((u: any) => {
+      this.state.context = { used: u.totalTokens, max: u.maxTokens, percentage: u.percentage, categories: toCategories(u) };
+      this.changed();
+    }).catch(() => {});
     this.q
       .accountInfo()
       .then((a: any) => {
@@ -372,6 +384,17 @@ export class ChatSession {
     if (!steers.length) return;
     this.queued = this.queued.filter((m) => m.priority !== 'next');
     for (const m of steers) this.push(m.text, m.images, 'next');
+  }
+
+  /** Load older history (one page, or everything with all=true, e.g. to search it). */
+  loadEarlier(all = false) {
+    const older = this.opts.history?.items ?? [];
+    const n = this.state.earlier;
+    if (!n) return;
+    const take = all ? n : Math.min(HISTORY_PAGE, n);
+    this.state.items.unshift(...older.slice(n - take, n));
+    this.state.earlier = n - take;
+    this.changed();
   }
 
   /** Re-send the last thing the user asked (text + images). */

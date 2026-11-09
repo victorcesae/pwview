@@ -4,6 +4,7 @@ import { AgentInfo, Change, Engine, HotFile, Session, State } from './engine';
 import { norm } from './paths';
 import { listAccounts } from './accounts';
 import { modelLabel } from './pricing';
+import { vendorOf } from './providers';
 import { ago, clip, rel } from './util';
 
 export type Node =
@@ -15,6 +16,11 @@ export type Node =
   | { kind: 'agent'; s: Session; a: AgentInfo; via?: string }
   | { kind: 'changes'; s: Session; agentId?: string; list: Change[]; via?: string }
   | { kind: 'change'; s: Session; c: Change; via?: string };
+
+/** media/vendors/<vendor>.svg, set by the extension at activation. */
+let mediaRoot: vscode.Uri | undefined;
+export const setMediaRoot = (u: vscode.Uri) => (mediaRoot = u);
+const vendorIcon = (model?: string) => (mediaRoot ? vscode.Uri.joinPath(mediaRoot, 'vendors', `${vendorOf(model)}.svg`) : new vscode.ThemeIcon('circle-filled'));
 
 const stateIcon = (st: State) =>
   st === 'working'
@@ -123,7 +129,8 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         const i = node.s.info;
         const it = new vscode.TreeItem(clip(i.title, 70), i.agents.length || i.edits ? C.Collapsed : C.None);
         it.id = `${node.via ?? ''}|s:${i.id}`;
-        it.iconPath = stateIcon(i.state);
+        // the agent's own mark (Claude, GPT, Llama…); a spinner while it works
+        it.iconPath = i.state === 'working' ? stateIcon('working') : vendorIcon(i.model);
         const bits = [listAccounts().length > 1 ? `👤 ${listAccounts().find((a) => a.id === i.account)?.name ?? i.account}` : '', this.attached().has(i.id) ? '⌨ terminal' : '', i.model ? modelLabel(i.model) : '', i.branch, `${i.edits} edits`, i.agents.length ? `${i.agents.length} agents` : '', i.pendingComments ? `${i.pendingComments} comments queued` : '', ago(i.updated)];
         it.description = bits.filter(Boolean).join(' · ');
         const md = new vscode.MarkdownString(undefined, true);

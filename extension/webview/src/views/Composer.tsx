@@ -58,18 +58,18 @@ export function ContextRing({ chat }: { chat: ChatState }) {
       : t('Context usage appears after the first answer');
   return (
     <span className="relative inline-grid size-6 place-items-center" title={title} aria-label={title} role="img">
-      <svg viewBox="0 0 20 20" className={cn('size-5 -rotate-90', working && !c && 'animate-spin')}>
+      <svg viewBox="0 0 20 20" className="size-5 -rotate-90">
         <circle cx={10} cy={10} r={R} fill="none" stroke="var(--border)" strokeWidth={2.5} />
-        {(c || working) && (
+        {c && (
           <circle
             cx={10}
             cy={10}
             r={R}
             fill="none"
-            stroke={c ? color : 'var(--working)'}
+            stroke={color}
             strokeWidth={2.5}
             strokeLinecap="round"
-            strokeDasharray={c ? `${(pct / 100) * C} ${C}` : `${C * 0.25} ${C}`}
+            strokeDasharray={`${(pct / 100) * C} ${C}`}
             className="transition-[stroke-dasharray] duration-500"
           />
         )}

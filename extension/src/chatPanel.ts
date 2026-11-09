@@ -13,6 +13,7 @@ export type FromChat =
   | { type: 'cancelQueued'; id: string }
   | { type: 'editQueued'; id: string; text: string }
   | { type: 'interrupt' }
+  | { type: 'loadEarlier'; all?: boolean }
   | { type: 'contextDetail' }
   | { type: 'toggleMcp'; name: string; enabled: boolean }
   | { type: 'reconnectMcp'; name: string }
@@ -166,6 +167,8 @@ export class Chats {
         return vscode.commands.executeCommand('agentlens.manageConnectors', c.state.cwd);
       case 'contextDetail':
         return c.contextDetail().catch(() => {});
+      case 'loadEarlier':
+        return c.loadEarlier(m.all);
       case 'interrupt':
         return c.interrupt();
       case 'respond':

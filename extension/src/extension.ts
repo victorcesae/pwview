@@ -16,7 +16,7 @@ import { usageReport } from './usage';
 import { addLink, briefing } from './links';
 import { PRESETS, listModels, secretKey } from './providers';
 import { addAccount, addProvider, listAccounts, preferredAccount, removeAccount, setPreferred, accountEnv, type Account } from './accounts';
-import { Node, SessionsTree } from './tree';
+import { Node, SessionsTree, setMediaRoot } from './tree';
 import { ago, clip, runAgent } from './util';
 
 const SCHEME = 'agentlens';
@@ -68,6 +68,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
 
   // ------------------------------------------------------------ views
+  setMediaRoot(vscode.Uri.joinPath(ctx.extensionUri, 'media'));
   const tree = new SessionsTree(() => sessions, () => hooks, () => attachedSessions());
   const treeView = vscode.window.createTreeView('agentlens.sessions', {
     treeDataProvider: tree,

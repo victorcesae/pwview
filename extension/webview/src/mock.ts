@@ -101,7 +101,7 @@ export const chat: Data = {
   chat: {
     key: 'k', sessionId: 's1', cwd: P, title: 'Sales module: quotation flow', model: 'claude-opus-5-5',
     models: [{ value: 'default', displayName: 'Default (Opus 5.5)' }, { value: 'sonnet', displayName: 'Sonnet 5.5' }, { value: 'haiku', displayName: 'Haiku 5.5' }],
-    permissionMode: 'default', effort: 'high', fastMode: false, ultracode: true, status: 'working', activity: 'Searching for "sendQuote"…', costUsd: 0.42, account: { name: 'Work', email: 'victor@example.com', plan: 'max', organization: 'NZero Labs' }, slashCommands: ['compact', 'review', 'init', 'cost', 'model'], mcp: [{ name: 'Metricool Social Media', status: 'connected', tools: 9 }, { name: 'Playwright', status: 'disabled', tools: 22 }, { name: 'GitHub', status: 'needs-auth', tools: 0, error: 'Sign in required' }],
+    permissionMode: 'default', effort: 'high', fastMode: false, ultracode: true, status: 'working', activity: 'Searching for "sendQuote"…', costUsd: 0.42, account: { name: 'Work', email: 'victor@example.com', plan: 'max', organization: 'NZero Labs' }, slashCommands: ['compact', 'review', 'init', 'cost', 'model'], earlier: 0, mcp: [{ name: 'Metricool Social Media', status: 'connected', tools: 9 }, { name: 'Playwright', status: 'disabled', tools: 22 }, { name: 'GitHub', status: 'needs-auth', tools: 0, error: 'Sign in required' }],
     todos: [
       { content: 'Find how quotes are sent today', status: 'completed', activeForm: 'Finding how quotes are sent' },
       { content: 'Add approval gate to QuoteService.send', status: 'completed', activeForm: 'Adding the approval gate' },
@@ -171,6 +171,7 @@ const schema = `${P}/packages/db/schema.prisma`;
 }
 
 // sample context breakdown (what Claude Code's getContextUsage returns)
+(chat as Extract<Data, { view: 'chat' }>).chat.host = 'Cursor';
 (chat as Extract<Data, { view: 'chat' }>).chat.context = {
   used: 187_400,
   max: 1_000_000,
@@ -198,5 +199,5 @@ export function longChat(): Data {
     else if (i % 4 === 1) items.push({ kind: 'assistant', id: `a${i}`, text: `Answer ${i}. Here is **what I changed** and why, with some \`code\` and a list:\n\n- one\n- two` });
     else items.push({ kind: 'tool', id: `t${i}`, name: i % 4 === 2 ? 'Read' : 'Edit', summary: `/repo/file${i}.ts`, file: `/repo/file${i}.ts`, input: { file_path: `/repo/file${i}.ts` }, status: 'done', patch: i % 4 === 3 ? changes[0].hunks : undefined });
   }
-  return { view: 'chat', linked: [], chat: { ...base, status: 'idle', activity: undefined, queue: [], items } };
+  return { view: 'chat', linked: [], chat: { ...base, status: 'idle', activity: undefined, queue: [], items, earlier: 1240 } };
 }

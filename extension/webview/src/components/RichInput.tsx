@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Bold, Code, Italic, List, ListOrdered, SquareCode } from 'lucide-react';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Markdown } from 'tiptap-markdown';
+import { expandChip, findChip, insertChip, isLongPaste, PasteChip } from './pasteChip';
 import { cn } from '@/lib/utils';
 
 export interface RichInputHandle {
@@ -40,6 +41,7 @@ export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput({
       StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false }),
       Placeholder.configure({ placeholder }),
       Markdown.configure({ html: false, transformPastedText: true, breaks: true }),
+      PasteChip,
     ],
     editorProps: {
       attributes: { class: 'rich-input outline-none min-h-11 max-h-64 overflow-y-auto px-1 py-0.5 text-[13px] leading-relaxed' },
@@ -65,6 +67,23 @@ export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput({
           cb.current.onFiles(files);
           return true;
         }
+        // long text: a compact chip; the same text pasted again expands the chip (like the terminal)
+        const text = event.clipboardData?.getData('text/plain') ?? '';
+        const ed = editorRef.current;
+        if (ed && text && isLongPaste(text)) {
+          const chip = findChip(ed, text);
+          if (chip) expandChip(ed, chip, text);
+          else insertChip(ed, text);
+          return true;
+        }
+        return false;
+      },
+      handleClickOn: (_view, _pos, node, nodePos) => {
+        const ed = editorRef.current;
+        if (ed && node.type.name === 'pasteChip') {
+          expandChip(ed, { pos: nodePos, size: node.nodeSize }, node.attrs.text);
+          return true;
+        }
         return false;
       },
       handleDrop: (_view, event) => {
@@ -79,6 +98,8 @@ export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput({
     },
     onUpdate: ({ editor }) => cb.current.onChange?.(md(editor)),
   });
+  const editorRef = useRef<Editor | null>(null);
+  editorRef.current = editor;
 
   useEffect(() => {
     if (editor) editor.extensionManager.extensions.find((x) => x.name === 'placeholder')!.options.placeholder = placeholder;

@@ -230,6 +230,20 @@ test('chat: try again re-sends the last message with its images', () => {
   assert.equal(m[1].text, 'fix it');
 });
 
+test('chat: a resumed chat shows the latest page of history and loads earlier pages on request', () => {
+  const items = Array.from({ length: 700 }, (_, i) => ({ kind: 'user', id: 'h' + i, text: 'msg ' + i, images: [], ts: '' }));
+  const c = new ChatSession({ cwd: '/r', resume: 'sid', history: { items, todos: [] } }, () => {});
+  assert.equal(c.state.earlier, 400);
+  assert.equal(c.state.items[0].id, 'h400', 'latest 300 shown');
+  c.loadEarlier();
+  assert.equal(c.state.earlier, 100);
+  assert.equal(c.state.items[0].id, 'h100');
+  c.loadEarlier(true);
+  assert.equal(c.state.earlier, 0);
+  assert.equal(c.state.items[0].id, 'h0');
+  assert.equal(c.state.items.filter((i) => i.kind === 'user').length, 700, 'nothing duplicated or lost');
+});
+
 test('chat: describes what the agent is doing in words', () => {
   assert.equal(describeTool('Read', { file_path: '/a/b/c.ts' }), 'Reading c.ts…');
   assert.equal(describeTool('Bash', { command: 'npm test', description: 'Run tests' }), 'Running Run tests…');
