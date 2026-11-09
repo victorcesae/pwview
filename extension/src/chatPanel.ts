@@ -185,7 +185,15 @@ export class Chats {
 
   /** Open chats (folder, session, title): for tests. */
   describe() {
-    return this.open.map((o) => ({ cwd: o.chat.state.cwd, sessionId: o.chat.state.sessionId, title: o.chat.state.title }));
+    return this.open.map((o) => {
+      const s = o.chat.state;
+      return { cwd: s.cwd, sessionId: s.sessionId, title: s.title, status: s.status, activity: s.activity, error: s.error, tail: s.items.slice(-4).map((it: any) => ({ kind: it.kind, status: it.status, streaming: it.streaming, name: it.name })) };
+    });
+  }
+
+  /** Test-only: send a prompt to the newest chat. */
+  testSend(text: string) {
+    this.open.at(-1)?.chat.send(text, [], 'later');
   }
 
   /** Session ids currently driven by an Steerhouse chat (a resumed session belongs to the chat). */

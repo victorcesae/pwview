@@ -31,7 +31,9 @@
   "main": "./dist/extension.js",
   "activationEvents": [
     "onStartupFinished",
-    "onWebviewPanel:steerhouse.chat"
+    "onWebviewPanel:steerhouse.chat",
+    "onWebviewPanel:agentlens.chat",
+    "onWebviewPanel:agentlens.dashboard"
   ],
   "contributes": {
     "viewsContainers": {

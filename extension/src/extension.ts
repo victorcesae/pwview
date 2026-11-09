@@ -47,21 +47,31 @@ const isTempProject = (p: string) => tempRoots.some((r) => norm(p) === r || norm
  * Test-only (env vars, used by test/editor/restore.cjs): open a chat then close the window
  * normally, or report which chat tabs came back after a relaunch.
  */
-function restoreTestHooks(chats: { describe(): unknown }) {
+function restoreTestHooks(chats: { describe(): unknown; testSend(text: string): void }) {
   const open = process.env.STEERHOUSE_TEST_OPEN_CHAT;
   const report = process.env.STEERHOUSE_TEST_REPORT;
   if (open)
     setTimeout(async () => {
       // "resume:<session id>" resumes that session in a chat; otherwise a new chat in that folder
+      // "legacy:<folder>": a tab saved by AgentLens (the old name), as it is left after the rename
+      if (open.startsWith('legacy:')) {
+        const p = vscode.window.createWebviewPanel('agentlens.chat', 'Old AgentLens chat', vscode.ViewColumn.Active, { enableScripts: true });
+        p.webview.html = `<script>acquireVsCodeApi().setState(${JSON.stringify({ cwd: open.slice(7), title: 'Old AgentLens chat' })});</script>old`;
+        setTimeout(() => vscode.commands.executeCommand('workbench.action.closeWindow'), 4000);
+        return;
+      }
       if (open.startsWith('resume:')) await vscode.commands.executeCommand('steerhouse.resumeSession', open.slice(7));
       else await vscode.commands.executeCommand('steerhouse.newChatHere', { kind: 'project', path: open });
-      setTimeout(() => vscode.commands.executeCommand('workbench.action.closeWindow'), 4000);
+      // optionally leave the chat busy (mid-turn) when the window closes
+      const prompt = process.env.STEERHOUSE_TEST_PROMPT;
+      if (prompt) setTimeout(() => chats.testSend(prompt), 1500);
+      setTimeout(() => vscode.commands.executeCommand('workbench.action.closeWindow'), Number(process.env.STEERHOUSE_TEST_CLOSE_MS ?? 4000));
     }, 2000);
   if (report)
     setTimeout(() => {
       require('fs').writeFileSync(report, JSON.stringify({ tabs: vscode.window.tabGroups.all.flatMap((g) => g.tabs).map((t) => ({ label: t.label, viewType: (t.input as any)?.viewType })), chats: chats.describe() }));
       vscode.commands.executeCommand('workbench.action.closeWindow');
-    }, 8000);
+    }, Number(process.env.STEERHOUSE_TEST_REPORT_MS ?? 8000));
 }
 
 export function activate(ctx: vscode.ExtensionContext) {
@@ -492,6 +502,26 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   const sessionArg = (x: unknown): string | undefined => (typeof x === 'string' ? x : (x as { s?: Session } | undefined)?.s?.info.id);
 
+  // Reload Window: reopen the chats that were open, in their tabs, with their settings
+  const chatSerializer: vscode.WebviewPanelSerializer = {
+    async deserializeWebviewPanel(panel, state: { sessionId?: string; cwd?: string; title?: string; account?: string } | undefined) {
+      try {
+        if (!state?.cwd) return panel.dispose();
+        if (!state.sessionId) {
+          // a chat that had no message yet: open it again, fresh, in the same folder
+          const account = listAccounts().find((a) => a.name === state.account) ?? listAccounts()[0];
+          return chats.start({ cwd: state.cwd, account, env: await envFor(account), panel });
+        }
+        if (!sessions.length) await refresh(true);
+        const s = find(state.sessionId);
+        const account = s ? accountOf(s.info.account) : (listAccounts().find((a) => a.name === state.account) ?? listAccounts()[0]);
+        chats.start({ cwd: s?.info.project ?? state.cwd, resume: state.sessionId, title: s?.info.title ?? state.title, account, env: await envFor(account), panel });
+      } catch (e: any) {
+        // never leave the tab loading forever
+        panel.webview.html = `<body style="font-family:sans-serif;padding:16px">Steerhouse could not reopen this chat: ${String(e?.message ?? e).replace(/</g, '&lt;')}. Close the tab and open the session again.</body>`;
+      }
+    },
+  };
   ctx.subscriptions.push(
     treeView,
     vscode.commands.registerCommand('steerhouse.refresh', () => refresh(true)),
@@ -513,20 +543,10 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('steerhouse.comment.queue', (r: vscode.CommentReply) => sendComment(r, 'queue')),
     vscode.commands.registerCommand('steerhouse.comment.now', (r: vscode.CommentReply) => sendComment(r, 'now')),
     // Reload Window: reopen the chats that were open, in their tabs, with their settings
-    vscode.window.registerWebviewPanelSerializer('steerhouse.chat', {
-      async deserializeWebviewPanel(panel, state: { sessionId?: string; cwd?: string; title?: string; account?: string } | undefined) {
-        if (!state?.cwd) return panel.dispose();
-        if (!state.sessionId) {
-          // a chat that had no message yet: open it again, fresh, in the same folder
-          const account = listAccounts().find((a) => a.name === state.account) ?? listAccounts()[0];
-          return chats.start({ cwd: state.cwd, account, env: await envFor(account), panel });
-        }
-        if (!sessions.length) await refresh(true);
-        const s = find(state.sessionId);
-        const account = s ? accountOf(s.info.account) : (listAccounts().find((a) => a.name === state.account) ?? listAccounts()[0]);
-        chats.start({ cwd: s?.info.project ?? state.cwd, resume: state.sessionId, title: s?.info.title ?? state.title, account, env: await envFor(account), panel });
-      },
-    }),
+    vscode.window.registerWebviewPanelSerializer('steerhouse.chat', chatSerializer),
+    // tabs saved by AgentLens (the old name): without this VS Code waits for them forever
+    vscode.window.registerWebviewPanelSerializer('agentlens.chat', chatSerializer),
+    vscode.window.registerWebviewPanelSerializer('agentlens.dashboard', { deserializeWebviewPanel: async (panel) => panel.dispose() }),
     vscode.commands.registerCommand('steerhouse.pinProject', (n?: { path?: string }) => mark('pinned', n?.path, true)),
     vscode.commands.registerCommand('steerhouse.unpinProject', (n?: { path?: string }) => mark('pinned', n?.path, false)),
     vscode.commands.registerCommand('steerhouse.archiveProject', async (n?: { path?: string }) => (await mark('pinned', n?.path, false), mark('archived', n?.path, true))),
