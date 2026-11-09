@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ago, base, rel } from '@/lib/utils';
 import { useState } from 'react';
 import { GraphView } from './Graph';
+import { VendorMark, vendorOf } from '@/components/VendorMark';
 import { UsageView } from './Usage';
 import type { GraphData, HotFile, SessionInfo, UsageReport } from '@/types';
 import { t } from '@/i18n';
@@ -18,6 +19,7 @@ function SessionRow({ s }: { s: SessionInfo }) {
       className="hover:bg-accent group flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors"
     >
       <StateDot state={s.state} />
+      <VendorMark vendor={vendorOf(s.model)} title={s.model} />
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium">{s.title}</div>
         <div className="text-muted-foreground flex items-center gap-2 truncate text-[11px]">

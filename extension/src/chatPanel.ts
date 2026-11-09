@@ -13,6 +13,9 @@ export type FromChat =
   | { type: 'cancelQueued'; id: string }
   | { type: 'editQueued'; id: string; text: string }
   | { type: 'interrupt' }
+  | { type: 'toggleMcp'; name: string; enabled: boolean }
+  | { type: 'reconnectMcp'; name: string }
+  | { type: 'manageConnectors' }
   | { type: 'retry' }
   | { type: 'respond'; id: string; decision: 'allow' | 'always' | 'deny'; message?: string; answers?: Record<string, string> }
   | { type: 'setModel'; model: string }
@@ -49,7 +52,7 @@ export class Chats {
     return this.open.find((o) => o.chat.state.sessionId === sessionId);
   }
 
-  start(opts: { cwd: string; resume?: string; title?: string; prompt?: string; account?: Account }) {
+  start(opts: { cwd: string; resume?: string; title?: string; prompt?: string; account?: Account; env?: Record<string, string> }) {
     if (opts.resume) {
       const existing = this.find(opts.resume);
       if (existing) return existing.panel.reveal();
@@ -69,7 +72,7 @@ export class Chats {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const transcript = opts.resume ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
     const history = transcript ? historyFromTranscript(transcript) : undefined;
-    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: accountEnv(opts.account) } }, () => {
+    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, host: vscode.env.appName, model: opts.account?.provider?.model }, () => {
       // throttle streaming updates to ~25 fps
       if (timer) return;
       timer = setTimeout(() => {
@@ -135,6 +138,12 @@ export class Chats {
         return c.cancelQueued(m.id);
       case 'retry':
         return c.retry();
+      case 'toggleMcp':
+        return c.toggleMcp(m.name, m.enabled).catch((e) => vscode.window.showWarningMessage(`AgentLens: ${m.name}: ${e?.message ?? e}`));
+      case 'reconnectMcp':
+        return c.reconnectMcp(m.name).catch((e) => vscode.window.showWarningMessage(`AgentLens: ${m.name}: ${e?.message ?? e}`));
+      case 'manageConnectors':
+        return vscode.commands.executeCommand('agentlens.manageConnectors', c.state.cwd);
       case 'interrupt':
         return c.interrupt();
       case 'respond':

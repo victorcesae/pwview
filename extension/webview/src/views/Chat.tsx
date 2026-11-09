@@ -6,27 +6,16 @@ import { Markdown } from '@/components/Markdown';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
 import { base, cn } from '@/lib/utils';
 import type { ChatData, ChatItem, ChatState, Effort, PermissionMode, Priority, Question, ToChat, Todo } from '@/types';
 import { HunkView } from './Session';
+import { Composer, PRIORITY } from './Composer';
+import { LightboxProvider, Zoomable } from '@/components/Lightbox';
+import { fileOf, groupTools, inp, KIND, stat, summarizeTools, type ToolItem } from './toolSummary';
+import { HostMark, hostName, VendorMark, vendorName, vendorOf } from '@/components/VendorMark';
 import { t } from '@/i18n';
 
 const post = (m: ToChat) => postAny(m as never);
-
-const PRIORITY: Record<Priority, { label: string; icon: React.ComponentType<{ className?: string }>; hint: string }> = {
-  later: { label: t('Queue'), icon: ListOrdered, hint: t('Sent when the current turn ends') },
-  next: { label: t('Steer'), icon: Navigation, hint: t('Picked up at its next step, without stopping') },
-  now: { label: t('Send now'), icon: Zap, hint: t('Sent immediately') },
-};
-
-const MODES: { value: PermissionMode; label: string }[] = [
-  { value: 'default', label: t('Ask before acting') },
-  { value: 'acceptEdits', label: t('Accept edits') },
-  { value: 'plan', label: t('Plan mode') },
-  { value: 'auto', label: t('Auto') },
-  { value: 'bypassPermissions', label: t('Bypass permissions') },
-];
 
 // ---------------------------------------------------------------- plan / todos
 
@@ -134,40 +123,6 @@ function ToolRow({ it, sessionId, children }: { it: Extract<ChatItem, { kind: 't
       )}
     </div>
   );
-}
-
-// ---------------------------------------------------------------- grouped tool calls ("Read and edited chat.ts, ran 1 command")
-
-type ToolItem = Extract<ChatItem, { kind: 'tool' }>;
-const stat = (it: ToolItem) => {
-  const lines = (it.patch ?? []).flatMap((h) => h.lines);
-  return { add: lines.filter((l) => l[0] === '+').length, del: lines.filter((l) => l[0] === '-').length };
-};
-const fileOf = (it: ToolItem) => (it.file ? base(it.file) : '');
-const inp = (it: ToolItem) => (it.input ?? {}) as Record<string, unknown>;
-const KIND = (n: string) =>
-  n === 'Read' ? 'read' : n === 'Edit' || n === 'MultiEdit' || n === 'Write' || n === 'NotebookEdit' ? 'edit' : n === 'Bash' || n === 'PowerShell' ? 'run' : n === 'Grep' || n === 'Glob' || n === 'WebSearch' ? 'search' : n === 'WebFetch' ? 'fetch' : 'other';
-
-/** One sentence for a run of tool calls, e.g. "Read and edited chat.ts, ran 1 command". */
-export function summarizeTools(items: ToolItem[]): string {
-  const files = (k: string) => [...new Set(items.filter((i) => KIND(i.name) === k).map(fileOf).filter(Boolean))];
-  const count = (k: string) => items.filter((i) => KIND(i.name) === k).length;
-  const read = files('read');
-  const edited = files('edit');
-  const parts: string[] = [];
-  const one = (list: string[], single: string, many: string) => (list.length === 1 ? t(single, list[0]) : t(many, list.length));
-  if (read.length && edited.length && read.length === 1 && edited.length === 1 && read[0] === edited[0]) parts.push(t('read and edited {0}', read[0]));
-  else {
-    if (read.length) parts.push(one(read, 'read {0}', 'read {0} files'));
-    if (edited.length) parts.push(one(edited, 'edited {0}', 'edited {0} files'));
-  }
-  const n = (k: string, s: string, p: string) => count(k) && parts.push(count(k) === 1 ? t(s) : t(p, count(k)));
-  n('run', 'ran 1 command', 'ran {0} commands');
-  n('search', 'searched once', 'searched {0} times');
-  n('fetch', 'fetched 1 page', 'fetched {0} pages');
-  n('other', 'used 1 tool', 'used {0} tools');
-  const s = parts.join(', ');
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function StepLabel({ it }: { it: ToolItem }) {
@@ -494,7 +449,7 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
           {it.images.length > 0 && (
             <div className="flex flex-wrap justify-end gap-1.5">
               {it.images.map((src, i) => (
-                <img key={i} src={src} alt="" className="h-20 rounded-md border object-cover" />
+                <Zoomable key={i} src={src} className="h-20 rounded-md border object-cover" />
               ))}
             </div>
           )}
@@ -510,6 +465,7 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
         </div>
       );
     case 'assistant':
+      if (!it.text.trim() && !it.streaming) return null;
       return (
         <div className="flex gap-2.5">
           <div className="bg-primary text-primary-foreground mt-0.5 grid size-5 shrink-0 place-items-center rounded-md">
@@ -543,247 +499,6 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
         </div>
       );
   }
-}
-
-// ---------------------------------------------------------------- composer
-
-type Img = { data: string; mime: string };
-const readImage = (f: File) =>
-  new Promise<Img>((ok, bad) => {
-    const r = new FileReader();
-    r.onload = () => ok({ data: String(r.result), mime: f.type || 'image/png' });
-    r.onerror = bad;
-    r.readAsDataURL(f);
-  });
-
-function Composer({ chat }: { chat: ChatState }) {
-  const working = chat.status === 'working' || chat.status === 'waiting';
-  const [text, setText] = useState('');
-  const [images, setImages] = useState<Img[]>([]);
-  const [priority, setPriority] = useState<Priority>('next'); // Steer by default
-  const [over, setOver] = useState(false);
-  const [sel, setSel] = useState(0);
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  const slash = text.startsWith('/') && !text.includes(' ') ? chat.slashCommands.filter((c) => `/${c}`.startsWith(text)).slice(0, 8) : [];
-
-  const addFiles = async (files: File[]) => {
-    const imgs = files.filter((f) => f.type.startsWith('image/'));
-    if (imgs.length) {
-      const read = await Promise.all(imgs.map(readImage));
-      setImages((p) => [...p, ...read]);
-    }
-  };
-  const send = (p: Priority = priority) => {
-    if (!text.trim() && !images.length) return;
-    post({ type: 'send', text, images, priority: working ? p : 'later' });
-    setText('');
-    setImages([]);
-  };
-
-  useEffect(() => {
-    ref.current?.focus();
-  }, []);
-
-  return (
-    <div
-      className={cn('bg-card focus-within:border-ring flex flex-col gap-2 rounded-xl border p-2.5 shadow-sm transition-colors', over && 'border-ring')}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setOver(false);
-        addFiles([...e.dataTransfer.files]);
-      }}
-    >
-      {slash.length > 0 && (
-        <div className="flex flex-col overflow-hidden rounded-md border">
-          {slash.map((c, i) => (
-            <button
-              key={c}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                setText(`/${c} `);
-              }}
-              className={cn('cursor-pointer px-2.5 py-1 text-left font-mono text-[12px]', i === sel ? 'bg-accent' : 'hover:bg-accent')}
-            >
-              /{c}
-            </button>
-          ))}
-        </div>
-      )}
-      {images.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {images.map((img, i) => (
-            <div key={i} className="group relative">
-              <img src={img.data} alt="" className="h-14 rounded-md border object-cover" />
-              <button
-                onClick={() => setImages(images.filter((_, j) => j !== i))}
-                className="bg-background absolute -top-1.5 -right-1.5 grid size-5 cursor-pointer place-items-center rounded-full border opacity-0 group-hover:opacity-100"
-                aria-label="Remove image"
-              >
-                <X className="size-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <Textarea
-        ref={ref}
-        value={text}
-        rows={2}
-        onChange={(e) => {
-          setText(e.target.value);
-          setSel(0);
-        }}
-        onPaste={(e) => {
-          const files = [...e.clipboardData.items].filter((i) => i.kind === 'file').map((i) => i.getAsFile()).filter((f): f is File => !!f);
-          if (files.length) {
-            e.preventDefault();
-            addFiles(files);
-          }
-        }}
-        onKeyDown={(e) => {
-          if (slash.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-            e.preventDefault();
-            setSel((s) => (s + (e.key === 'ArrowDown' ? 1 : slash.length - 1)) % slash.length);
-          } else if (slash.length && e.key === 'Tab') {
-            e.preventDefault();
-            setText(`/${slash[sel]} `);
-          } else if (e.key === 'Escape' && working) {
-            e.preventDefault();
-            post({ type: 'interrupt' });
-          } else if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            send(e.ctrlKey || e.metaKey ? 'now' : priority);
-          }
-        }}
-        placeholder={working ? t('Message the agent while it works…  (Enter steers it, Ctrl+Enter sends now)') : t('Ask, plan, or give a task…  (/ for commands, paste or drop images)')}
-        className="max-h-60 min-h-12 resize-none border-0 bg-transparent px-1 shadow-none outline-none focus:outline-none focus-visible:ring-0 focus-visible:outline-none"
-      />
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-[11px]">
-          <ImagePlus className="size-3.5" />
-          <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => addFiles([...(e.target.files ?? [])])} />
-          {t('Image')}
-        </label>
-        <select
-          value={chat.permissionMode}
-          onChange={(e) => post({ type: 'setMode', mode: e.target.value as PermissionMode })}
-          className="bg-input text-muted-foreground h-6 cursor-pointer rounded-md border px-1.5 text-[11px] outline-none"
-          aria-label="Permission mode"
-        >
-          {MODES.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-        {chat.models.length > 0 && (
-          <select
-            value={chat.models.some((m) => m.value === chat.model) ? chat.model : ''}
-            onChange={(e) => post({ type: 'setModel', model: e.target.value })}
-            className="bg-input text-muted-foreground h-6 max-w-44 cursor-pointer rounded-md border px-1.5 text-[11px] outline-none"
-            aria-label="Model"
-          >
-            {!chat.models.some((m) => m.value === chat.model) && <option value="">{chat.model ?? 'Default model'}</option>}
-            {chat.models.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.displayName}
-              </option>
-            ))}
-          </select>
-        )}
-        <select
-          value={chat.effort ?? ''}
-          onChange={(e) => post({ type: 'setEffort', effort: e.target.value as Effort })}
-          className="bg-input text-muted-foreground h-6 cursor-pointer rounded-md border px-1.5 text-[11px] outline-none"
-          aria-label="Effort"
-          title="How hard the model thinks. Higher is slower and costs more."
-        >
-          {!chat.effort && <option value="">{t('Effort: default')}</option>}
-          {(['low', 'medium', 'high', 'xhigh', 'max'] as Effort[]).map((e) => (
-            <option key={e} value={e}>{t('Effort: {0}', e)}</option>
-          ))}
-        </select>
-        <button
-          onClick={() => post({ type: 'setFast', on: !chat.fastMode })}
-          title="Fast mode: same model, faster output, premium pricing (supported models only)"
-          className={cn('inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border px-1.5 text-[11px]', chat.fastMode ? 'border-warn/60 bg-warn/10 text-warn' : 'text-muted-foreground hover:text-foreground')}
-        >
-          <Zap className="size-3" /> {t('Fast')}
-        </button>
-        <button
-          onClick={() => post({ type: 'setUltracode', on: !chat.ultracode })}
-          title="Ultracode: the agent orchestrates multi-agent workflows for big tasks (supported models only; uses more tokens)"
-          className={cn('inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border px-1.5 text-[11px]', chat.ultracode ? 'border-agent/60 bg-agent/10 text-agent' : 'text-muted-foreground hover:text-foreground')}
-        >
-          <Bot className="size-3" /> Ultracode
-        </button>
-        <div className="ml-auto flex items-center gap-1.5">
-          {working && (
-            <div className="bg-muted inline-flex rounded-lg p-[3px]" role="radiogroup" aria-label="Delivery">
-              {(Object.keys(PRIORITY) as Priority[]).map((p) => {
-                const I = PRIORITY[p].icon;
-                return (
-                  <button
-                    key={p}
-                    role="radio"
-                    aria-checked={priority === p}
-                    title={PRIORITY[p].hint}
-                    onClick={() => setPriority(p)}
-                    className={cn(
-                      'inline-flex h-6 cursor-pointer items-center gap-1 rounded-md px-2 text-[11px] font-medium',
-                      priority === p ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    <I className="size-3" />
-                    {PRIORITY[p].label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {working && (
-            <Button size="sm" variant="outline" onClick={() => post({ type: 'interrupt' })} title="Stop (Esc)">
-              <Square className="fill-current" /> {t('Stop')}
-            </Button>
-          )}
-          <Button size="sm" onClick={() => send()} disabled={!text.trim() && !images.length}>
-            {working ? (
-              <>
-                {(() => {
-                  const I = PRIORITY[priority].icon;
-                  return <I />;
-                })()}
-                {PRIORITY[priority].label}
-              </>
-            ) : (
-              <>
-                <Send /> {t('Send')}
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Consecutive plain tool calls become one group; sub-agents keep their own row (they nest their steps). */
-export function groupTools(items: ChatItem[]): (ChatItem | ToolItem[])[] {
-  const out: (ChatItem | ToolItem[])[] = [];
-  for (const it of items) {
-    const groupable = it.kind === 'tool' && it.name !== 'Agent' && it.name !== 'Task' && it.name !== 'TodoWrite';
-    const last = out.at(-1);
-    if (groupable && Array.isArray(last)) last.push(it as ToolItem);
-    else if (groupable) out.push([it as ToolItem]);
-    else if (!(it.kind === 'tool' && it.name === 'TodoWrite')) out.push(it); // the plan card already shows TodoWrite
-  }
-  return out;
 }
 
 /** A message waiting to be handed over: still editable, switchable and cancellable. */
@@ -851,6 +566,7 @@ export function ChatView({ data }: { data: ChatData }) {
   const end = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const [atBottom, setAtBottom] = useState(true);
   const working = chat.status === 'working' || chat.status === 'waiting';
 
   // top-level items; sub-agent items are nested under their Agent tool row
@@ -870,10 +586,21 @@ export function ChatView({ data }: { data: ChatData }) {
   }, [chat.items, chat.activity]);
 
   return (
+    <LightboxProvider>
     <div className="flex h-screen flex-col">
       <header className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
         <StateDot state={working ? 'working' : chat.status === 'idle' ? 'recent' : 'idle'} />
+        <span className="inline-flex items-center gap-0.5" title={`${hostName(chat.host)}${chat.host ? ' + ' : ''}${vendorName(vendorOf(chat.model))}${chat.model ? ' · ' + chat.model : ''}`}>
+          <HostMark host={chat.host} />
+          {chat.host && <span className="text-muted-foreground text-[10px]">+</span>}
+          <VendorMark vendor={vendorOf(chat.model)} />
+        </span>
         <h1 className="min-w-0 flex-1 truncate text-[14px] font-semibold">{chat.title}</h1>
+        {chat.status === 'starting' && (
+          <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11.5px]" role="status">
+            <Loader2 className="size-3.5 animate-spin" /> {t('Starting Claude Code…')}
+          </span>
+        )}
         <span
           className="text-muted-foreground inline-flex max-w-64 items-center gap-1 truncate rounded-md border px-1.5 py-0.5 text-[11px]"
           title={[chat.account.email, chat.account.organization, chat.account.plan, chat.account.provider].filter(Boolean).join(' · ')}
@@ -914,6 +641,7 @@ export function ChatView({ data }: { data: ChatData }) {
         onScroll={(e) => {
           const el = e.currentTarget;
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          setAtBottom(stick.current);
         }}
       >
         <div className="mx-auto flex max-w-[860px] flex-col gap-3 px-4 py-4">
@@ -945,7 +673,20 @@ export function ChatView({ data }: { data: ChatData }) {
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-[860px] flex-col gap-2 px-4 pt-1 pb-3">
+      <div className="relative mx-auto flex w-full max-w-[860px] flex-col gap-2 px-4 pt-1 pb-3">
+        {!atBottom && (
+          <button
+            onClick={() => {
+              stick.current = true;
+              setAtBottom(true);
+              end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+            }}
+            className="bg-popover text-popover-foreground hover:bg-accent absolute -top-11 left-1/2 z-30 inline-flex -translate-x-1/2 cursor-pointer items-center gap-1 rounded-full border px-3 py-1 text-[11.5px] shadow-md"
+            aria-label={t('Jump to latest')}
+          >
+            <ChevronDown className="size-3.5" /> {t('Jump to latest')}
+          </button>
+        )}
         <TodoCard todos={chat.todos} />
         {working && chat.activity && (
           <div className="text-muted-foreground flex items-center gap-2 px-1 text-[12px]" role="status">
@@ -964,5 +705,6 @@ export function ChatView({ data }: { data: ChatData }) {
         <Composer chat={chat} />
       </div>
     </div>
+    </LightboxProvider>
   );
 }

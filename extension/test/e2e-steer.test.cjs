@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
+const { removeTestSession } = require('./e2e-cleanup.cjs');
 
 const root = path.join(__dirname, '..');
 const out = path.join(os.tmpdir(), 'agentlens-e2e-build');
@@ -58,6 +59,7 @@ test('e2e: Steer reaches the agent mid-task, in the same turn', { skip, timeout:
     assert.equal(c.turns, 1, 'it was picked up inside the running turn (not as a new turn afterwards)');
   } finally {
     c.close();
+    await removeTestSession(c.state.cwd);
   }
 });
 
@@ -73,5 +75,6 @@ test('e2e: Send now switches the agent to the new message right away', { skip, t
     assert.ok(steps < 3, 'the slow task did not run to the end first');
   } finally {
     c.close();
+    await removeTestSession(c.state.cwd);
   }
 });

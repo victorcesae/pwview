@@ -52,7 +52,7 @@ export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | '
 export interface ChatState {
   key: string; sessionId?: string; cwd: string; title: string; model?: string; models: { value: string; displayName: string }[];
   permissionMode: PermissionMode; effort?: Effort; fastMode: boolean; ultracode: boolean; status: 'starting' | 'idle' | 'working' | 'waiting' | 'closed' | 'error'; activity?: string;
-  todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[]; tokens?: number; slashCommands: string[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string }; error?: string;
+  todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[]; tokens?: number; context?: { used: number; max: number; percentage: number; categories?: { name: string; tokens: number }[] }; slashCommands: string[]; mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string }; host?: string; error?: string;
 }
 export type LinkedSession = { id: string; title: string; state: State; activity?: string };
 export type ChatData = { view: 'chat'; chat: ChatState; linked: LinkedSession[] };
@@ -63,6 +63,9 @@ export type ToChat =
   | { type: 'cancelQueued'; id: string }
   | { type: 'editQueued'; id: string; text: string }
   | { type: 'interrupt' }
+  | { type: 'toggleMcp'; name: string; enabled: boolean }
+  | { type: 'reconnectMcp'; name: string }
+  | { type: 'manageConnectors' }
   | { type: 'retry' }
   | { type: 'respond'; id: string; decision: 'allow' | 'always' | 'deny'; message?: string; answers?: Record<string, string> }
   | { type: 'setModel'; model: string }

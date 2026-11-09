@@ -25,6 +25,9 @@ export interface UsageReport {
   topSessions: (Bucket & { id: string; title: string; project: string })[];
 }
 
+/** Local calendar day (YYYY-MM-DD), so 'today' matches the user's clock, not UTC. */
+export const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 const rowsOf = (s: Session): UsageRow[] => [...s.t.usage, ...s.agents.flatMap((a) => a.t.usage)];
 
 export function usageReport(sessions: Session[], days: number, now = Date.now()): UsageReport {
@@ -35,7 +38,7 @@ export function usageReport(sessions: Session[], days: number, now = Date.now())
   const byProject = new Map<string, Bucket>();
   const bySession: (Bucket & { id: string; title: string; project: string })[] = [];
 
-  for (let i = days - 1; i >= 0; i--) byDay.set(new Date(now - i * 86_400_000).toISOString().slice(0, 10), { cost: 0, tokens: 0, byModel: {} });
+  for (let i = days - 1; i >= 0; i--) byDay.set(localDay(new Date(now - i * 86_400_000)), { cost: 0, tokens: 0, byModel: {} });
 
   for (const s of sessions) {
     const sb = { ...empty(), id: s.info.id, title: s.info.title, project: s.info.project };
@@ -45,7 +48,7 @@ export function usageReport(sessions: Session[], days: number, now = Date.now())
       add(sb, r);
       add(byModel.get(r.model) ?? byModel.set(r.model, empty()).get(r.model)!, r);
       add(byProject.get(s.info.project) ?? byProject.set(s.info.project, empty()).get(s.info.project)!, r);
-      const d = byDay.get(r.ts.slice(0, 10));
+      const d = byDay.get(localDay(new Date(r.ts)));
       if (d) {
         const c = costOf(r.model, r) ?? 0;
         d.cost += c;

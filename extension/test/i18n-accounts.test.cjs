@@ -48,7 +48,9 @@ test('i18n: the UI follows the editor language and falls back to English', () =>
     return require(path.join(out, 'webview', 'src', 'i18n.js')).t;
   };
   let t = load('pt-br');
-  assert.equal(t('Send now'), 'Enviar agora');
+  assert.equal(t('Send now'), 'Send now', 'developer terms stay in English');
+  assert.equal(t('Steer'), 'Steer');
+  assert.equal(t('Jump to latest'), 'Ir para o fim');
   assert.equal(t('Allow {0}?', 'Bash'), 'Permitir Bash?');
   assert.equal(t('{0}/{1} done', 2, 4), '2/4 feitos');
   assert.equal(t('Some new string'), 'Some new string', 'untranslated text stays English');

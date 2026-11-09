@@ -140,12 +140,35 @@ pub fn kill_tree(pid: u32) {
 // ---------- windows ----------
 
 #[cfg(windows)]
+fn no_inherit_std_handles() {
+    use std::ffi::c_void;
+    extern "system" {
+        fn GetStdHandle(n: u32) -> *mut c_void;
+        fn SetHandleInformation(h: *mut c_void, mask: u32, flags: u32) -> i32;
+    }
+    const HANDLE_FLAG_INHERIT: u32 = 1;
+    // STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE
+    for n in [-10i32, -11, -12] {
+        unsafe {
+            let h = GetStdHandle(n as u32);
+            if !h.is_null() && h as isize != -1 {
+                SetHandleInformation(h, HANDLE_FLAG_INHERIT, 0);
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
 fn detach_spawn(cmd: &mut Command) -> std::io::Result<Child> {
     use std::os::windows::process::CommandExt;
     const DETACHED_PROCESS: u32 = 0x0000_0008;
     const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
     const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
     let base = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
+    // Our own stdin/stdout/stderr may be inheritable pipes (e.g. `pwview up | head`). A detached
+    // child would inherit them and keep the pipe open long after we exit, so the caller seems
+    // to hang. Make them non-inheritable; the child gets its own log-file handles anyway.
+    no_inherit_std_handles();
     // Break away from the SSH session's job so closing the session doesn't kill us;
     // fall back when the job forbids breakaway.
     cmd.creation_flags(base | CREATE_BREAKAWAY_FROM_JOB);

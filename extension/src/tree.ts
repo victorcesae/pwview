@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { AgentInfo, Change, Engine, HotFile, Session, State } from './engine';
 import { norm } from './paths';
 import { listAccounts } from './accounts';
+import { modelLabel } from './pricing';
 import { ago, clip, rel } from './util';
 
 export type Node =
@@ -123,7 +124,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         const it = new vscode.TreeItem(clip(i.title, 70), i.agents.length || i.edits ? C.Collapsed : C.None);
         it.id = `${node.via ?? ''}|s:${i.id}`;
         it.iconPath = stateIcon(i.state);
-        const bits = [listAccounts().length > 1 ? `👤 ${listAccounts().find((a) => a.id === i.account)?.name ?? i.account}` : '', this.attached().has(i.id) ? '⌨ terminal' : '', i.branch, `${i.edits} edits`, i.agents.length ? `${i.agents.length} agents` : '', i.pendingComments ? `${i.pendingComments} comments queued` : '', ago(i.updated)];
+        const bits = [listAccounts().length > 1 ? `👤 ${listAccounts().find((a) => a.id === i.account)?.name ?? i.account}` : '', this.attached().has(i.id) ? '⌨ terminal' : '', i.model ? modelLabel(i.model) : '', i.branch, `${i.edits} edits`, i.agents.length ? `${i.agents.length} agents` : '', i.pendingComments ? `${i.pendingComments} comments queued` : '', ago(i.updated)];
         it.description = bits.filter(Boolean).join(' · ');
         const md = new vscode.MarkdownString(undefined, true);
         md.appendMarkdown(`**${i.title}**\n\n`);

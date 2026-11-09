@@ -2,7 +2,7 @@
   "name": "agentlens",
   "displayName": "AgentLens",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -265,6 +265,18 @@
         "title": "%cmd.claude.accounts%",
         "category": "AgentLens",
         "icon": "$(account)"
+      },
+      {
+        "command": "agentlens.addProvider",
+        "title": "%cmd.add.model.provider.ollama.openrouter.litellm%",
+        "category": "AgentLens",
+        "icon": "$(server-process)"
+      },
+      {
+        "command": "agentlens.manageConnectors",
+        "title": "%cmd.manage.connectors.mcp%",
+        "category": "AgentLens",
+        "icon": "$(plug)"
       }
     ],
     "menus": {
@@ -343,6 +355,11 @@
           "command": "agentlens.accounts",
           "when": "view == agentlens.sessions",
           "group": "1_more@1"
+        },
+        {
+          "command": "agentlens.addProvider",
+          "when": "view == agentlens.sessions",
+          "group": "1_more@2"
         }
       ],
       "view/item/context": [
@@ -499,6 +516,11 @@
           ],
           "default": "chat",
           "description": "%setting.where.new.and.resumed.sessions.open.the.agentlens.chat.or.a.%"
+        },
+        "agentlens.hideTempSessions": {
+          "type": "boolean",
+          "default": true,
+          "description": "%setting.hide.sessions.that.ran.inside.the.system.temp.folder.scratch%"
         }
       }
     },
@@ -603,7 +625,7 @@
     "build:webview": "vite build --config webview/vite.config.mts",
     "dev:webview": "vite --config webview/vite.config.mts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
-    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs",
+    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs",
     "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs",
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs"
@@ -612,6 +634,10 @@
     "@anthropic-ai/claude-agent-sdk": "^0.3.319",
     "@dagrejs/dagre": "^3.1.3",
     "@tailwindcss/vite": "4.1.8",
+    "@tiptap/extension-placeholder": "^3.33.0",
+    "@tiptap/pm": "^3.33.0",
+    "@tiptap/react": "^3.33.0",
+    "@tiptap/starter-kit": "^3.33.0",
     "@types/node": "22.15.29",
     "@types/react": "19.1.6",
     "@types/react-dom": "19.1.5",
@@ -629,6 +655,7 @@
     "react-dom": "19.1.0",
     "tailwind-merge": "3.3.0",
     "tailwindcss": "4.1.8",
+    "tiptap-markdown": "^0.9.0",
     "tw-animate-css": "1.3.4",
     "typescript": "5.8.3",
     "vite": "6.3.5"

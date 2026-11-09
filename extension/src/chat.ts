@@ -11,7 +11,7 @@ export type Todo = { content: string; status: 'pending' | 'in_progress' | 'compl
 
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string }
-  | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string }
+  | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string }
   | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
   | { kind: 'permission'; id: string; tool: string; summary: string; input: unknown; canAlways: boolean; status: 'pending' | 'allowed' | 'denied'; reason?: string }
   | { kind: 'plan'; id: string; plan: string; status: 'pending' | 'approved' | 'rejected' }
@@ -38,11 +38,16 @@ export interface ChatState {
   items: ChatItem[];
   queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[];
   slashCommands: string[];
+  /** connectors (MCP servers) available in this session */
+  mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[];
   costUsd: number;
   /** All tokens this chat used (input + output + cache), from each turn's usage. */
   tokens?: number;
+  /** Context window usage after the last turn (for the ring next to the input). */
+  context?: { used: number; max: number; percentage: number; categories?: { name: string; tokens: number }[] };
   /** Which Claude account this session runs on (name from AgentLens, details from Claude Code). */
-  account: { name: string; email?: string; organization?: string; plan?: string; provider?: string };
+  account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string };
+  host?: string;
   error?: string;
 }
 
@@ -218,7 +223,9 @@ export interface ChatOptions {
   title?: string;
   history?: { items: ChatItem[]; todos: Todo[] };
   /** Account: its name and env (CLAUDE_CONFIG_DIR) */
-  account?: { name: string; env: Record<string, string> };
+  account?: { name: string; env: Record<string, string>; provider?: string };
+  /** editor the chat runs in (Visual Studio Code, Cursor…) */
+  host?: string;
 }
 
 export class ChatSession {
@@ -230,6 +237,8 @@ export class ChatSession {
   private streaming = new Map<string, string>(); // `${parent}:${msgId}:${index}` → item id
   private currentMsg = new Map<string, string>(); // parent → message id being streamed
   private abort = new AbortController();
+  /** per streamed message: how many of its text blocks the final messages already matched */
+  private claimed = new Map<string, number>();
   /** Completed turns (one per result message). */
   turns = 0;
 
@@ -251,8 +260,10 @@ export class ChatSession {
       items: opts.history ? [...opts.history.items, { kind: 'system', id: uid(), text: 'Resumed: earlier conversation above' }] : [],
       queue: [],
       slashCommands: [],
+      mcp: [],
       costUsd: 0,
-      account: { name: opts.account?.name ?? 'Default' },
+      account: { name: opts.account?.name ?? 'Default', gateway: opts.account?.provider },
+      host: opts.host,
     };
   }
 
@@ -297,7 +308,6 @@ export class ChatSession {
         this.changed();
       })
       .catch(() => {});
-    this.state.status = 'idle';
     this.changed();
   }
 
@@ -312,7 +322,9 @@ export class ChatSession {
     if (!text.trim() && !images.length) return;
     const working = this.state.status === 'working' || this.state.status === 'waiting';
     if (working && priority !== 'now') {
-      this.queued.push({ id: uid(), text, images, priority });
+      const id = uid();
+      this.queued.push({ id, text, images, priority });
+      if (priority === 'next') this.armSteer(id);
       this.changed();
       return;
     }
@@ -327,8 +339,33 @@ export class ChatSession {
     this.changed();
   }
 
-  /** Steer messages go in as the agent starts its next step (it picks them up right after it). */
+  /**
+   * A steer waits only a short undo window (edit / cancel / switch), then goes in at once.
+   * Measured against the real CLI: handing it over immediately is what makes the agent follow
+   * it within the running turn; waiting for a step boundary often arrives too late.
+   */
+  steerGraceMs = 3000;
+  private steerTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private armSteer(id: string) {
+    clearTimeout(this.steerTimers.get(id));
+    this.steerTimers.set(
+      id,
+      setTimeout(() => {
+        this.steerTimers.delete(id);
+        const i = this.queued.findIndex((m) => m.id === id && m.priority === 'next');
+        if (i < 0) return;
+        const [m] = this.queued.splice(i, 1);
+        this.push(m.text, m.images, 'next');
+      }, this.steerGraceMs),
+    );
+  }
+  private disarm(id: string) {
+    clearTimeout(this.steerTimers.get(id));
+    this.steerTimers.delete(id);
+  }
+
   private flushSteers() {
+    for (const m of this.queued) if (m.priority === 'next') this.disarm(m.id);
     const steers = this.queued.filter((m) => m.priority === 'next');
     if (!steers.length) return;
     this.queued = this.queued.filter((m) => m.priority !== 'next');
@@ -349,14 +386,18 @@ export class ChatSession {
     if (i < 0) return;
     if (priority !== 'now') {
       this.queued[i].priority = priority;
+      if (priority === 'next') this.armSteer(id);
+      else this.disarm(id);
       this.changed();
       return;
     }
+    this.disarm(id);
     const [m] = this.queued.splice(i, 1);
     this.push(m.text, m.images, 'now');
   }
 
   cancelQueued(id: string) {
+    this.disarm(id);
     this.queued = this.queued.filter((m) => m.id !== id);
     this.changed();
   }
@@ -400,6 +441,25 @@ export class ChatSession {
     await this.q?.setModel(model);
     this.state.model = model;
     this.changed();
+  }
+
+  /** Connectors: refresh their status, turn one on or off, or reconnect a failed one. */
+  async refreshMcp() {
+    try {
+      const list: any[] = (await this.q?.mcpServerStatus()) ?? [];
+      this.state.mcp = list.map((s) => ({ name: s.name, status: s.status, tools: s.tools?.length ?? 0, error: s.error }));
+      this.changed();
+    } catch {
+      /* older CLI */
+    }
+  }
+  async toggleMcp(name: string, enabled: boolean) {
+    await this.q?.toggleMcpServer(name, enabled);
+    await this.refreshMcp();
+  }
+  async reconnectMcp(name: string) {
+    await this.q?.reconnectMcpServer(name);
+    await this.refreshMcp();
   }
 
   /** Effort, fast mode and ultracode, applied to the running session (flag settings layer). */
@@ -512,6 +572,8 @@ export class ChatSession {
       case 'system': {
         if (m.subtype === 'init') {
           this.state.sessionId = m.session_id;
+          if (this.state.status === 'starting') this.state.status = 'idle';
+          this.refreshMcp();
           this.state.model = m.model;
           this.state.permissionMode = m.permissionMode;
           this.state.slashCommands = m.slash_commands ?? [];
@@ -533,7 +595,7 @@ export class ChatSession {
         } else if (e.type === 'content_block_start' && e.content_block?.type === 'text') {
           const id = uid();
           this.streaming.set(`${key}:${this.currentMsg.get(key)}:${e.index}`, id);
-          this.state.items.push({ kind: 'assistant', id, text: '', streaming: true, parent });
+          this.state.items.push({ kind: 'assistant', id, text: '', streaming: true, parent, msg: this.currentMsg.get(key) });
           if (!parent) this.state.activity = 'Writing…';
         } else if (e.type === 'content_block_delta') {
           if (e.delta?.type === 'text_delta') {
@@ -545,26 +607,34 @@ export class ChatSession {
         break;
       }
       case 'assistant': {
-        let startedStep = false;
         const key = parent ?? '';
         const msgId = (m.message as any).id;
+        // The CLI can send one reply as several assistant messages (one per block) whose block
+        // indexes differ from the stream's, so match streamed text by message id and order.
+        const streamed = this.state.items.filter((x): x is Extract<ChatItem, { kind: 'assistant' }> => x.kind === 'assistant' && x.msg === msgId && x.parent === parent);
+        const claimed = this.claimed.get(msgId) ?? 0;
+        let next = claimed;
         (m.message.content as any[]).forEach((c, index) => {
           if (c.type === 'text') {
-            const id = this.streaming.get(`${key}:${msgId}:${index}`);
-            const it = id && this.state.items.find((x) => x.id === id);
+            const byIndex = this.streaming.get(`${key}:${msgId}:${index}`);
+            const it = (byIndex && this.state.items.find((x) => x.id === byIndex && x.kind === 'assistant' && x.streaming)) || streamed[next];
             if (it && it.kind === 'assistant') {
               it.text = c.text;
               it.streaming = false;
-            } else if (c.text.trim()) this.state.items.push({ kind: 'assistant', id: uid(), text: c.text, parent });
+              if (it === streamed[next]) next++;
+            } else if (c.text.trim()) {
+              const last = [...this.state.items].reverse().find((x) => x.kind === 'assistant' && x.parent === parent);
+              if (!(last && last.kind === 'assistant' && last.text.trim() === c.text.trim()))
+                this.state.items.push({ kind: 'assistant', id: uid(), text: c.text, parent, msg: msgId });
+            }
           } else if (c.type === 'tool_use') {
             if (c.name === 'TodoWrite' && Array.isArray(c.input?.todos)) this.state.todos = c.input.todos;
             if (!this.tool(c.id))
               this.state.items.push({ kind: 'tool', id: c.id, name: c.name, summary: summary(c.name, c.input), input: c.input, status: 'running', parent, file: str(c.input?.file_path) || undefined });
             if (!parent || c.name === 'Agent') this.state.activity = describe(c.name, c.input);
-            if (!parent) startedStep = true;
           }
         });
-        if (startedStep) this.flushSteers();
+        this.claimed.set(msgId, next);
         break;
       }
       case 'user': {
@@ -600,6 +670,18 @@ export class ChatSession {
         for (const it of this.state.items) if (it.kind === 'tool' && it.status === 'running' && !it.parent) it.status = 'done';
         this.state.status = 'idle';
         this.state.activity = undefined;
+        this.q
+          ?.getContextUsage({ detail: 'summary' })
+          .then((u: any) => {
+            this.state.context = {
+              used: u.totalTokens,
+              max: u.maxTokens,
+              percentage: u.percentage,
+              categories: (u.categories ?? []).filter((c: any) => c.kind === 'used' && c.tokens > 0).map((c: any) => ({ name: c.name, tokens: c.tokens })),
+            };
+            this.changed();
+          })
+          .catch(() => {});
         // the turn ended: steers that never found a next step go first, then the next queued message
         const steers = this.queued.filter((q) => q.priority === 'next');
         const handover = steers.length ? steers : this.queued.slice(0, 1);

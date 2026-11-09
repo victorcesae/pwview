@@ -135,3 +135,63 @@ pre,
 .react-flow__node.selected > div {
   border-color: var(--ring);
 }
+
+/* ---- rich-text prompt input (TipTap) */
+.rich-input p {
+  margin: 0;
+}
+.rich-input p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.rich-input code {
+  background: var(--muted);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
+  font-size: 0.92em;
+}
+.rich-input pre {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 4px 0;
+  font-size: 12px;
+  overflow-x: auto;
+}
+.rich-input pre code {
+  background: none;
+  padding: 0;
+}
+.rich-input ul,
+.rich-input ol {
+  padding-left: 1.3em;
+  margin: 2px 0;
+}
+.rich-input ul {
+  list-style: disc;
+}
+.rich-input ol {
+  list-style: decimal;
+}
+.rich-input h1,
+.rich-input h2,
+.rich-input h3 {
+  font-weight: 600;
+  margin: 4px 0 2px;
+}
+.rich-input h1 {
+  font-size: 1.2em;
+}
+.rich-input h2 {
+  font-size: 1.1em;
+}
+.rich-input blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+  color: var(--muted-foreground);
+}

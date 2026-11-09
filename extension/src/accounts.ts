@@ -4,11 +4,14 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { claudeDir, dataDir } from './paths';
+import { providerEnv, type Provider } from './providers';
 
 export interface Account {
   id: string;
   name: string;
   configDir: string;
+  /** set for model providers (Ollama, OpenRouter…): Claude Code runs against that endpoint */
+  provider?: Provider;
 }
 
 interface Store {
@@ -66,5 +69,19 @@ export function removeAccount(id: string) {
   save({ ...s, accounts: s.accounts.filter((a) => a.id !== id), defaultId: s.defaultId === id ? undefined : s.defaultId });
 }
 
-/** Env for running the agent CLI as this account. */
-export const accountEnv = (a: Account): Record<string, string> => (a.id === 'default' ? {} : { CLAUDE_CONFIG_DIR: a.configDir });
+/** Env for running the agent CLI as this account (key: the provider's API key from SecretStorage). */
+export const accountEnv = (a: Account, key?: string): Record<string, string> => {
+  if (a.provider) return providerEnv(a.provider, key);
+  return a.id === 'default' ? {} : { CLAUDE_CONFIG_DIR: a.configDir };
+};
+
+/** A model provider shares the default Claude Code folder (sessions, skills, hooks) but not its login. */
+export function addProvider(p: Omit<Provider, 'id'>): Account {
+  const s = load();
+  const slug = p.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'provider';
+  let id = 'p-' + slug;
+  for (let i = 2; s.accounts.some((a) => a.id === id); i++) id = `p-${slug}-${i}`;
+  const acc: Account = { id, name: p.name, configDir: claudeDir(), provider: { ...p, id } };
+  save({ ...s, accounts: [...s.accounts, acc] });
+  return acc;
+}

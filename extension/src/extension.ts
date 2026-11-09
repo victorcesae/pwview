@@ -14,14 +14,35 @@ import { attachedSessions, resolveTerminals, terminalFor, typeInto } from './ter
 import { Chats } from './chatPanel';
 import { usageReport } from './usage';
 import { addLink, briefing } from './links';
-import { addAccount, listAccounts, preferredAccount, removeAccount, setPreferred, accountEnv, type Account } from './accounts';
+import { PRESETS, listModels, secretKey } from './providers';
+import { addAccount, addProvider, listAccounts, preferredAccount, removeAccount, setPreferred, accountEnv, type Account } from './accounts';
 import { Node, SessionsTree } from './tree';
 import { ago, clip, runAgent } from './util';
 
 const SCHEME = 'agentlens';
 
+/** Sessions that ran inside the system temp folder (scratch runs, tests) are hidden by default. */
+const tempRoots = (() => {
+  const os = require('os') as typeof import('os');
+  const roots = [os.tmpdir()];
+  try {
+    roots.push(fs.realpathSync.native(os.tmpdir()));
+  } catch {
+    /* ignore */
+  }
+  return [...new Set(roots.map((r) => norm(r)))];
+})();
+const isTempProject = (p: string) => tempRoots.some((r) => norm(p) === r || norm(p).startsWith(r + '/'));
+
 export function activate(ctx: vscode.ExtensionContext) {
-  const engine = new Engine(() => listAccounts().map((a) => ({ account: a.id, dir: path.join(a.configDir, 'projects') })));
+  const engine = new Engine(() => {
+    const seen = new Set<string>();
+    return listAccounts()
+      .filter((a) => !a.provider && !seen.has(a.configDir) && !!seen.add(a.configDir))
+      .map((a) => ({ account: a.id, dir: path.join(a.configDir, 'projects') }));
+  });
+  /** Env for an account, with a provider's API key read from VS Code's secure storage. */
+  const envFor = async (a: Account) => accountEnv(a, a.provider?.hasKey ? await ctx.secrets.get(secretKey(a.provider.id)) : undefined);
   const accountOf = (id: string) => listAccounts().find((a) => a.id === id) ?? listAccounts()[0];
   async function pickAccount(): Promise<Account | undefined> {
     const all = listAccounts();
@@ -314,8 +335,8 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (prompt === undefined) return;
     const account = await pickAccount();
     if (!account) return;
-    if (surface() === 'terminal') runAgent(`✦ ${clip(prompt || 'agent', 30)}`, cwd, prompt ? [prompt] : [], accountEnv(account));
-    else chats.start({ cwd, prompt: prompt || undefined, account });
+    if (surface() === 'terminal') runAgent(`✦ ${clip(prompt || 'agent', 30)}`, cwd, prompt ? [prompt] : [], await envFor(account));
+    else chats.start({ cwd, prompt: prompt || undefined, account, env: await envFor(account) });
   }
 
   async function linkSession(id: string) {
@@ -395,21 +416,59 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('agentlens.comment.send', (r: vscode.CommentReply) => sendComment(r)),
     vscode.commands.registerCommand('agentlens.comment.queue', (r: vscode.CommentReply) => sendComment(r, 'queue')),
     vscode.commands.registerCommand('agentlens.comment.now', (r: vscode.CommentReply) => sendComment(r, 'now')),
-    vscode.commands.registerCommand('agentlens.resumeSession', (x: unknown) => {
+    vscode.commands.registerCommand('agentlens.resumeSession', async (x: unknown) => {
       const s = find(sessionArg(x) ?? '');
       if (!s) return;
       const account = accountOf(s.info.account);
-      if (surface() === 'terminal') runAgent(`✦ ${clip(s.info.title, 30)}`, s.info.project, ['--resume', s.info.id], accountEnv(account));
-      else chats.start({ cwd: s.info.project, resume: s.info.id, title: s.info.title, account });
+      if (surface() === 'terminal') runAgent(`✦ ${clip(s.info.title, 30)}`, s.info.project, ['--resume', s.info.id], await envFor(account));
+      else chats.start({ cwd: s.info.project, resume: s.info.id, title: s.info.title, account, env: await envFor(account) });
     }),
-    vscode.commands.registerCommand('agentlens.resumeInTerminal', (x: unknown) => {
+    vscode.commands.registerCommand('agentlens.resumeInTerminal', async (x: unknown) => {
       const s = find(sessionArg(x) ?? '');
-      if (s) runAgent(`✦ ${clip(s.info.title, 30)}`, s.info.project, ['--resume', s.info.id], accountEnv(accountOf(s.info.account)));
+      if (s) runAgent(`✦ ${clip(s.info.title, 30)}`, s.info.project, ['--resume', s.info.id], await envFor(accountOf(s.info.account)));
     }),
     vscode.commands.registerCommand('agentlens.newChat', () => {
       const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!cwd) return vscode.window.showWarningMessage('Open a folder first.');
-      pickAccount().then((account) => account && chats.start({ cwd, account }));
+      pickAccount().then(async (account) => account && chats.start({ cwd, account, env: await envFor(account) }));
+    }),
+    vscode.commands.registerCommand('agentlens.manageConnectors', async (cwd?: string) => {
+      const dir = cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!dir) return;
+      const file = path.join(dir, '.mcp.json');
+      if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify({ mcpServers: {} }, null, 2) + '\n');
+      await vscode.window.showTextDocument(vscode.Uri.file(file));
+      vscode.window.showInformationMessage(vscode.l10n.t('Add MCP servers under "mcpServers" (shared with the team). Personal ones: run "claude mcp add" in a terminal. Start a new chat to load changes.'));
+    }),
+    vscode.commands.registerCommand('agentlens.addProvider', async () => {
+      const preset = (await vscode.window.showQuickPick(PRESETS.map((p) => ({ label: p.label, detail: p.detail, p })), { placeHolder: vscode.l10n.t('Which models do you want to use?') }))?.p;
+      if (!preset) return;
+      const baseUrl = await vscode.window.showInputBox({ prompt: vscode.l10n.t('Endpoint (Anthropic-compatible)'), value: preset.baseUrl, placeHolder: 'https://…', ignoreFocusOut: true });
+      if (!baseUrl) return;
+      let key: string | undefined;
+      if (preset.needsKey) {
+        key = await vscode.window.showInputBox({ prompt: vscode.l10n.t('API key for {0} (stored in VS Code secure storage)', preset.label), password: true, ignoreFocusOut: true });
+        if (key === undefined) return;
+      }
+      let models: string[] = [];
+      try {
+        models = await listModels(preset, baseUrl, key);
+      } catch (e) {
+        vscode.window.showWarningMessage(vscode.l10n.t('Could not list models from {0}: {1}. Type the model name instead.', baseUrl, String((e as Error).message ?? e)));
+      }
+      const model = models.length
+        ? (await vscode.window.showQuickPick(models, { placeHolder: vscode.l10n.t('Model to use') }))
+        : await vscode.window.showInputBox({ prompt: vscode.l10n.t('Model name'), placeHolder: preset.id === 'openrouter' ? 'openai/gpt-5, meta-llama/llama-4-maverick, qwen/qwen3-coder…' : 'llama3.3, qwen3-coder…', ignoreFocusOut: true });
+      if (!model) return;
+      const name = await vscode.window.showInputBox({ prompt: vscode.l10n.t('Name for this provider'), value: `${preset.label.replace(/ \(.*\)$/, '')} · ${model}` });
+      if (!name) return;
+      const acc = addProvider({ name, preset: preset.id, baseUrl, model, hasKey: !!key });
+      if (key) await ctx.secrets.store(secretKey(acc.provider!.id), key);
+      const start = vscode.l10n.t('Start a chat with it');
+      if ((await vscode.window.showInformationMessage(vscode.l10n.t('Provider "{0}" added.', name), start)) === start) {
+        const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (cwd) chats.start({ cwd, account: acc, env: await envFor(acc) });
+      }
     }),
     vscode.commands.registerCommand('agentlens.addAccount', async () => {
       const name = await vscode.window.showInputBox({ prompt: vscode.l10n.t('Name for the new Claude account'), placeHolder: vscode.l10n.t('Work, Personal, Client X…') });
@@ -426,18 +485,20 @@ export function activate(ctx: vscode.ExtensionContext) {
         [
           ...listAccounts().map((a) => ({ label: (a.id === pref.id ? '$(check) ' : '') + a.name, description: a.configDir, a: a as Account | undefined })),
           { label: '$(add) ' + vscode.l10n.t('Add account…'), description: '', a: undefined as Account | undefined },
+          { label: '$(server-process) ' + vscode.l10n.t('Add model provider (Ollama, OpenRouter, LiteLLM…)'), description: '', a: { id: '__provider' } as Account },
         ],
         { placeHolder: vscode.l10n.t('Default Claude account for new sessions') },
       );
       if (!pick) return;
       if (!pick.a) return vscode.commands.executeCommand('agentlens.addAccount');
+      if (pick.a.id === '__provider') return vscode.commands.executeCommand('agentlens.addProvider');
       const acc = pick.a;
       if (acc.id !== 'default') {
         const USE = vscode.l10n.t('Use by default');
         const LOGIN = vscode.l10n.t('Log in again');
         const REMOVE = vscode.l10n.t('Remove from AgentLens');
         const act = await vscode.window.showQuickPick([USE, LOGIN, REMOVE], { placeHolder: acc.name });
-        if (act === LOGIN) return runAgent(`Claude login · ${acc.name}`, require('os').homedir(), [], accountEnv(acc));
+        if (act === LOGIN) return runAgent(`Claude login · ${acc.name}`, require('os').homedir(), [], await envFor(acc));
         if (act === REMOVE) {
           removeAccount(acc.id);
           return refresh(true);
@@ -472,7 +533,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (busy && !force) return;
     busy = true;
     try {
-      sessions = engine.scan(cfg().get<number>('days', 3));
+      sessions = engine.scan(cfg().get<number>('days', 3)).filter((s) => !cfg().get<boolean>('hideTempSessions', true) || !isTempProject(s.info.project));
       await resolveTerminals();
     } catch (e) {
       console.error('AgentLens scan failed', e);

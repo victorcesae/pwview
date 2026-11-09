@@ -101,7 +101,7 @@ export const chat: Data = {
   chat: {
     key: 'k', sessionId: 's1', cwd: P, title: 'Sales module: quotation flow', model: 'claude-opus-5-5',
     models: [{ value: 'default', displayName: 'Default (Opus 5.5)' }, { value: 'sonnet', displayName: 'Sonnet 5.5' }, { value: 'haiku', displayName: 'Haiku 5.5' }],
-    permissionMode: 'default', effort: 'high', fastMode: false, ultracode: true, status: 'working', activity: 'Searching for "sendQuote"…', costUsd: 0.42, account: { name: 'Work', email: 'victor@example.com', plan: 'max', organization: 'NZero Labs' }, slashCommands: ['compact', 'review', 'init', 'cost', 'model'],
+    permissionMode: 'default', effort: 'high', fastMode: false, ultracode: true, status: 'working', activity: 'Searching for "sendQuote"…', costUsd: 0.42, account: { name: 'Work', email: 'victor@example.com', plan: 'max', organization: 'NZero Labs' }, slashCommands: ['compact', 'review', 'init', 'cost', 'model'], mcp: [{ name: 'Metricool Social Media', status: 'connected', tools: 9 }, { name: 'Playwright', status: 'disabled', tools: 22 }, { name: 'GitHub', status: 'needs-auth', tools: 0, error: 'Sign in required' }],
     todos: [
       { content: 'Find how quotes are sent today', status: 'completed', activeForm: 'Finding how quotes are sent' },
       { content: 'Add approval gate to QuoteService.send', status: 'completed', activeForm: 'Adding the approval gate' },
@@ -148,3 +148,24 @@ const schema = `${P}/packages/db/schema.prisma`;
     { id: 'e9', source: 's:s3', target: 'p:s3:0', kind: 'start' },
   ],
 };
+
+// sample usage (last 7 days) for the Usage view
+{
+  const days = [...Array(7)].map((_, i) => new Date(Date.now() - (6 - i) * 86_400_000).toISOString().slice(0, 10));
+  const series = [
+    [12.4, 3.1], [30.2, 8.4], [8.9, 0.6], [44.1, 12.2], [21.7, 5.3], [3.2, 0], [38.6, 9.9],
+  ];
+  const b = (cost: number, k: number) => ({ input: 40_000 * k, output: 120_000 * k, cacheWrite: 600_000 * k, cacheRead: 60_000_000 * k, cost, unpriced: 0 });
+  (overview as Extract<Data, { view: 'overview' }>).overview.usage = {
+    days: 7,
+    totals: b(229.6, 12),
+    byModel: [{ ...b(181.1, 9), model: 'claude-opus-5-5', label: 'Opus 5.5' }, { ...b(39.5, 2.5), model: 'claude-sonnet-5-5', label: 'Sonnet 5.5' }, { ...b(9, 0.5), model: 'claude-haiku-5-5', label: 'Haiku 5.5' }],
+    byDay: days.map((day, i) => ({ day, cost: series[i][0] + series[i][1], tokens: (series[i][0] + series[i][1]) * 300_000, byModel: { 'Opus 5.5': series[i][0], 'Sonnet 5.5': series[i][1] } })),
+    byProject: [{ ...b(171.3, 9), project: P }, { ...b(58.3, 3), project: '/home/victor/pwview' }],
+    topSessions: [
+      { ...b(96.4, 5), id: 's1', title: 'Sales module: quotation flow', project: P },
+      { ...b(58.3, 3), id: 's3', title: 'Playwright tests visibility over SSH', project: '/home/victor/pwview' },
+      { ...b(31.7, 2), id: 's2', title: 'Prisma: add approval columns', project: P },
+    ],
+  };
+}

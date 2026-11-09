@@ -6,6 +6,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
+const { removeTestSession } = require('./e2e-cleanup.cjs');
 
 const root = path.join(__dirname, '..');
 const out = path.join(os.tmpdir(), 'agentlens-e2e-build');
@@ -53,6 +54,9 @@ test('e2e: chat answers, streams, runs a tool, and delivers a queued message aft
     assert.ok(c.state.account.email || c.state.account.provider, 'session reports its account');
     console.log('account:', c.state.account.email ? c.state.account.email.replace(/^(.).*@/, '$1***@') : '', c.state.account.plan ?? '', c.state.account.provider ?? '');
     assert.ok(sawStreaming, 'text streamed in');
+    await until(c, () => !!c.state.context);
+    assert.ok(c.state.context.max > 0 && c.state.context.used > 0, 'context usage for the ring');
+    console.log(`context: ${c.state.context.used} / ${c.state.context.max} tokens (${c.state.context.percentage.toFixed(1)}%)`);
 
     c.send('Use the Bash tool to run: echo agentlens-e2e  Then say "ran it".', [], 'later');
     await until(c, () => c.state.status === 'working' || c.state.status === 'waiting');
@@ -66,5 +70,6 @@ test('e2e: chat answers, streams, runs a tool, and delivers a queued message aft
     console.log(`e2e ok · cost $${c.state.costUsd.toFixed(4)} · session ${c.state.sessionId}`);
   } finally {
     c.close();
+    await removeTestSession(c.state.cwd);
   }
 });

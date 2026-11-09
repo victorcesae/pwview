@@ -8,5 +8,16 @@
   "Use by default": "Usar como padrão",
   "Which Claude account should this session use?": "Qual conta Claude esta sessão deve usar?",
   "Work, Personal, Client X…": "Trabalho, Pessoal, Cliente X…",
-  "default": "padrão"
+  "default": "padrão",
+  "Which models do you want to use?": "Quais modelos você quer usar?",
+  "Endpoint (Anthropic-compatible)": "Endpoint (compatível com Anthropic)",
+  "API key for {0} (stored in VS Code secure storage)": "Chave de API para {0} (guardada no armazenamento seguro do VS Code)",
+  "Could not list models from {0}: {1}. Type the model name instead.": "Não foi possível listar os modelos de {0}: {1}. Digite o nome do modelo.",
+  "Model to use": "Modelo a usar",
+  "Model name": "Nome do modelo",
+  "Name for this provider": "Nome para este provedor",
+  "Start a chat with it": "Iniciar um chat com ele",
+  "Provider \"{0}\" added.": "Provedor \"{0}\" adicionado.",
+  "Add model provider (Ollama, OpenRouter, LiteLLM…)": "Adicionar provedor de modelos (Ollama, OpenRouter, LiteLLM…)",
+  "Add MCP servers under \"mcpServers\" (shared with the team). Personal ones: run \"claude mcp add\" in a terminal. Start a new chat to load changes.": "Adicione servidores MCP em \"mcpServers\" (compartilhado com o time). Pessoais: rode \"claude mcp add\" em um terminal. Abra um novo chat para carregar as mudanças."
 }

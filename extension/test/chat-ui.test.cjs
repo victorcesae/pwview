@@ -9,7 +9,7 @@ const assert = require('node:assert');
 const root = path.join(__dirname, '..');
 const entry = path.join(__dirname, '.chat-ui-entry.tsx');
 const out = path.join(os.tmpdir(), 'agentlens-chat-ui', 'ui.cjs');
-fs.writeFileSync(entry, `export { groupTools, summarizeTools } from ${JSON.stringify(path.join(root, 'webview/src/views/Chat.tsx').replace(/\\/g, '/'))};`);
+fs.writeFileSync(entry, `export { groupTools, summarizeTools } from ${JSON.stringify(path.join(root, 'webview/src/views/toolSummary.ts').replace(/\\/g, '/'))};`);
 execSync(`npx esbuild "${entry}" --bundle --platform=node --format=cjs --jsx=automatic --outfile="${out}" --alias:@=./webview/src --loader:.css=empty --log-level=error`, { cwd: root });
 
 const load = (lang) => {

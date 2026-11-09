@@ -58,5 +58,8 @@
   "step.skills.for.every.agent": "Skills for every agent",
   "step.one.skill.visible.to.claude.code.cursor.codex.and.more.add.a": "One skill, visible to Claude Code, Cursor, Codex and more.\n[Add a skill](command:agentlens.skillAdd)",
   "cmd.add.claude.account": "Add Claude Account…",
-  "cmd.claude.accounts": "Claude Accounts…"
+  "cmd.claude.accounts": "Claude Accounts…",
+  "cmd.add.model.provider.ollama.openrouter.litellm": "Add Model Provider (Ollama, OpenRouter, LiteLLM…)…",
+  "setting.hide.sessions.that.ran.inside.the.system.temp.folder.scratch": "Hide sessions that ran inside the system temp folder (scratch runs, automated tests).",
+  "cmd.manage.connectors.mcp": "Manage Connectors (MCP)"
 }
