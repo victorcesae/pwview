@@ -89,7 +89,9 @@ Logs: `.pwview/logs/<service>.log`.
 ## Releasing
 
 Push a tag `v*`. `.github/workflows/release.yml` builds Linux (x86_64/aarch64, static musl),
-Windows, and macOS binaries and attaches them to the GitHub release that the install scripts download.
+Windows, and macOS (Apple Silicon) binaries and attaches them to the GitHub release that the install
+scripts download. The scripts pick the newest `vX.Y.Z` release, so Steerhouse releases (`steerhouse-v*`)
+in the same repo don't get in the way. On an Intel Mac, use `cargo install`.
 
 ---
 

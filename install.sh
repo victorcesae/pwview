@@ -12,15 +12,21 @@ case "$(uname -s)-$(uname -m)" in
   Linux-x86_64)          ASSET=pwview-linux-x86_64 ;;
   Linux-aarch64|Linux-arm64) ASSET=pwview-linux-aarch64 ;;
   Darwin-arm64)          ASSET=pwview-macos-aarch64 ;;
-  Darwin-x86_64)         ASSET=pwview-macos-x86_64 ;;
   *) echo "Unsupported platform: $(uname -s) $(uname -m). Use: cargo install --git https://github.com/$REPO" >&2; exit 1 ;;
 esac
 
+# The repo also publishes Steerhouse releases (steerhouse-v*), so GitHub's "latest" release may not
+# be a pwview one. Ask for the newest vX.Y.Z tag instead (the API lists newest first).
 if [ "$VERSION" = latest ]; then
-  URL="https://github.com/$REPO/releases/latest/download/$ASSET"
-else
-  URL="https://github.com/$REPO/releases/download/$VERSION/$ASSET"
+  VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=100" \
+    | grep -o '"tag_name": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' \
+    | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1) || true
+  if [ -z "$VERSION" ]; then
+    echo "No pwview release found in $REPO. Use: cargo install --git https://github.com/$REPO" >&2
+    exit 1
+  fi
 fi
+URL="https://github.com/$REPO/releases/download/$VERSION/$ASSET"
 
 mkdir -p "$DIR"
 echo "Downloading $URL"
