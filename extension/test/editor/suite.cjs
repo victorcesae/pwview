@@ -74,6 +74,28 @@ async function run() {
     assert.strictEqual(String(cwd?.fsPath ?? cwd).toLowerCase(), dir.toLowerCase());
     term.dispose();
   });
+  await check('source control: VS Code Git reports a repo branch and changed files the way Steerhouse reads them', async () => {
+    const cp = require('child_process'), fsx = require('fs'), pathx = require('path'), osx = require('os');
+    const dir = fsx.realpathSync.native(fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'steerhouse-scm-')));
+    const g = (c) => cp.execSync('git -c user.name=t -c user.email=t@t -c init.defaultBranch=main ' + c, { cwd: dir });
+    g('init -q');
+    fsx.writeFileSync(pathx.join(dir, 'a.txt'), 'one');
+    g('add .');
+    g('commit -qm init');
+    fsx.writeFileSync(pathx.join(dir, 'a.txt'), 'two');
+    fsx.writeFileSync(pathx.join(dir, 'new.txt'), 'x');
+    const ext = vscode.extensions.getExtension('vscode.git');
+    const api = (ext.isActive ? ext.exports : await ext.activate()).getAPI(1);
+    const repo = api.getRepository(vscode.Uri.file(dir)) ?? (await api.openRepository(vscode.Uri.file(dir)));
+    assert.ok(repo, 'repository opened');
+    await repo.status();
+    const s = repo.state;
+    assert.strictEqual(s.HEAD?.name, 'main');
+    const names = [...s.workingTreeChanges, ...(s.untrackedChanges ?? [])].map((c) => pathx.basename(c.uri.fsPath));
+    assert.ok(names.includes('a.txt') && names.includes('new.txt'), names.join(','));
+    assert.strictEqual(typeof api.toGitUri, 'function');
+    assert.ok(Array.isArray(s.indexChanges) && Array.isArray(s.mergeChanges));
+  });
   await check('check setup runs', async () => {
     await vscode.commands.executeCommand('steerhouse.refresh');
   });

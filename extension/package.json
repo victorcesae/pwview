@@ -2,7 +2,7 @@
   "name": "steerhouse",
   "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -429,6 +429,48 @@
         "command": "steerhouse.fs.delete",
         "title": "%cmd.fs-delete%",
         "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.scm.commit",
+        "title": "%cmd.scm-commit%",
+        "category": "Steerhouse",
+        "icon": "$(check)"
+      },
+      {
+        "command": "steerhouse.scm.sync",
+        "title": "%cmd.scm-sync%",
+        "category": "Steerhouse",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "steerhouse.scm.push",
+        "title": "%cmd.scm-push%",
+        "category": "Steerhouse",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "steerhouse.scm.pull",
+        "title": "%cmd.scm-pull%",
+        "category": "Steerhouse",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "steerhouse.scm.openView",
+        "title": "%cmd.scm-openView%",
+        "category": "Steerhouse",
+        "icon": "$(source-control)"
+      },
+      {
+        "command": "steerhouse.scm.openFile",
+        "title": "%cmd.scm-openFile%",
+        "category": "Steerhouse",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "steerhouse.scm.openChange",
+        "title": "%cmd.scm-openChange%",
+        "category": "Steerhouse",
+        "icon": "$(diff)"
       }
     ],
     "menus": {
@@ -714,6 +756,51 @@
           "command": "steerhouse.newChatInWorktree",
           "when": "view == steerhouse.sessions && viewItem == fsfolder",
           "group": "steerhouse@2"
+        },
+        {
+          "command": "steerhouse.scm.commit",
+          "when": "view == steerhouse.sessions && viewItem =~ /^scm dirty/",
+          "group": "inline@1"
+        },
+        {
+          "command": "steerhouse.scm.sync",
+          "when": "view == steerhouse.sessions && viewItem =~ /^scm .*\\btracked\\b/",
+          "group": "inline@2"
+        },
+        {
+          "command": "steerhouse.scm.push",
+          "when": "view == steerhouse.sessions && viewItem =~ /^scm\\b/",
+          "group": "1_sync@1"
+        },
+        {
+          "command": "steerhouse.scm.pull",
+          "when": "view == steerhouse.sessions && viewItem =~ /^scm .*\\btracked\\b/",
+          "group": "1_sync@2"
+        },
+        {
+          "command": "steerhouse.scm.openView",
+          "when": "view == steerhouse.sessions && viewItem =~ /^scm\\b/",
+          "group": "inline@3"
+        },
+        {
+          "command": "steerhouse.scm.openFile",
+          "when": "view == steerhouse.sessions && viewItem == scmfile",
+          "group": "inline@1"
+        },
+        {
+          "command": "steerhouse.scm.commit",
+          "when": "view == steerhouse.sessions && viewItem =~ /^scm dirty/",
+          "group": "0_commit@1"
+        },
+        {
+          "command": "steerhouse.scm.sync",
+          "when": "view == steerhouse.sessions && viewItem =~ /^scm .*\\btracked\\b/",
+          "group": "1_sync@0"
+        },
+        {
+          "command": "steerhouse.scm.openView",
+          "when": "view == steerhouse.sessions && viewItem =~ /^scm\\b/",
+          "group": "2_view@1"
         }
       ],
       "comments/commentThread/context": [
@@ -856,6 +943,34 @@
         },
         {
           "command": "steerhouse.fs.delete",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.scm.commit",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.scm.sync",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.scm.push",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.scm.pull",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.scm.openView",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.scm.openFile",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.scm.openChange",
           "when": "false"
         }
       ],
@@ -1063,7 +1178,7 @@
     "build:webview": "vite build --config webview/vite.config.mts",
     "dev:webview": "vite --config webview/vite.config.mts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
-    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs",
+    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs test/scm.test.cjs",
     "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs test/e2e-fork.test.cjs test/e2e-bg.test.cjs",
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs",

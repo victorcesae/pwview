@@ -93,5 +93,12 @@
   "cmd.fs-copyPath": "Copiar o Caminho",
   "cmd.fs-copyRelativePath": "Copiar Caminho Relativo",
   "cmd.fs-rename": "Renomear…",
-  "cmd.fs-delete": "Excluir"
+  "cmd.fs-delete": "Excluir",
+  "cmd.scm-commit": "Fazer commit…",
+  "cmd.scm-sync": "Sincronizar (pull e push)",
+  "cmd.scm-push": "Push",
+  "cmd.scm-pull": "Pull",
+  "cmd.scm-openView": "Abrir Controle do Código-Fonte",
+  "cmd.scm-openFile": "Abrir Arquivo",
+  "cmd.scm-openChange": "Abrir Alterações"
 }

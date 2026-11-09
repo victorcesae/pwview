@@ -5,6 +5,7 @@ import { AgentInfo, Change, Engine, HotFile, Session, State } from './engine';
 import { norm } from './paths';
 import { projectRules, userRules, type RuleFile } from './rules';
 import { worktreeInfo } from './worktree';
+import { scmFiles, scmSummary, type Scm, type ScmFile } from './scm';
 import { guessStatus, type BgTask } from './bgtasks';
 import { accountIdentity, listAccounts, preferredAccount, type Account } from './accounts';
 import { modelLabel } from './pricing';
@@ -24,6 +25,8 @@ export type Node =
   /** the project's folders and files, like the Explorer; files agents changed are marked */
   | { kind: 'tasks'; s: Session; via?: string }
   | { kind: 'task'; s: Session; task: BgTask; via?: string }
+  | { kind: 'scm'; root: string }
+  | { kind: 'scmfile'; root: string; file: ScmFile }
   | { kind: 'accounts' }
   | { kind: 'account'; a: Account }
   | { kind: 'rules'; scope: 'user' | 'project'; root?: string }
@@ -93,6 +96,12 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
     private marks: () => { pinned: string[]; archived: string[] } = () => ({ pinned: [], archived: [] }),
   ) {}
 
+  private scm?: Scm;
+  /** Source control (VS Code's Git) for the "Source control" node of each project. */
+  setScm(scm: Scm) {
+    this.scm = scm;
+  }
+
   refresh() {
     this.emitter.fire(undefined);
   }
@@ -135,6 +144,10 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
     switch (node.kind) {
       case 'archived':
         return node.projects;
+      case 'scm': {
+        const r = this.scm?.peek(node.root);
+        return r ? scmFiles(r.state).map((file): Node => ({ kind: 'scmfile', root: node.root, file })) : [];
+      }
       case 'tasks':
         // running first, newest first
         return [...node.s.t.tasks]
@@ -148,7 +161,9 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
       case 'project': {
         const files: Node[] = fs.existsSync(node.path) ? [{ kind: 'files', root: node.path, sessions: node.sessions }] : [];
         const rules: Node[] = fs.existsSync(node.path) ? [{ kind: 'rules', scope: 'project', root: node.path }] : [];
-        return [...rules, ...files, ...node.sessions.map((s): Node => ({ kind: 'session', s }))];
+        // shown once VS Code's Git has the repository (opened in the background the first time)
+        const scm: Node[] = fs.existsSync(node.path) && this.scm?.peek(node.path) ? [{ kind: 'scm', root: node.path }] : [];
+        return [...scm, ...rules, ...files, ...node.sessions.map((s): Node => ({ kind: 'session', s }))];
       }
       case 'accounts':
         return [
@@ -206,6 +221,29 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         it.resourceUri = vscode.Uri.file(node.hot.file);
         it.description = `${node.hot.sessions.length} sessions · ${node.hot.changes} edits · ${ago(node.hot.updated)}`;
         it.tooltip = node.hot.file;
+        return it;
+      }
+      case 'scm': {
+        const r = this.scm?.peek(node.root);
+        const n = r ? scmFiles(r.state).length : 0;
+        const it = new vscode.TreeItem(vscode.l10n.t('Source control'), n ? C.Collapsed : C.None);
+        it.id = `scm:${node.root}`;
+        it.iconPath = new vscode.ThemeIcon('source-control', n ? new vscode.ThemeColor('gitDecoration.modifiedResourceForeground') : undefined);
+        it.description = r ? scmSummary(r.state, (s, ...a) => vscode.l10n.t(s, ...(a as (string | number)[]))) : '';
+        it.tooltip = node.root;
+        const h = r?.state.HEAD;
+        it.contextValue = ['scm', n ? 'dirty' : 'clean', h?.upstream ? 'tracked' : 'untracked', h?.ahead ? 'ahead' : '', h?.behind ? 'behind' : ''].filter(Boolean).join(' ');
+        return it;
+      }
+      case 'scmfile': {
+        const f = node.file;
+        const it = new vscode.TreeItem(path.basename(f.path), C.None);
+        it.id = `scmfile:${node.root}:${f.staged}:${f.path}`;
+        it.resourceUri = vscode.Uri.file(f.path); // file icon and git colour from the theme
+        it.description = [f.letter, f.staged ? vscode.l10n.t('staged') : '', rel(path.dirname(f.path), node.root)].filter(Boolean).join(' · ');
+        it.tooltip = `${f.path}\n${vscode.l10n.t(f.label)}${f.staged ? ' · ' + vscode.l10n.t('staged') : ''}`;
+        it.contextValue = 'scmfile';
+        it.command = { command: 'steerhouse.scm.openChange', title: 'Open change', arguments: [node] };
         return it;
       }
       case 'tasks': {

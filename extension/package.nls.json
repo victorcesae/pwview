@@ -93,5 +93,12 @@
   "cmd.fs-copyPath": "Copy Path",
   "cmd.fs-copyRelativePath": "Copy Relative Path",
   "cmd.fs-rename": "Rename…",
-  "cmd.fs-delete": "Delete"
+  "cmd.fs-delete": "Delete",
+  "cmd.scm-commit": "Commit…",
+  "cmd.scm-sync": "Sync (Pull and Push)",
+  "cmd.scm-push": "Push",
+  "cmd.scm-pull": "Pull",
+  "cmd.scm-openView": "Open Source Control",
+  "cmd.scm-openFile": "Open File",
+  "cmd.scm-openChange": "Open Changes"
 }

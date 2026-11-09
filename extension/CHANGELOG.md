@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.5
+- **Source control** under each project and worktree in the Sessions tree (VS Code's own Git): branch, ahead / behind, changed files with their diff, Commit (all changes when nothing is staged), Push, Pull, Sync, Open Source Control.
+
 ## 1.0.4
 - Code blocks: no more highlighted box behind each line (VS Code's own code background is removed inside blocks); inline code keeps a subtle background.
 

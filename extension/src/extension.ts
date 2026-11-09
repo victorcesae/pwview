@@ -8,6 +8,7 @@ import { addWorktree, removeWorktree, repoRoot, slug, validBranch, worktreeInfo 
 import { lanAddress, RemoteServer } from './remote';
 import { migrateFromAgentLens } from './migrate';
 import { registerFileActions } from './fileActions';
+import { Scm, type ScmFile } from './scm';
 import { followCommand } from './bgtasks';
 import { claudeDir } from './paths';
 import { MCP_PRESETS, mcpAddArgs, runClaude, sdkConfig, splitCommand, validName, type McpPreset, type McpScope, type McpServer } from './mcp';
@@ -874,6 +875,29 @@ export function activate(ctx: vscode.ExtensionContext) {
   refresh(true);
   restoreTestHooks(chats);
   registerFileActions(ctx, () => tree.refresh());
+  // Source control per project, through VS Code's own Git
+  const scm = new Scm(() => tree.refresh());
+  tree.setScm(scm);
+  const rootOf = (n?: { root?: string; path?: string }) => n?.root ?? n?.path;
+  const scmRun = (fn: (root: string) => Promise<unknown>) => async (n?: { root?: string; path?: string }) => {
+    const root = rootOf(n);
+    if (!root) return;
+    try {
+      await fn(root);
+    } catch (e: any) {
+      vscode.window.showErrorMessage(vscode.l10n.t('Git: {0}', String(e?.stderr || e?.message || e).split('\n')[0]));
+    }
+    tree.refresh();
+  };
+  ctx.subscriptions.push(
+    vscode.commands.registerCommand('steerhouse.scm.commit', scmRun((r) => scm.commit(r))),
+    vscode.commands.registerCommand('steerhouse.scm.push', scmRun((r) => scm.push(r))),
+    vscode.commands.registerCommand('steerhouse.scm.pull', scmRun((r) => scm.pull(r))),
+    vscode.commands.registerCommand('steerhouse.scm.sync', scmRun((r) => scm.sync(r))),
+    vscode.commands.registerCommand('steerhouse.scm.openView', () => vscode.commands.executeCommand('workbench.view.scm')),
+    vscode.commands.registerCommand('steerhouse.scm.openChange', (n?: { root: string; file: ScmFile }) => n && scm.openDiff(n.root, n.file)),
+    vscode.commands.registerCommand('steerhouse.scm.openFile', (n?: { file: ScmFile }) => n && vscode.commands.executeCommand('vscode.open', vscode.Uri.file(n.file.path))),
+  );
   let timer = setInterval(refresh, cfg().get<number>('pollSeconds', 3) * 1000);
   ctx.subscriptions.push(
     { dispose: () => clearInterval(timer) },
