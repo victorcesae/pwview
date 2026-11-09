@@ -7,6 +7,7 @@ import { installedAgents, runCliAgent } from './agents';
 import { addWorktree, removeWorktree, repoRoot, slug, validBranch, worktreeInfo } from './worktree';
 import { lanAddress, RemoteServer } from './remote';
 import { migrateFromAgentLens } from './migrate';
+import { followCommand } from './bgtasks';
 import { claudeDir } from './paths';
 import { MCP_PRESETS, mcpAddArgs, runClaude, sdkConfig, splitCommand, validName, type McpPreset, type McpScope, type McpServer } from './mcp';
 import { addComment, cancelComment, editComment, loadComments, Mode } from './comments';
@@ -657,6 +658,16 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
     // "New chat here" on a project or folder in the Sessions tree (or a folder in the Explorer)
     // Your default shell in that folder (from a chat, a project or a folder in the tree)
+    // Watch a background command's output in a terminal, as it is written (like tail -f)
+    vscode.commands.registerCommand('steerhouse.followTask', (x?: { outputFile?: string; command?: string; description?: string } | { task?: { outputFile?: string; command?: string; description?: string } }) => {
+      const t = x && 'task' in x ? x.task : (x as { outputFile?: string; command?: string; description?: string } | undefined);
+      if (!t?.outputFile) return vscode.window.showWarningMessage(vscode.l10n.t('This command has no output file.'));
+      const f = followCommand(t.outputFile);
+      vscode.window
+        .createTerminal({ name: '▶ ' + clip(t.description || t.command || 'output', 30), shellPath: f.shell, shellArgs: f.args, iconPath: new vscode.ThemeIcon('debug-console') })
+        .show();
+    }),
+    vscode.commands.registerCommand('steerhouse.openTaskFile', (x?: { task?: { outputFile?: string } }) => x?.task?.outputFile && vscode.window.showTextDocument(vscode.Uri.file(x.task.outputFile), { preview: true })),
     vscode.commands.registerCommand('steerhouse.openTerminalHere', (n?: { path?: string } | vscode.Uri | string) => {
       const dir = typeof n === 'string' ? n : n instanceof vscode.Uri ? n.fsPath : (n?.path ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
       if (!dir) return vscode.window.showWarningMessage(vscode.l10n.t('Open a folder first.'));

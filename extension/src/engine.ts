@@ -1,6 +1,7 @@
 // Reads Claude Code's own transcripts (~/.claude/projects/<project>/<session>.jsonl and
 // <session>/subagents/agent-*.jsonl) and turns them into sessions, sub-agents, timelines
 // and file changes with exact before/after content. No vscode imports: unit-testable.
+import { BgTaskTracker, textsOf, type BgTask } from './bgtasks';
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadComments } from './comments';
@@ -63,6 +64,8 @@ export interface Transcript {
   pending: Set<string>;
   usage: UsageRow[];
   toolCount: number;
+  /** commands the agent left running in the background (dev servers, watchers…) */
+  tasks: BgTask[];
 }
 
 export interface AgentInfo {
@@ -195,7 +198,8 @@ function changeFrom(r: any, id: string, sid: string, aid: string | undefined, ts
 }
 
 export function parse(file: string, sid: string, aid?: string): Transcript {
-  const t: Transcript = { events: [], changes: [], pending: new Set(), toolCount: 0, usage: [] };
+  const t: Transcript = { events: [], changes: [], pending: new Set(), toolCount: 0, usage: [], tasks: [] };
+  const bg = new BgTaskTracker();
   const whyByTool = new Map<string, string>();
   // one reply is written as several records that repeat the same usage: count each reply once
   const usageById = new Map<string, UsageRow>();
@@ -211,6 +215,8 @@ export function parse(file: string, sid: string, aid?: string): Transcript {
     if (typeof rec.cwd === 'string') t.cwd ??= rec.cwd;
     if (typeof rec.gitBranch === 'string' && rec.gitBranch) t.branch = rec.gitBranch;
 
+    // task notifications can arrive in any record (a user message, an attachment, a queued command)
+    if (rec.type === 'user' || rec.type === 'attachment' || rec.type === 'queue-operation') bg.text(textsOf(rec.message?.content ?? rec.attachment ?? rec.content), ts);
     switch (rec.type) {
       case 'custom-title':
         t.title = str(rec.customTitle) || t.title;
@@ -254,6 +260,7 @@ export function parse(file: string, sid: string, aid?: string): Transcript {
           } else if (c.type === 'tool_use') {
             t.toolCount++;
             t.pending.add(c.id);
+            bg.toolUse(c.id, c.name, c.input, ts, aid);
             whyByTool.set(c.id, lastText);
             t.events.push({ ts, kind: 'tool', tool: c.name, text: summarize(c.name, c.input), refId: c.id, agentId: aid });
           }
@@ -273,6 +280,7 @@ export function parse(file: string, sid: string, aid?: string): Transcript {
           for (const c of content ?? []) {
             if (c.type === 'tool_result') {
               t.pending.delete(c.tool_use_id);
+              bg.toolResult(c.tool_use_id, textsOf(c.content), ts);
               // Resumed/compacted sessions can replay the same tool result: count each change once.
               if (t.changes.some((x) => x.id === c.tool_use_id)) continue;
               const ch = changeFrom(rec.toolUseResult, c.tool_use_id, sid, aid, ts, whyByTool.get(c.tool_use_id) ?? '');
@@ -286,6 +294,7 @@ export function parse(file: string, sid: string, aid?: string): Transcript {
       }
     }
   }
+  t.tasks = bg.tasks;
   return t;
 }
 

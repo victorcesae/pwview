@@ -25,6 +25,10 @@ export type ToExtension =
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
   | { type: 'openTerminal' }
+  | { type: 'taskOutput'; id: string }
+  | { type: 'stopTask'; id: string }
+  | { type: 'followTask'; id: string }
+  | { type: 'openTaskFile'; id: string }
   | { type: 'editPrompt'; id: string; text: string }
   | { type: 'stash'; text: string }
   | { type: 'unstash'; index: number }
@@ -63,7 +67,7 @@ export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | '
 export interface ChatState {
   key: string; sessionId?: string; cwd: string; title: string; model?: string; models: { value: string; displayName: string }[];
   permissionMode: PermissionMode; effort?: Effort; fastMode: boolean; ultracode: boolean; status: 'starting' | 'idle' | 'working' | 'waiting' | 'closed' | 'error'; activity?: string;
-  todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[]; tokens?: number; context?: { used: number; max: number; percentage: number; detailed?: boolean; categories?: { id?: string; name: string; tokens: number; kind: 'used' | 'free' | 'buffer' | 'deferred' }[] }; earlier: number; slashCommands: string[]; mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string }; host?: string; hostIcon?: string; limits?: Limits; suggestion?: string; stash?: string[]; prs?: Record<string, { state: 'open' | 'draft' | 'merged' | 'closed' | 'unknown'; title?: string; tasks?: { done: number; total: number }; checks?: PrCheckView[]; review?: 'approved' | 'changes_requested' | 'required' }>; error?: string;
+  todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[]; tokens?: number; context?: { used: number; max: number; percentage: number; detailed?: boolean; categories?: { id?: string; name: string; tokens: number; kind: 'used' | 'free' | 'buffer' | 'deferred' }[] }; earlier: number; slashCommands: string[]; mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string }; host?: string; hostIcon?: string; limits?: Limits; suggestion?: string; stash?: string[]; tasks?: BgTaskView[]; prs?: Record<string, { state: 'open' | 'draft' | 'merged' | 'closed' | 'unknown'; title?: string; tasks?: { done: number; total: number }; checks?: PrCheckView[]; review?: 'approved' | 'changes_requested' | 'required' }>; error?: string;
 }
 export type LinkedSession = { id: string; title: string; state: State; activity?: string };
 export type ChatData = { view: 'chat'; chat: ChatState; linked: LinkedSession[] };
@@ -79,6 +83,10 @@ export type ToChat =
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
   | { type: 'openTerminal' }
+  | { type: 'taskOutput'; id: string }
+  | { type: 'stopTask'; id: string }
+  | { type: 'followTask'; id: string }
+  | { type: 'openTaskFile'; id: string }
   | { type: 'editPrompt'; id: string; text: string }
   | { type: 'stash'; text: string }
   | { type: 'unstash'; index: number }
@@ -127,3 +135,5 @@ export interface LimitWindow { id: string; label: string; pct: number; resetsAt?
 export interface Limits { available: boolean; plan?: string; windows: LimitWindow[]; extra?: { used: number; limit?: number; currency?: string; label: string }; source: 'claude' | 'openrouter' | 'none' }
 
 export interface PrCheckView { name: string; workflow?: string; state: 'pass' | 'fail' | 'pending' | 'skipped'; url?: string }
+
+export interface BgTaskView { id: string; command: string; description?: string; outputFile?: string; status: 'running' | 'completed' | 'failed' | 'stopped' | 'unknown'; started?: string; ended?: string }

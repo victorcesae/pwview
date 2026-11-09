@@ -62,7 +62,13 @@ export function App() {
         if (m.type === 'openSession') setData(mock.session(m.id, m.agentId));
         else if (m.type === 'overview') setData(mock.overview);
         else if (m.type === 'message') window.postMessage({ type: 'toast', text: m.mode === 'steer' ? 'steering: delivered at its next step' : m.mode === 'now' ? 'interrupted and sent' : 'queued: delivered when this turn ends' }, '*');
-        else if (m.type === 'prFiles' || m.type === 'prViewed') {
+        else if (m.type === 'taskOutput') {
+          // browser dev mode: a dev server's output, a little longer each time
+          const n = ((window as any).__ticks = ((window as any).__ticks ?? 0) + 1);
+          const reloads = Array.from({ length: n }, (_, i) => `[vite] page reload app/sales/quotes/page.tsx (${i + 1})`);
+          const text = m.id === 'dev1' ? ['  VITE v6.0.0  ready in 412 ms', '', '  ➜  Local:   http://localhost:5173/', ...reloads].join('\n') : ' ✓ 12 tests passed';
+          setTimeout(() => window.postMessage({ type: 'taskOutputResult', id: m.id, text, size: text.length, urls: m.id === 'dev1' ? ['http://localhost:5173/'] : [] }, '*'), 30);
+        } else if (m.type === 'prFiles' || m.type === 'prViewed') {
           // browser dev mode: answer like the extension would (GitHub's file list with viewed marks)
           const viewed = new Set(JSON.parse(sessionStorage.getItem('devViewed') ?? '[]'));
           if (m.type === 'prViewed') (m.viewed ? viewed.add(m.path) : viewed.delete(m.path), sessionStorage.setItem('devViewed', JSON.stringify([...viewed])));

@@ -5,6 +5,7 @@ import { AgentInfo, Change, Engine, HotFile, Session, State } from './engine';
 import { norm } from './paths';
 import { projectRules, userRules, type RuleFile } from './rules';
 import { worktreeInfo } from './worktree';
+import { guessStatus, type BgTask } from './bgtasks';
 import { accountIdentity, listAccounts, preferredAccount, type Account } from './accounts';
 import { modelLabel } from './pricing';
 import { vendorOf } from './providers';
@@ -21,6 +22,8 @@ export type Node =
   | { kind: 'changes'; s: Session; agentId?: string; list: Change[]; via?: string }
   | { kind: 'change'; s: Session; c: Change; via?: string }
   /** the project's folders and files, like the Explorer; files agents changed are marked */
+  | { kind: 'tasks'; s: Session; via?: string }
+  | { kind: 'task'; s: Session; task: BgTask; via?: string }
   | { kind: 'accounts' }
   | { kind: 'account'; a: Account }
   | { kind: 'rules'; scope: 'user' | 'project'; root?: string }
@@ -132,6 +135,12 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
     switch (node.kind) {
       case 'archived':
         return node.projects;
+      case 'tasks':
+        // running first, newest first
+        return [...node.s.t.tasks]
+          .map((task) => ({ task, st: guessStatus(task, node.s.info.state === 'working') }))
+          .sort((a, b) => Number(b.st === 'running') - Number(a.st === 'running') || (b.task.started ?? '').localeCompare(a.task.started ?? ''))
+          .map(({ task, st }): Node => ({ kind: 'task', s: node.s, task: { ...task, status: st }, via: node.via }));
       case 'hot':
         return node.files.map((hot) => ({ kind: 'hotfile', hot }));
       case 'hotfile':
@@ -155,6 +164,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         const out: Node[] = node.s.agents.map((a) => ({ kind: 'agent', s: node.s, a: a.info, via: node.via }));
         const own = node.s.t.changes;
         if (own.length) out.push({ kind: 'changes', s: node.s, list: own, via: node.via });
+        if (node.s.t.tasks?.length) out.push({ kind: 'tasks', s: node.s, via: node.via });
         if (fs.existsSync(node.s.info.project)) out.push({ kind: 'files', root: node.s.info.project, s: node.s, sessions: [node.s], via: node.via });
         return out;
       }
@@ -196,6 +206,32 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         it.resourceUri = vscode.Uri.file(node.hot.file);
         it.description = `${node.hot.sessions.length} sessions · ${node.hot.changes} edits · ${ago(node.hot.updated)}`;
         it.tooltip = node.hot.file;
+        return it;
+      }
+      case 'tasks': {
+        const running = node.s.t.tasks.filter((t) => guessStatus(t, node.s.info.state === 'working') === 'running').length;
+        const it = new vscode.TreeItem(vscode.l10n.t('Background commands'), running ? C.Expanded : C.Collapsed);
+        it.id = `${node.via ?? ''}|tasks:${node.s.info.id}`;
+        it.iconPath = new vscode.ThemeIcon('terminal', running ? new vscode.ThemeColor('charts.blue') : undefined);
+        it.description = running ? vscode.l10n.t('{0} running', running) : String(node.s.t.tasks.length);
+        it.tooltip = vscode.l10n.t('Commands the agent left running: dev servers, watchers, long test runs');
+        return it;
+      }
+      case 'task': {
+        const t = node.task;
+        const it = new vscode.TreeItem(clip(t.description || t.command || t.id, 60), C.None);
+        it.id = `${node.via ?? ''}|task:${node.s.info.id}:${t.id}`;
+        const icon: Record<string, [string, string?]> = { running: ['loading~spin', 'charts.blue'], completed: ['pass', 'charts.green'], failed: ['error', 'charts.red'], stopped: ['debug-stop'], unknown: ['question', 'disabledForeground'] };
+        const [i, color] = icon[t.status] ?? icon.unknown;
+        it.iconPath = new vscode.ThemeIcon(i, color ? new vscode.ThemeColor(color) : undefined);
+        const label = { running: vscode.l10n.t('running'), completed: vscode.l10n.t('done'), failed: vscode.l10n.t('failed'), stopped: vscode.l10n.t('stopped'), unknown: vscode.l10n.t('maybe stopped') }[t.status];
+        it.description = [label, t.started ? ago(t.started) : ''].filter(Boolean).join(' · ');
+        const md = new vscode.MarkdownString();
+        md.appendCodeblock(t.command, 'bash');
+        if (t.outputFile) md.appendMarkdown('\n' + vscode.l10n.t('Output') + ': `' + t.outputFile + '`');
+        it.tooltip = md;
+        it.contextValue = 'bgtask';
+        it.command = { command: 'steerhouse.openTaskFile', title: 'Open output', arguments: [{ task: t }] };
         return it;
       }
       case 'archived': {

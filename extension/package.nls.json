@@ -79,5 +79,7 @@
   "cmd.archive.project": "Archive Project",
   "cmd.unarchive.project": "Unarchive Project",
   "cmd.remote.access": "Open on Phone…",
-  "cmd.open.terminal.here": "Open Terminal Here"
+  "cmd.open.terminal.here": "Open Terminal Here",
+  "cmd.follow.task": "Follow in Terminal",
+  "cmd.open.task.file": "Open Output"
 }

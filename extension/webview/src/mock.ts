@@ -252,5 +252,9 @@ export function multiChat(): Data {
     'https://github.com/NZero-Labs/intranet-v5/pull/1288': { state: 'open' as const, title: 'Use approvalStatus in quotes', tasks: { done: 2, total: 5 }, review: 'required' as const, checks: [{"workflow":"CI","name":"unit tests","state":"pass" as const,"url":"https://github.com/x/actions/runs/1"}, {"workflow":"CI","name":"e2e (playwright)","state":"fail" as const,"url":"https://github.com/x/actions/runs/1"}, {"workflow":"CI","name":"build","state":"pending" as const,"url":"https://github.com/x/actions/runs/1"}, {"workflow":"Deploy","name":"preview","state":"skipped" as const,"url":"https://github.com/x/actions/runs/1"}] },
   };
   (items[0] as any).forkAt = 'uuid-before-first';
-  return { view: 'chat', linked: [], chat: { ...base, suggestion: 'Now update the API docs for /quotes/:id', stash: ['Check the e2e tests for approval', 'Draft the release note'], model: undefined, host: 'Visual Studio Code', cwd: W, title: 'Rename quote status across repos', status: 'idle', activity: undefined, queue: [], todos: [], items, limits, prs } };
+  const tasks = [
+    { id: 'dev1', command: 'pnpm --filter web dev', description: 'Start the web dev server', status: 'running' as const, started: t(6) },
+    { id: 'wt1', command: 'pnpm test -- --watch quotes', description: 'Watch the quote tests', status: 'completed' as const, started: t(20), ended: t(12) },
+  ];
+  return { view: 'chat', linked: [], chat: { ...base, tasks, suggestion: 'Now update the API docs for /quotes/:id', stash: ['Check the e2e tests for approval', 'Draft the release note'], model: undefined, host: 'Visual Studio Code', cwd: W, title: 'Rename quote status across repos', status: 'idle', activity: undefined, queue: [], todos: [], items, limits, prs } };
 }

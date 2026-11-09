@@ -150,5 +150,16 @@
   "Merging…": "Mesclando…",
   "Merge failed: {0}": "Falha ao mesclar: {0}",
   "Merged {0}.": "{0} mesclado.",
-  "$(check) Steerhouse: carried over from AgentLens: {0}": "$(check) Steerhouse: trazido do AgentLens: {0}"
+  "$(check) Steerhouse: carried over from AgentLens: {0}": "$(check) Steerhouse: trazido do AgentLens: {0}",
+  "Could not stop it: {0}": "Não foi possível parar: {0}",
+  "This command has no output file.": "Este comando não tem arquivo de saída.",
+  "Background commands": "Comandos em segundo plano",
+  "Commands the agent left running: dev servers, watchers, long test runs": "Comandos que o agente deixou rodando: servidores de dev, watchers, testes longos",
+  "running": "rodando",
+  "done": "concluído",
+  "failed": "falhou",
+  "stopped": "parado",
+  "maybe stopped": "talvez parado",
+  "Output": "Saída",
+  "{0} running": "{0} rodando"
 }

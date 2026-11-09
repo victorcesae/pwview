@@ -6,6 +6,7 @@ import { ChatSession, historyFromTranscript, Priority, type ChatPrefs } from './
 import { hostIcon } from './hostIcon';
 import { findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMethod } from './prs';
 import { openUrl } from './browser';
+import { findUrls, readTail } from './bgtasks';
 import { vendorOf } from './providers';
 import type { Session } from './engine';
 import { addLink, briefing, loadLinks, removeLink, sameConnection } from './links';
@@ -24,6 +25,10 @@ export type FromChat =
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
   | { type: 'openTerminal' }
+  | { type: 'taskOutput'; id: string }
+  | { type: 'stopTask'; id: string }
+  | { type: 'followTask'; id: string }
+  | { type: 'openTaskFile'; id: string }
   | { type: 'editPrompt'; id: string; text: string }
   | { type: 'stash'; text: string }
   | { type: 'unstash'; index: number }
@@ -410,6 +415,21 @@ export class Chats {
       }
       case 'editPrompt':
         return this.editAndRerun(o, m.id, m.text);
+      case 'taskOutput': {
+        const t = c.state.tasks.find((x) => x.id === m.id);
+        const r = readTail(t?.outputFile);
+        return o.panel.webview.postMessage({ type: 'taskOutputResult', id: m.id, text: r.text, size: r.size, urls: findUrls(r.text) });
+      }
+      case 'stopTask':
+        return c.stopTask(m.id).catch((e) => vscode.window.showErrorMessage(vscode.l10n.t('Could not stop it: {0}', String(e?.message ?? e))));
+      case 'followTask': {
+        const t = c.state.tasks.find((x) => x.id === m.id);
+        return t && vscode.commands.executeCommand('steerhouse.followTask', t);
+      }
+      case 'openTaskFile': {
+        const t = c.state.tasks.find((x) => x.id === m.id);
+        return t?.outputFile && vscode.window.showTextDocument(vscode.Uri.file(t.outputFile), { preview: true });
+      }
       case 'openTerminal':
         return vscode.commands.executeCommand('steerhouse.openTerminalHere', c.state.cwd);
       case 'deleteSession':

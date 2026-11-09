@@ -79,5 +79,7 @@
   "cmd.archive.project": "Arquivar projeto",
   "cmd.unarchive.project": "Desarquivar projeto",
   "cmd.remote.access": "Abrir no celular…",
-  "cmd.open.terminal.here": "Abrir terminal aqui"
+  "cmd.open.terminal.here": "Abrir terminal aqui",
+  "cmd.follow.task": "Acompanhar no terminal",
+  "cmd.open.task.file": "Abrir saída"
 }

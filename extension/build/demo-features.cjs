@@ -107,6 +107,25 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
   await sleep(200);
+
+  // background commands (dev servers, watchers)
+  check('Terminals button counts running commands', (await evaluate(`document.querySelector('aside button[aria-label^="Background commands"]')?.getAttribute('aria-label')`)) === 'Background commands (1)');
+  await click('aside button[aria-label^="Background commands"]');
+  await sleep(2200);
+  check('running command first, opened, with live output', (await evaluate(`[...document.querySelectorAll('[data-task]')].map(e => e.dataset.status).join(',')`)) === 'running,completed' && /page reload/.test(await evaluate(`document.querySelector('[data-task="dev1"] [data-task-output]')?.textContent ?? ''`)));
+  const n1 = await evaluate(`(document.querySelector('[data-task="dev1"] [data-task-output]').textContent.match(/page reload/g) || []).length`);
+  await sleep(1700);
+  const n2 = await evaluate(`(document.querySelector('[data-task="dev1"] [data-task-output]').textContent.match(/page reload/g) || []).length`);
+  check('output keeps updating while it runs', n2 > n1, `${n1} → ${n2} lines`);
+  check('the dev server URL is a link', (await evaluate(`document.querySelector('[data-task="dev1"] [data-task-url]')?.getAttribute('href')`)) === 'http://localhost:5173/');
+  await shot('feat-5-background.png');
+  await evaluate(`document.querySelector('[data-task="dev1"] [data-task-stop]').click()`);
+  await evaluate(`document.querySelector('[data-task="dev1"] [data-task-follow]').click()`);
+  await sleep(150);
+  check('Stop and Follow in terminal go to the extension', (await sentMsgs()).some((m) => m.type === 'stopTask' && m.id === 'dev1') && (await sentMsgs()).some((m) => m.type === 'followTask' && m.id === 'dev1'));
+  check('finished commands have no Stop', await evaluate(`(() => { document.querySelector('[data-task="wt1"] button').click(); return true; })()`) && !(await evaluate(`!!document.querySelector('[data-task="wt1"] [data-task-stop]')`)));
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  await sleep(200);
   await evaluate(`document.querySelector('[data-open-terminal]').click()`);
   await sleep(150);
   check('terminal button asks to open a terminal in the chat folder', (await sentMsgs()).some((m) => m.type === 'openTerminal'));

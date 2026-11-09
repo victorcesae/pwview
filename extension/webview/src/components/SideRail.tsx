@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { FileDiff } from 'lucide-react';
 import { PrList, PrRailIcon } from '@/components/PrList';
+import { TaskList, TaskRailIcon } from '@/components/TaskList';
 import { post } from '@/bridge';
 import { t } from '@/i18n';
 import { ContextPanel } from '@/components/ContextPanel';
@@ -79,6 +80,11 @@ export function SideRail({ chat }: { chat: ChatState }) {
         </Pop>
       )}
 
+      {!!chat.tasks?.length && (
+        <Pop label={t('Background commands')} icon={<TaskRailIcon running={chat.tasks.filter((x) => x.status === 'running').length} />} count={chat.tasks.filter((x) => x.status === 'running').length || chat.tasks.length}>
+          <TaskList tasks={chat.tasks} canStop={chat.status !== 'closed'} />
+        </Pop>
+      )}
       {prs.length > 0 && (
         <Pop label={t('Pull requests')} icon={<PrRailIcon st={chat.prs?.[prs.at(-1)!.url]} />} count={prs.length}>
           <PrList prs={prs} status={chat.prs} />

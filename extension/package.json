@@ -355,6 +355,18 @@
         "title": "%cmd.open.terminal.here%",
         "category": "Steerhouse",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "steerhouse.followTask",
+        "title": "%cmd.follow.task%",
+        "category": "Steerhouse",
+        "icon": "$(debug-console)"
+      },
+      {
+        "command": "steerhouse.openTaskFile",
+        "title": "%cmd.open.task.file%",
+        "category": "Steerhouse",
+        "icon": "$(go-to-file)"
       }
     ],
     "menus": {
@@ -560,6 +572,11 @@
           "command": "steerhouse.openTerminalHere",
           "when": "view == steerhouse.sessions && viewItem == fsfolder",
           "group": "inline@1"
+        },
+        {
+          "command": "steerhouse.followTask",
+          "when": "view == steerhouse.sessions && viewItem == bgtask",
+          "group": "inline@1"
         }
       ],
       "comments/commentThread/context": [
@@ -646,6 +663,14 @@
         },
         {
           "command": "steerhouse.unarchiveProject",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.followTask",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.openTaskFile",
           "when": "false"
         }
       ],
@@ -848,8 +873,8 @@
     "build:webview": "vite build --config webview/vite.config.mts",
     "dev:webview": "vite --config webview/vite.config.mts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
-    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs",
-    "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs test/e2e-fork.test.cjs",
+    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs",
+    "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs test/e2e-fork.test.cjs test/e2e-bg.test.cjs",
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs",
     "test:restore": "npm run build && node test/editor/restore.cjs"

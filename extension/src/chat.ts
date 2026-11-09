@@ -2,6 +2,7 @@
 // Uses the user's own Claude Code CLI (and therefore its login: subscription, API key,
 // Bedrock/Vertex...). Messages carry a native priority: later = queue, next = steer
 // (picked up between steps), now = send now.
+import { BgTaskTracker, guessStatus, sdkStatus, textsOf, type BgTask } from './bgtasks';
 import { randomUUID } from 'crypto';
 import { query, type PermissionMode, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 
@@ -48,6 +49,8 @@ export interface ChatState {
   suggestion?: string;
   /** prompts you put aside (shared by all chats) */
   stash?: string[];
+  /** commands the agent left running in the background (dev servers, watchers…) */
+  tasks: BgTask[];
   /** All tokens this chat used (input + output + cache), from each turn's usage. */
   tokens?: number;
   /** Context window usage after the last turn (for the ring next to the input). */
@@ -219,7 +222,8 @@ function resultText(content: unknown): string {
 const NOISE = ['<system-reminder>', '<local-command', '<command-', 'Caveat:', '[Request interrupted'];
 
 /** Rebuild the conversation from a session transcript (JSONL) so resumed chats show their history. */
-export function historyFromTranscript(file: string): { items: ChatItem[]; todos: Todo[]; title?: string; model?: string } {
+export function historyFromTranscript(file: string): { items: ChatItem[]; todos: Todo[]; title?: string; model?: string; tasks?: BgTask[] } {
+  const bg = new BgTaskTracker();
   const items: ChatItem[] = [];
   let todos: Todo[] = [];
   let title: string | undefined;
@@ -254,6 +258,7 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
       continue;
     }
     const content = rec.message?.content;
+    if (rec.type === 'user' || rec.type === 'attachment' || rec.type === 'queue-operation') bg.text(textsOf(content ?? rec.attachment ?? rec.content), rec.timestamp);
     if (rec.type === 'user') {
       const texts: string[] = [];
       const images: string[] = [];
@@ -261,6 +266,7 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
         if (c.type === 'text' && !NOISE.some((n) => String(c.text).trimStart().startsWith(n))) texts.push(c.text);
         else if (c.type === 'image' && c.source?.type === 'base64') images.push(`data:${c.source.media_type};base64,${c.source.data}`);
         else if (c.type === 'tool_result') {
+          bg.toolResult(c.tool_use_id, textsOf(c.content), rec.timestamp);
           const t = tools.get(c.tool_use_id);
           if (!t) continue;
           t.status = c.is_error ? 'error' : 'done';
@@ -274,6 +280,7 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
       for (const c of content ?? []) {
         if (c.type === 'text' && c.text?.trim()) items.push({ kind: 'assistant', id: uid(), text: c.text });
         else if (c.type === 'tool_use' && !tools.has(c.id)) {
+          bg.toolUse(c.id, c.name, c.input, rec.timestamp);
           if (c.name === 'TodoWrite' && Array.isArray(c.input?.todos)) todos = c.input.todos;
           const t: Extract<ChatItem, { kind: 'tool' }> = { kind: 'tool', id: c.id, name: c.name, summary: summary(c.name, c.input), input: c.input, status: 'done', file: str(c.input?.file_path) || undefined };
           tools.set(c.id, t);
@@ -282,7 +289,7 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
       }
     }
   }
-  return { items, todos, title, model };
+  return { items, todos, title, model, tasks: bg.tasks };
 }
 
 const toCategories = (u: any) => (u.categories ?? []).filter((c: any) => c.tokens > 0).map((c: any) => ({ id: c.id, name: c.name, tokens: c.tokens, kind: c.kind }));
@@ -297,7 +304,7 @@ export interface ChatOptions {
   model?: string;
   permissionMode?: PermissionMode;
   title?: string;
-  history?: { items: ChatItem[]; todos: Todo[]; model?: string };
+  history?: { items: ChatItem[]; todos: Todo[]; model?: string; tasks?: BgTask[] };
   /** Account: its name and env (CLAUDE_CONFIG_DIR) */
   account?: { name: string; env: Record<string, string>; provider?: string };
   /** editor the chat runs in (Visual Studio Code, Cursor…) */
@@ -355,6 +362,8 @@ export class ChatSession {
       todos: opts.history?.todos ?? [],
       items: opts.history ? [...opts.history.items.slice(-HISTORY_PAGE), { kind: 'system', id: uid(), text: 'Resumed: earlier conversation above' }] : [],
       earlier: Math.max(0, (opts.history?.items.length ?? 0) - HISTORY_PAGE),
+      // from an earlier run of this session: still running only if its output is still being written
+      tasks: (opts.history?.tasks ?? []).map((t) => ({ ...t, status: guessStatus(t, false) })),
       queue: [],
       slashCommands: [],
       mcp: [],
@@ -483,6 +492,49 @@ export class ChatSession {
     if (!steers.length) return;
     this.queued = this.queued.filter((m) => m.priority !== 'next');
     for (const m of steers) this.push(m.text, m.images, 'next');
+  }
+
+  /** background commands seen in this run (merged into state.tasks) */
+  private bg = new BgTaskTracker();
+
+  private syncTasks() {
+    // the SDK's task_started often comes first (no output file yet); the tool result then adds the
+    // output file and the exact command
+    for (const t of this.bg.tasks) {
+      const known = this.state.tasks.find((x) => x.id === t.id);
+      if (!known) this.state.tasks.push({ ...t });
+      else {
+        known.outputFile ??= t.outputFile;
+        if (t.command) known.command = t.command;
+        known.description ??= t.description;
+        known.toolUseId ??= t.toolUseId;
+      }
+    }
+  }
+
+  /** task_started / task_updated / task_notification: exact status for shell tasks of this run. */
+  private onTaskEvent(m: any) {
+    let t = this.state.tasks.find((x) => x.id === m.task_id);
+    if (m.subtype === 'task_started') {
+      if (m.task_type && m.task_type !== 'local_bash') return; // sub-agents are shown elsewhere
+      if (!t) {
+        const call = m.tool_use_id ? this.tool(m.tool_use_id) : undefined;
+        this.state.tasks.push((t = { id: m.task_id, toolUseId: m.tool_use_id, command: String((call?.input as any)?.command ?? m.description ?? ''), description: m.description, status: 'running', started: new Date().toISOString() }));
+      }
+    }
+    if (!t) return;
+    const st = m.subtype === 'task_updated' ? sdkStatus(m.patch?.status) : m.subtype === 'task_notification' ? sdkStatus(m.status) : undefined;
+    if (st) {
+      t.status = st;
+      if (st !== 'running') t.ended = new Date().toISOString();
+    }
+    if (m.output_file) t.outputFile = m.output_file;
+    this.changed();
+  }
+
+  /** Stops a background command the agent started in this chat. */
+  async stopTask(id: string) {
+    await this.q?.stopTask(id);
   }
 
   private limitsAt = 0;
@@ -759,6 +811,8 @@ export class ChatSession {
           const init: any = m;
           if (init.effort) this.state.effort = init.effort;
           if (init.fast_mode_state) this.state.fastMode = init.fast_mode_state === 'on';
+        } else if ((m.subtype as string) === 'task_started' || (m.subtype as string) === 'task_updated' || (m.subtype as string) === 'task_notification') {
+          this.onTaskEvent(m as any);
         } else if (m.subtype === 'status') {
           if (m.status === 'compacting') this.state.activity = 'Compacting the conversation…';
           if (m.permissionMode) this.state.permissionMode = m.permissionMode;
@@ -816,6 +870,7 @@ export class ChatSession {
                 this.state.items.push({ kind: 'assistant', id: uid(), text: c.text, parent, msg: msgId });
             }
           } else if (c.type === 'tool_use') {
+            this.bg.toolUse(c.id, c.name, c.input, new Date().toISOString(), parent);
             if (c.name === 'TodoWrite' && Array.isArray(c.input?.todos)) this.state.todos = c.input.todos;
             if (!this.tool(c.id))
               this.state.items.push({ kind: 'tool', id: c.id, name: c.name, summary: summary(c.name, c.input), input: c.input, status: 'running', parent, file: str(c.input?.file_path) || undefined });
@@ -830,6 +885,8 @@ export class ChatSession {
         if (!Array.isArray(content)) break;
         for (const c of content) {
           if (c?.type !== 'tool_result') continue;
+          this.bg.toolResult(c.tool_use_id, textsOf(c.content), new Date().toISOString());
+          this.syncTasks();
           const t = this.tool(c.tool_use_id);
           if (!t) continue;
           t.status = c.is_error ? 'error' : 'done';

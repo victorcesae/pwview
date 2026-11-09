@@ -1,6 +1,7 @@
 # Changelog
 
 ## 1.0.0
+- **Background commands**: dev servers, watchers and long test runs the agent started, per session (tree) and per chat (side bar): status, live output, local URLs, Stop, Follow in terminal, Open output.
 - **Open Terminal Here** from a chat (header button), a project or a folder in the Sessions tree.
 - **Renamed AgentLens to Steerhouse**, with a new icon. Settings (`agentlens.*` → `steerhouse.*`), the data folder and Claude Code hook entries carry over on first start.
 
