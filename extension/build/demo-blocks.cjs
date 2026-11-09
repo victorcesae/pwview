@@ -25,7 +25,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await send('Page.navigate', { url: baseUrl + '/#multi' });
   await sleep(3000);
   // VS Code's default webview styles come first in <head>: dim preformatted text
-  await ev(`(() => { const s = document.createElement('style'); s.textContent = 'code, pre { color: rgb(140, 140, 140); } pre { white-space: pre; }'; document.head.prepend(s); return true; })()`);
+  await ev(`(() => { const s = document.createElement('style'); s.textContent = 'code, pre { color: rgb(140, 140, 140); } pre { white-space: pre; } code { background-color: rgb(60, 60, 60); padding: 1px 3px; border-radius: 3px; }'; document.head.prepend(s); return true; })()`);
   // real mouse clicks (like a user), on the tool group and then on each command row
   const clickAt = async (find) => {
     const p = await ev(`(() => { const b = ${find}; if (!b) return null; b.scrollIntoView({ block: "center" }); const r = b.getBoundingClientRect(); return { x: r.x + 20, y: r.y + r.height / 2 }; })()`);
@@ -41,6 +41,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await sleep(300);
   const fg = await ev(`getComputedStyle(document.body).color`);
   const blocks = await ev(`JSON.stringify([...document.querySelectorAll('pre, code')].filter(e => e.offsetParent).map(e => ({ tag: e.tagName, color: getComputedStyle(e).color, keep: !!e.closest('.keep-lines'), sideways: e.tagName === 'PRE' && e.scrollWidth > e.clientWidth + 1, text: e.textContent.slice(0, 40) })))`).then(JSON.parse);
+  const boxed = await ev(`JSON.stringify([...document.querySelectorAll('pre code')].filter(e => e.offsetParent && getComputedStyle(e).backgroundColor !== 'rgba(0, 0, 0, 0)').map(e => e.textContent.slice(0, 30)))`).then(JSON.parse);
+  check('no box behind the lines inside code blocks', !boxed.length, boxed.join(' | '));
   const dim = blocks.filter((b) => b.color === 'rgb(140, 140, 140)');
   const sideways = blocks.filter((b) => b.sideways && !b.keep);
   check(`${blocks.length} code/pre blocks found on screen`, blocks.length >= 8 && blocks.some((b) => /Test Files|github.com/.test(b.text)));

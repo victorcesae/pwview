@@ -248,3 +248,19 @@ pre::-webkit-scrollbar-track,
 .keep-lines::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* VS Code's page styles also give every <code> a background, padding and rounding. Inside a
+   block that paints a box behind each line: remove it there. (Plain rules: Tailwind's utility
+   layer is weaker than VS Code's unlayered styles, so classes like bg-transparent lose.) */
+pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  border: 0;
+}
+:not(pre) > code {
+  background: var(--muted);
+  color: inherit;
+  padding: 0.05em 0.35em;
+  border-radius: 4px;
+}

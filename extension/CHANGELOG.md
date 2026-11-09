@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.4
+- Code blocks: no more highlighted box behind each line (VS Code's own code background is removed inside blocks); inline code keeps a subtle background.
+
 ## 1.0.3
 - The readable code blocks from 1.0.2 now really ship: packaging rebuilds first (the 1.0.2 package had the previous chat page).
 - Right-click on files and folders in the Sessions tree, like the Explorer: Open to the Side, Reveal in Explorer (every other extension's actions are there), Reveal in File Explorer, Open in Terminal, New File / Folder, Find in Folder, Select for Compare / Compare with Selected, Copy Path / Relative Path, Rename (F2), Delete (to the trash), New Chat Here, New Chat in a Worktree.
