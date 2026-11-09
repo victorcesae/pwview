@@ -239,5 +239,11 @@ export function multiChat(): Data {
     { kind: 'tool', id: 'm-b4', name: 'Bash', summary: 'gh pr create --fill', input: { command: 'gh pr create --fill' }, status: 'done', result: 'https://github.com/NZero-Labs/intranet-v5/pull/1288' },
     { kind: 'assistant', id: 'm-a2', text: 'Done. **7 files in 3 repos** now use `approvalStatus`:\n\n| Repo | Files | PR |\n|---|---|---|\n| api-gateway | 2 | [#214](https://github.com/nzero-labs/api-gateway/pull/214) |\n| shared-ui | 2 | [#57](https://github.com/nzero-labs/shared-ui/pull/57) |\n| intranet-v5 | 3 | [#1288](https://github.com/NZero-Labs/intranet-v5/pull/1288) |\n\nMerge them in that order: the web app needs the new badge and API field.' },
   ];
-  return { view: 'chat', linked: [], chat: { ...base, cwd: W, title: 'Rename quote status across repos', status: 'idle', activity: undefined, queue: [], todos: [], items, limits } };
+  // as right after a resume: Claude Code has not reported the model yet
+  const prs = {
+    'https://github.com/nzero-labs/api-gateway/pull/214': { state: 'merged' as const, title: 'Rename quote status to approvalStatus' },
+    'https://github.com/nzero-labs/shared-ui/pull/57': { state: 'closed' as const, title: 'QuoteBadge: approvalStatus prop' },
+    'https://github.com/NZero-Labs/intranet-v5/pull/1288': { state: 'open' as const, title: 'Use approvalStatus in quotes' },
+  };
+  return { view: 'chat', linked: [], chat: { ...base, model: undefined, host: 'Visual Studio Code', cwd: W, title: 'Rename quote status across repos', status: 'idle', activity: undefined, queue: [], todos: [], items, limits, prs } };
 }

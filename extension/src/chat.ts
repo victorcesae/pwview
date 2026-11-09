@@ -214,10 +214,11 @@ function resultText(content: unknown): string {
 const NOISE = ['<system-reminder>', '<local-command', '<command-', 'Caveat:', '[Request interrupted'];
 
 /** Rebuild the conversation from a session transcript (JSONL) so resumed chats show their history. */
-export function historyFromTranscript(file: string): { items: ChatItem[]; todos: Todo[]; title?: string } {
+export function historyFromTranscript(file: string): { items: ChatItem[]; todos: Todo[]; title?: string; model?: string } {
   const items: ChatItem[] = [];
   let todos: Todo[] = [];
   let title: string | undefined;
+  let model: string | undefined;
   let text = '';
   try {
     text = require('fs').readFileSync(file, 'utf8');
@@ -230,6 +231,8 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
     let rec: any;
     try {
       rec = JSON.parse(line);
+      // the model of the last answer (Claude Code only reports it again after the next message)
+      if (rec?.type === 'assistant' && typeof rec.message?.model === 'string' && !rec.message.model.startsWith('<')) model = rec.message.model;
     } catch {
       continue;
     }
@@ -274,7 +277,7 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
       }
     }
   }
-  return { items, todos, title };
+  return { items, todos, title, model };
 }
 
 const toCategories = (u: any) => (u.categories ?? []).filter((c: any) => c.tokens > 0).map((c: any) => ({ id: c.id, name: c.name, tokens: c.tokens, kind: c.kind }));
@@ -289,7 +292,7 @@ export interface ChatOptions {
   model?: string;
   permissionMode?: PermissionMode;
   title?: string;
-  history?: { items: ChatItem[]; todos: Todo[] };
+  history?: { items: ChatItem[]; todos: Todo[]; model?: string };
   /** Account: its name and env (CLAUDE_CONFIG_DIR) */
   account?: { name: string; env: Record<string, string>; provider?: string };
   /** editor the chat runs in (Visual Studio Code, Cursor…) */
@@ -333,7 +336,7 @@ export class ChatSession {
       title: opts.title ?? 'New chat',
       models: [],
       permissionMode: opts.prefs?.permissionMode ?? opts.permissionMode ?? 'default',
-      model: opts.prefs?.model,
+      model: opts.prefs?.model ?? opts.history?.model ?? opts.model,
       effort: opts.prefs?.effort,
       fastMode: !!opts.prefs?.fastMode,
       ultracode: !!opts.prefs?.ultracode,

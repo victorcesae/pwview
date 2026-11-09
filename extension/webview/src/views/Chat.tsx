@@ -589,7 +589,6 @@ function AgentAvatar() {
   return (
     <span className="relative mt-0.5 inline-flex h-5 shrink-0 self-start" title={`${vendorName(vendor)}${model ? ' · ' + model : ''}${host ? ' · ' + hostName(host) : ''}`}>
       <VendorMark vendor={vendor} className="size-5 rounded-md text-[9px]" />
-      {host && <HostMark host={host} icon={hostIcon} className="ring-background absolute -right-1.5 -bottom-1 size-3 rounded-[3px] text-[5px] ring-2" />}
     </span>
   );
 }
@@ -598,6 +597,8 @@ function AgentAvatar() {
 
 export function ChatView({ data }: { data: ChatData }) {
   const { chat, linked } = data;
+  // until Claude Code reports the model, a Claude account (no gateway) is Claude
+  const shownModel = chat.model ?? (chat.account.gateway ? undefined : 'claude');
   const end = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -681,14 +682,14 @@ export function ChatView({ data }: { data: ChatData }) {
 
   return (
     <LightboxProvider>
-    <AgentCtx.Provider value={{ model: chat.model, host: chat.host, hostIcon: chat.hostIcon }}>
+    <AgentCtx.Provider value={{ model: shownModel, host: chat.host, hostIcon: chat.hostIcon }}>
     <div className="flex h-screen flex-col">
       <header className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
         <StateDot state={working ? 'working' : chat.status === 'idle' ? 'recent' : 'idle'} />
-        <span className="inline-flex items-center gap-0.5" title={`${hostName(chat.host)}${chat.host ? ' + ' : ''}${vendorName(vendorOf(chat.model))}${chat.model ? ' · ' + chat.model : ''}`}>
+        <span className="inline-flex items-center gap-0.5" title={`${hostName(chat.host)}${chat.host ? ' + ' : ''}${vendorName(vendorOf(shownModel))}${chat.model ? ' · ' + chat.model : ''}`}>
           <HostMark host={chat.host} icon={chat.hostIcon} />
           {chat.host && <span className="text-muted-foreground text-[10px]">+</span>}
-          <VendorMark vendor={vendorOf(chat.model)} />
+          <VendorMark vendor={vendorOf(shownModel)} />
         </span>
         <h1 className="min-w-0 flex-1 truncate text-[14px] font-semibold">{chat.title}</h1>
         {chat.status === 'starting' && (

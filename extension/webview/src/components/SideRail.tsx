@@ -2,7 +2,7 @@
 // changed grouped by project (one chat can touch several repos), and the PRs it opened.
 import { useMemo } from 'react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
-import { FileDiff, GitPullRequest } from 'lucide-react';
+import { FileDiff, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react';
 import { post } from '@/bridge';
 import { t } from '@/i18n';
 import { ContextPanel } from '@/components/ContextPanel';
@@ -21,7 +21,7 @@ function Pop({ label, icon, count, children }: { label: string; icon: React.Reac
         </button>
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
-        <PopoverPrimitive.Content side="left" align="start" sideOffset={8} className="bg-popover text-popover-foreground animate-in fade-in-0 zoom-in-95 z-50 max-h-[70vh] w-[22rem] overflow-y-auto rounded-xl border p-3 shadow-xl">
+        <PopoverPrimitive.Content side="left" align="start" sideOffset={8} className="bg-popover text-popover-foreground animate-in fade-in-0 zoom-in-95 z-50 max-h-[70vh] w-[min(30rem,calc(100vw-5rem))] overflow-y-auto rounded-xl border p-3 shadow-xl">
           <div className="mb-2 font-semibold">{label}</div>
           {children}
         </PopoverPrimitive.Content>
@@ -29,6 +29,15 @@ function Pop({ label, icon, count, children }: { label: string; icon: React.Reac
     </PopoverPrimitive.Root>
   );
 }
+
+type PrState = NonNullable<ChatState['prs']>[string]['state'];
+const PR_LOOK: Record<PrState, { icon: typeof GitPullRequest; color: string; label: string }> = {
+  open: { icon: GitPullRequest, color: 'var(--recent)', label: 'Open' },
+  draft: { icon: GitPullRequestDraft, color: 'var(--muted-foreground)', label: 'Draft' },
+  merged: { icon: GitMerge, color: '#a371f7', label: 'Merged' },
+  closed: { icon: GitPullRequestClosed, color: 'var(--removed)', label: 'Closed' },
+  unknown: { icon: GitPullRequest, color: 'var(--muted-foreground)', label: 'Status unknown' },
+};
 
 export function SideRail({ chat }: { chat: ChatState }) {
   const prs = useMemo(() => findPRs(chat.items as never), [chat.items]);
@@ -79,14 +88,37 @@ export function SideRail({ chat }: { chat: ChatState }) {
       )}
 
       {prs.length > 0 && (
-        <Pop label={t('Pull requests')} icon={<GitPullRequest className="size-4" />} count={prs.length}>
+        <Pop
+          label={t('Pull requests')}
+          icon={(() => {
+            // the newest PR's state
+            const L = PR_LOOK[chat.prs?.[prs.at(-1)!.url]?.state ?? 'unknown'];
+            return <L.icon className="size-4" style={{ color: L.color }} />;
+          })()}
+          count={prs.length}
+        >
           <ul className="flex flex-col">
             {prs.map((pr) => (
               <li key={pr.url}>
-                <a href={pr.url} className="hover:bg-accent flex items-center gap-2 rounded px-1.5 py-1 text-[12px]" title={pr.url}>
-                  <GitPullRequest className="text-recent size-3.5 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{pr.label}</span>
-                </a>
+                {(() => {
+                  const st = chat.prs?.[pr.url];
+                  const L = PR_LOOK[st?.state ?? 'unknown'];
+                  return (
+                    <a href={pr.url} className="hover:bg-accent flex items-center gap-2 rounded px-1.5 py-1 text-[12px]" title={`${pr.url}
+${t(L.label)}`}>
+                      <L.icon className="size-3.5 shrink-0" style={{ color: L.color }} aria-label={t(L.label)} />
+                      <span className="min-w-0 flex-1 truncate">
+                        {pr.label}
+                        {st?.title && <span className="text-muted-foreground"> · {st.title}</span>}
+                      </span>
+                      {st && st.state !== 'unknown' && (
+                        <span className="rounded px-1.5 text-[10.5px] font-medium" style={{ color: L.color, background: `color-mix(in srgb, ${L.color} 14%, transparent)` }}>
+                          {t(L.label)}
+                        </span>
+                      )}
+                    </a>
+                  );
+                })()}
               </li>
             ))}
           </ul>

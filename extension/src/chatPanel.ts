@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import { ChatSession, historyFromTranscript, Priority, type ChatPrefs } from './chat';
 import { hostIcon } from './hostIcon';
+import { findPrUrls, PrTracker } from './prs';
 import { openUrl } from './browser';
 import { vendorOf } from './providers';
 import type { Session } from './engine';
@@ -44,9 +45,17 @@ interface Open {
   vendor?: string;
   /** last settings saved for its session */
   saved?: string;
+  /** PR links seen in this chat */
+  prUrls?: Set<string>;
 }
 
+/** PR links in an item's text (answers, tool output). */
+const itemPrUrls = (it: any): string[] => findPrUrls(`${it.text ?? ''}
+${it.result ?? ''}`);
+
 export class Chats {
+  /** live status of the PRs the chats' agents opened */
+  private prs = new PrTracker(() => this.refresh());
   private open: Open[] = [];
 
   constructor(
@@ -159,10 +168,17 @@ export class Chats {
       return { id, title: x?.info.title ?? id.slice(0, 8), state: x?.info.state ?? 'idle', activity: x?.t.events.at(-1)?.text?.slice(0, 120) };
     });
     const { items, ...rest } = s;
+    const prsOf = (list: typeof items) => {
+      o.prUrls ??= new Set();
+      const fresh = list.flatMap(itemPrUrls).filter((u) => !o.prUrls!.has(u));
+      for (const u of fresh) o.prUrls.add(u);
+      if (fresh.length) this.prs.track(fresh);
+      return Object.fromEntries([...o.prUrls].map((u) => [u, this.prs.get(u) ?? { state: 'unknown', checked: 0 }]));
+    };
     if (!o.sent) {
       // first paint: the whole conversation once
       o.sent = { items: new Map(items.map((it) => [it.id, JSON.stringify(it)])), order: items.map((it) => it.id) };
-      o.panel.webview.postMessage({ type: 'data', data: { view: 'chat', chat: s, linked: linkedInfo } });
+      o.panel.webview.postMessage({ type: 'data', data: { view: 'chat', chat: { ...s, prs: prsOf(items) }, linked: linkedInfo } });
       return;
     }
     // afterwards only items that are new or changed. Old finished items don't change, so only the
@@ -180,7 +196,7 @@ export class Chats {
     const order = items.map((it) => it.id);
     const orderChanged = order.length !== o.sent.order.length || order.some((id, i) => id !== o.sent!.order[i]);
     if (orderChanged) o.sent.order = order;
-    o.panel.webview.postMessage({ type: 'chatPatch', chat: rest, upserts, order: orderChanged ? order : undefined, linked: linkedInfo });
+    o.panel.webview.postMessage({ type: 'chatPatch', chat: { ...rest, prs: prsOf(upserts) }, upserts, order: orderChanged ? order : undefined, linked: linkedInfo });
   }
 
   private async onMessage(o: Open, m: FromChat) {
