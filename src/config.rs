@@ -124,7 +124,9 @@ resolution = "1920x1080x24"
 window_manager = true   # run fluxbox if installed, so windows can be moved/resized
 
 [browser]
-# executable = "/usr/bin/google-chrome"   # default: Chromium installed by the project's Playwright
+# executable = "chrome"   # your installed Google Chrome; "msedge" for Edge; "default" for this
+#                          # computer's default browser (if Chromium-based); or a full path
+#                          # default: Playwright's Chromium, else the installed Google Chrome
 start_url = "about:blank"
 args = []               # e.g. ["--no-sandbox"] inside containers
 

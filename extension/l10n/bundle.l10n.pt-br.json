@@ -19,5 +19,20 @@
   "Start a chat with it": "Iniciar um chat com ele",
   "Provider \"{0}\" added.": "Provedor \"{0}\" adicionado.",
   "Add model provider (Ollama, OpenRouter, LiteLLM…)": "Adicionar provedor de modelos (Ollama, OpenRouter, LiteLLM…)",
-  "Add MCP servers under \"mcpServers\" (shared with the team). Personal ones: run \"claude mcp add\" in a terminal. Start a new chat to load changes.": "Adicione servidores MCP em \"mcpServers\" (compartilhado com o time). Pessoais: rode \"claude mcp add\" em um terminal. Abra um novo chat para carregar as mudanças."
+  "Add MCP servers under \"mcpServers\" (shared with the team). Personal ones: run \"claude mcp add\" in a terminal. Start a new chat to load changes.": "Adicione servidores MCP em \"mcpServers\" (compartilhado com o time). Pessoais: rode \"claude mcp add\" em um terminal. Abra um novo chat para carregar as mudanças.",
+  "AgentLens: {0} was not found, so the link opens in your default browser.": "AgentLens: {0} não foi encontrado; o link abre no seu navegador padrão.",
+  "My rules": "Minhas regras",
+  "Project rules": "Regras do projeto",
+  "none yet": "nenhuma ainda",
+  "create": "criar",
+  "Rules every agent follows in every project": "Regras que todo agente segue em todos os projetos",
+  "Rules agents follow in this project": "Regras que os agentes seguem neste projeto",
+  "Your rules · every project · Claude Code": "Suas regras · todos os projetos · Claude Code",
+  "Project rules · shared with the team (commit it)": "Regras do projeto · compartilhadas com o time (faça commit)",
+  "Your rules for this project · not committed": "Suas regras para este projeto · fora do git",
+  "Read by Codex, Cursor and other agents": "Lido pelo Codex, Cursor e outros agentes",
+  "Project rules (alternate location)": "Regras do projeto (local alternativo)",
+  "Cursor rule": "Regra do Cursor",
+  "Open a folder to edit its project rules.": "Abra uma pasta para editar as regras do projeto.",
+  "Project rules · {0}": "Regras do projeto · {0}"
 }

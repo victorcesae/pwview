@@ -93,8 +93,79 @@ fn npx() -> Result<PathBuf> {
 
 const RESOLVE_CHROMIUM_JS: &str = "for (const m of ['playwright-core','playwright','@playwright/test']) { try { const p = require(m).chromium.executablePath(); if (p) { console.log(p); process.exit(0); } } catch (e) {} } process.exit(3);";
 
+/// Where Google Chrome / Microsoft Edge are installed, for `executable = "chrome"` / `"msedge"`.
+fn installed_browser(name: &str) -> Option<PathBuf> {
+    let name = name.to_ascii_lowercase();
+    let chrome = matches!(name.as_str(), "chrome" | "google-chrome" | "chrome-stable");
+    let edge = matches!(name.as_str(), "msedge" | "edge" | "microsoft-edge");
+    if !chrome && !edge {
+        return None;
+    }
+    let mut c: Vec<PathBuf> = vec![];
+    if cfg!(windows) {
+        let rel = if chrome { r"Google\Chrome\Application\chrome.exe" } else { r"Microsoft\Edge\Application\msedge.exe" };
+        for var in ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"] {
+            if let Ok(base) = std::env::var(var) {
+                c.push(PathBuf::from(base).join(rel));
+            }
+        }
+    } else if cfg!(target_os = "macos") {
+        c.push(PathBuf::from(if chrome {
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        } else {
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+        }));
+    } else {
+        let names: &[&str] = if chrome { &["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"] } else { &["microsoft-edge", "microsoft-edge-stable"] };
+        for n in names {
+            if let Some(p) = sys::which(n) {
+                c.push(p);
+            }
+        }
+    }
+    c.into_iter().find(|p| p.is_file())
+}
+
+/// The computer's default web browser, as "chrome" / "msedge", when it is one pwview can drive
+/// (Chromium-based, over CDP). Firefox, Safari and others give None.
+fn default_browser() -> Option<&'static str> {
+    let out = if cfg!(windows) {
+        Command::new("reg")
+            .args([
+                "query",
+                r"HKCU\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice",
+                "/v",
+                "ProgId",
+            ])
+            .output()
+            .ok()?
+    } else if cfg!(target_os = "macos") {
+        return None;
+    } else {
+        Command::new("xdg-settings").args(["get", "default-web-browser"]).output().ok()?
+    };
+    let s = String::from_utf8_lossy(&out.stdout).to_ascii_lowercase();
+    if s.contains("chrome") || s.contains("chromium") {
+        Some("chrome")
+    } else if s.contains("msedge") || s.contains("microsoft-edge") {
+        Some("msedge")
+    } else {
+        None
+    }
+}
+
 fn chromium(ctx: &Ctx) -> Result<PathBuf> {
     if let Some(exe) = &ctx.cfg.browser.executable {
+        if exe.eq_ignore_ascii_case("default") {
+            return default_browser()
+                .and_then(installed_browser)
+                .or_else(|| installed_browser("chrome"))
+                .or_else(|| installed_browser("msedge"))
+                .context("browser.executable = \"default\": the default browser is not Chromium-based (pwview drives Chrome/Edge/Chromium) and neither Chrome nor Edge is installed");
+        }
+        if let Some(p) = installed_browser(exe) {
+            return Ok(p);
+        }
         return sys::which(exe)
             .or_else(|| Some(PathBuf::from(exe)).filter(|p| p.is_file()))
             .with_context(|| format!("browser.executable not found: {exe}"));
@@ -105,6 +176,10 @@ fn chromium(ctx: &Ctx) -> Result<PathBuf> {
         .current_dir(&ctx.root)
         .output()?;
     if !out.status.success() {
+        // no Playwright here: use an installed Google Chrome rather than failing
+        if let Some(p) = installed_browser("chrome") {
+            return Ok(p);
+        }
         bail!(
             "Playwright is not installed in {} (npm i -D @playwright/test)",
             ctx.root.display()
@@ -208,8 +283,8 @@ pub fn doctor(ctx: &Ctx) -> Result<i32> {
     let n = sys::which("npx");
     line(n.is_some(), "npx", n.map(|p| p.display().to_string()).unwrap_or("comes with Node.js".into()));
     match chromium(ctx) {
-        Ok(p) => line(true, "playwright chromium", p.display().to_string()),
-        Err(e) => line(false, "playwright chromium", format!("{e:#}")),
+        Ok(p) => line(true, "browser", p.display().to_string()),
+        Err(e) => line(false, "browser", format!("{e:#}")),
     }
     let mcp_ok = ctx.root.join(".mcp.json").is_file();
     line(mcp_ok, ".mcp.json", if mcp_ok { "Claude Code -> pwview mcp".into() } else { "run `pwview init` to register the MCP server".into() });

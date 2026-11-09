@@ -3,7 +3,8 @@
 import { Blocks, Bot, ListOrdered, Navigation, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, Square, SquareSlash, Zap, Gauge, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger, Switch } from '@/components/ui/dropdown-menu';
 import { Zoomable } from '@/components/Lightbox';
-import { ContextPanel } from '@/components/ContextPanel';
+import { UsagePanel } from '@/components/UsagePanel';
+import { prettyModel } from '@/views/toolSummary';
 import { useEffect, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
 import { RichInput, type RichInputHandle } from '@/components/RichInput';
@@ -29,6 +30,7 @@ const MODES: { value: PermissionMode; label: string; hint: string }[] = [
   { value: 'bypassPermissions', label: 'Bypass permissions', hint: 'Never asks. Use with care' },
 ];
 const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+const EFFORT_LABEL: Record<Effort, string> = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' };
 
 type Img = { data: string; mime: string };
 const readImage = (f: File) =>
@@ -280,7 +282,7 @@ export function Composer({ chat }: { chat: ChatState }) {
             </SelectTrigger>
             <SelectContent>
               <SelectLabel>{t('Model')}</SelectLabel>
-              {!model && <SelectItem value="__current">{chat.model ?? t('Default model')}</SelectItem>}
+              {!model && <SelectItem value="__current">{prettyModel(chat.model) ?? t('Default model')}</SelectItem>}
               {chat.models.map((m) => (
                 <SelectItem key={m.value} value={m.value}>
                   {m.displayName}
@@ -300,7 +302,7 @@ export function Composer({ chat }: { chat: ChatState }) {
             {!chat.effort && <SelectItem value="__default">{t('Default')}</SelectItem>}
             {EFFORTS.map((e) => (
               <SelectItem key={e} value={e}>
-                {e}
+                {t(EFFORT_LABEL[e])}
               </SelectItem>
             ))}
           </SelectContent>
@@ -326,9 +328,7 @@ export function Composer({ chat }: { chat: ChatState }) {
         </button>
 
         <div className="ml-auto flex items-center gap-1.5">
-          <ContextPanel chat={chat}>
-            <ContextRing chat={chat} />
-          </ContextPanel>
+          <UsagePanel chat={chat} />
           {working && (
             <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
               <SelectTrigger aria-label="Delivery" title={P.hint}>

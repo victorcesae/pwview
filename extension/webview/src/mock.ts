@@ -201,3 +201,43 @@ export function longChat(): Data {
   }
   return { view: 'chat', linked: [], chat: { ...base, status: 'idle', activity: undefined, queue: [], items, earlier: 1240 } };
 }
+
+// plan usage, like Claude's /usage
+const limits = {
+  available: true, plan: 'max', source: 'claude' as const,
+  windows: [
+    { id: 'five_hour', label: 'Current session (5h)', pct: 42, resetsAt: new Date(Date.now() + 2.6 * 3_600_000).toISOString() },
+    { id: 'seven_day', label: 'Weekly · all models', pct: 23, resetsAt: new Date(Date.now() + 3.2 * 86_400_000).toISOString() },
+    { id: 'seven_day_opus', label: 'Weekly · Opus', pct: 61, resetsAt: new Date(Date.now() + 3.2 * 86_400_000).toISOString() },
+  ],
+  extra: { used: 3.4, limit: 50, currency: 'USD', label: 'Extra usage this month' },
+};
+(chat as Extract<Data, { view: 'chat' }>).chat.limits = limits;
+
+/** #multi: one prompt that changes three projects (web app, API, shared UI library) and opens PRs. */
+export function multiChat(): Data {
+  const base = (chat as Extract<Data, { view: 'chat' }>).chat;
+  const W = '/home/victor/intranet-v5';
+  const A = '/home/victor/api-gateway';
+  const U = '/home/victor/shared-ui';
+  const hunk = (old: string[], neu: string[], at = 12) => [{ oldStart: at, oldLines: old.length + 1, newStart: at, newLines: neu.length + 1, lines: [' export function handler() {', ...old.map((l) => '-' + l), ...neu.map((l) => '+' + l)] }];
+  const edit = (id: string, file: string, old: string[], neu: string[]) => ({ kind: 'tool' as const, id, name: 'Edit', summary: file, file, input: { file_path: file }, status: 'done' as const, patch: hunk(old, neu) });
+  const items: typeof base.items = [
+    { kind: 'user', id: 'm-u1', text: 'Rename the "status" field of quotes to "approvalStatus" everywhere: the web app, the API gateway and the shared UI badge. Open one PR per repo.', images: [], ts: t(12) },
+    { kind: 'assistant', id: 'm-a1', text: "This touches three repos. I'll change the API contract first, then the shared badge, then the web app, and open a PR in each." },
+    { kind: 'tool', id: 'm-g1', name: 'Grep', summary: '"status"  in ../api-gateway, ../shared-ui, .', input: {}, status: 'done', result: `${A}/src/quotes/dto.ts:8\n${U}/src/QuoteBadge.tsx:3\n${W}/apps/web/app/sales/quotes/page.tsx:41` },
+    edit('m-e1', `${A}/src/quotes/dto.ts`, ['  status: QuoteStatus;'], ['  approvalStatus: QuoteStatus;']),
+    edit('m-e2', `${A}/src/quotes/quotes.controller.ts`, ['  return { ...q, status: q.status };'], ['  return { ...q, approvalStatus: q.status };']),
+    { kind: 'tool', id: 'm-b1', name: 'Bash', summary: 'cd ../api-gateway && pnpm test quotes', input: { command: 'cd ../api-gateway && pnpm test quotes' }, status: 'done', result: ' ✓ quotes.controller.spec.ts (6 tests) 412ms\n\n Test Files  1 passed (1)' },
+    edit('m-e3', `${U}/src/QuoteBadge.tsx`, ['export function QuoteBadge({ status }: Props) {'], ['export function QuoteBadge({ approvalStatus }: Props) {']),
+    edit('m-e4', `${U}/src/index.ts`, ["export type { Props as QuoteBadgeProps } from './QuoteBadge';"], ["export type { Props as QuoteBadgeProps } from './QuoteBadge';", "export const QUOTE_BADGE_V = 2;"]),
+    edit('m-e5', `${W}/apps/web/app/sales/quotes/page.tsx`, ['        <QuoteBadge status={q.status} />'], ['        <QuoteBadge approvalStatus={q.approvalStatus} />']),
+    edit('m-e6', `${W}/apps/web/lib/api/quotes.ts`, ['  status: string;'], ['  approvalStatus: string;']),
+    edit('m-e7', `${W}/apps/web/app/sales/quotes/[id]/page.tsx`, ['  const label = labels[quote.status];'], ['  const label = labels[quote.approvalStatus];']),
+    { kind: 'tool', id: 'm-b2', name: 'Bash', summary: 'cd ../api-gateway && gh pr create --fill', input: { command: 'cd ../api-gateway && gh pr create --title "Rename quote status to approvalStatus" --fill' }, status: 'done', result: 'https://github.com/nzero-labs/api-gateway/pull/214' },
+    { kind: 'tool', id: 'm-b3', name: 'Bash', summary: 'cd ../shared-ui && gh pr create --fill', input: { command: 'cd ../shared-ui && gh pr create --fill' }, status: 'done', result: 'https://github.com/nzero-labs/shared-ui/pull/57' },
+    { kind: 'tool', id: 'm-b4', name: 'Bash', summary: 'gh pr create --fill', input: { command: 'gh pr create --fill' }, status: 'done', result: 'https://github.com/NZero-Labs/intranet-v5/pull/1288' },
+    { kind: 'assistant', id: 'm-a2', text: 'Done. **7 files in 3 repos** now use `approvalStatus`:\n\n| Repo | Files | PR |\n|---|---|---|\n| api-gateway | 2 | [#214](https://github.com/nzero-labs/api-gateway/pull/214) |\n| shared-ui | 2 | [#57](https://github.com/nzero-labs/shared-ui/pull/57) |\n| intranet-v5 | 3 | [#1288](https://github.com/NZero-Labs/intranet-v5/pull/1288) |\n\nMerge them in that order: the web app needs the new badge and API field.' },
+  ];
+  return { view: 'chat', linked: [], chat: { ...base, cwd: W, title: 'Rename quote status across repos', status: 'idle', activity: undefined, queue: [], todos: [], items, limits } };
+}

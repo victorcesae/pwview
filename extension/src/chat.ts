@@ -50,7 +50,68 @@ export interface ChatState {
   /** Which Claude account this session runs on (name from AgentLens, details from Claude Code). */
   account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string };
   host?: string;
+  /** the editor's own icon (data: URI) */
+  hostIcon?: string;
+  /** Subscription limits (Claude plan windows, or a provider key's credit), for the ring by the input. */
+  limits?: Limits;
   error?: string;
+}
+
+export interface LimitWindow {
+  id: string;
+  label: string;
+  /** 0-100 */
+  pct: number;
+  resetsAt?: string;
+}
+export interface Limits {
+  /** false: no plan limits apply (API key, Bedrock, Vertex, a gateway without a usage API) */
+  available: boolean;
+  plan?: string;
+  windows: LimitWindow[];
+  /** pay-as-you-go credit on top of the plan, or a provider key's spend */
+  extra?: { used: number; limit?: number; currency?: string; label: string };
+  source: 'claude' | 'openrouter' | 'none';
+}
+
+const WINDOW_LABEL: Record<string, string> = {
+  five_hour: 'Current session (5h)',
+  seven_day: 'Weekly · all models',
+  seven_day_opus: 'Weekly · Opus',
+  seven_day_sonnet: 'Weekly · Sonnet',
+  seven_day_oauth_apps: 'Weekly · apps',
+};
+
+/** Turns the SDK's /usage answer into display windows. */
+export function limitsFromUsage(u: any): Limits {
+  const rl = u?.rate_limits;
+  if (!u?.rate_limits_available || !rl) return { available: false, plan: u?.subscription_type ?? undefined, windows: [], source: 'none' };
+  const windows: LimitWindow[] = [];
+  for (const id of Object.keys(WINDOW_LABEL)) {
+    const w = rl[id];
+    if (w && typeof w.utilization === 'number') windows.push({ id, label: WINDOW_LABEL[id], pct: w.utilization, resetsAt: w.resets_at ?? undefined });
+  }
+  for (const m of rl.model_scoped ?? []) if (typeof m.utilization === 'number') windows.push({ id: 'model:' + m.display_name, label: 'Weekly · ' + m.display_name, pct: m.utilization, resetsAt: m.resets_at ?? undefined });
+  const x = rl.extra_usage;
+  const extra = x?.is_enabled && typeof x.used_credits === 'number' ? { used: x.used_credits, limit: x.monthly_limit ?? undefined, currency: x.currency ?? undefined, label: 'Extra usage this month' } : undefined;
+  return { available: true, plan: u.subscription_type ?? undefined, windows, extra, source: 'claude' };
+}
+
+/** OpenRouter keys report their own spend and limit (documented GET /api/v1/key). */
+export async function openRouterLimits(env: Record<string, string | undefined>): Promise<Limits | undefined> {
+  const base = env.ANTHROPIC_BASE_URL ?? '';
+  const key = env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY;
+  if (!/openrouter\.ai/i.test(base) || !key) return undefined;
+  const r = await fetch('https://openrouter.ai/api/v1/key', { headers: { Authorization: 'Bearer ' + key } });
+  if (!r.ok) return undefined;
+  const d: any = ((await r.json()) as any)?.data ?? {};
+  const limit = typeof d.limit === 'number' ? d.limit : undefined;
+  return {
+    available: true,
+    windows: limit ? [{ id: 'credit', label: 'Key credit', pct: Math.min(100, ((d.usage ?? 0) / limit) * 100), resetsAt: undefined }] : [],
+    extra: { used: d.usage ?? 0, limit, currency: 'USD', label: 'OpenRouter spend' },
+    source: 'openrouter',
+  };
 }
 
 type Img = { data: string; mime: string };
@@ -233,6 +294,7 @@ export interface ChatOptions {
   account?: { name: string; env: Record<string, string>; provider?: string };
   /** editor the chat runs in (Visual Studio Code, Cursor…) */
   host?: string;
+  hostIcon?: string;
 }
 
 export class ChatSession {
@@ -272,6 +334,7 @@ export class ChatSession {
       costUsd: 0,
       account: { name: opts.account?.name ?? 'Default', gateway: opts.account?.provider },
       host: opts.host,
+      hostIcon: opts.hostIcon,
     };
   }
 
@@ -315,6 +378,7 @@ export class ChatSession {
       this.state.context = { used: u.totalTokens, max: u.maxTokens, percentage: u.percentage, categories: toCategories(u) };
       this.changed();
     }).catch(() => {});
+    this.refreshLimits(true);
     this.q
       .accountInfo()
       .then((a: any) => {
@@ -384,6 +448,21 @@ export class ChatSession {
     if (!steers.length) return;
     this.queued = this.queued.filter((m) => m.priority !== 'next');
     for (const m of steers) this.push(m.text, m.images, 'next');
+  }
+
+  private limitsAt = 0;
+  /** Plan usage (5-hour / weekly windows), at most once a minute unless forced. */
+  refreshLimits(force = false) {
+    if (!this.q || (!force && Date.now() - this.limitsAt < 60_000)) return;
+    this.limitsAt = Date.now();
+    const env = { ...process.env, ...(this.opts.account?.env ?? {}) };
+    openRouterLimits(env)
+      .then(async (or) => or ?? limitsFromUsage(await (this.q as any).usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true })))
+      .then((l) => {
+        this.state.limits = l;
+        this.changed();
+      })
+      .catch(() => {});
   }
 
   /** Load older history (one page, or everything with all=true, e.g. to search it). */
@@ -619,6 +698,15 @@ export class ChatSession {
         }
         break;
       }
+      case 'rate_limit_event' as any: {
+        const info: any = (m as any).rate_limit_info ?? {};
+        const w = this.state.limits?.windows.find((x) => x.id === info.rateLimitType);
+        if (w && typeof info.utilization === 'number') {
+          w.pct = info.utilization <= 1 ? info.utilization * 100 : info.utilization;
+          if (info.resetsAt) w.resetsAt = new Date(info.resetsAt * 1000).toISOString();
+        } else this.refreshLimits(true);
+        break;
+      }
       case 'stream_event': {
         const e: any = m.event;
         const key = parent ?? '';
@@ -703,6 +791,7 @@ export class ChatSession {
         for (const it of this.state.items) if (it.kind === 'tool' && it.status === 'running' && !it.parent) it.status = 'done';
         this.state.status = 'idle';
         this.state.activity = undefined;
+        this.refreshLimits();
         this.q
           ?.getContextUsage({ detail: 'summary' })
           .then((u: any) => {

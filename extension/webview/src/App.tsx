@@ -8,7 +8,7 @@ import { SessionView } from './views/Session';
 import { ChatView } from './views/Chat';
 
 export function App() {
-  const [data, setData] = useState<Data | undefined>(inVsCode ? undefined : location.hash === '#long' ? mock.longChat() : location.hash === '#chat' ? mock.chat : mock.overview);
+  const [data, setData] = useState<Data | undefined>(inVsCode ? undefined : location.hash === '#multi' ? mock.multiChat() : location.hash === '#long' ? mock.longChat() : location.hash === '#chat' ? mock.chat : mock.overview);
   const [toast, setToast] = useState<string>();
 
   useEffect(() => {
@@ -21,6 +21,18 @@ export function App() {
     };
     window.addEventListener('message', onToast);
     return () => window.removeEventListener('message', onToast);
+  }, []);
+
+  useEffect(() => {
+    if (!inVsCode) return;
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!a || !/^https?:/i.test(a.href)) return;
+      e.preventDefault();
+      post({ type: 'openUrl', url: a.href } as never);
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
   }, []);
 
   useEffect(() => {

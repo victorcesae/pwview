@@ -60,10 +60,12 @@ export function VendorMark({ vendor, className, title }: { vendor: Vendor; class
 }
 
 /** The editor the agent runs in (VS Code, Cursor, Windsurf…). */
-export function HostMark({ host, className }: { host?: string; className?: string }) {
+export function HostMark({ host, icon, className }: { host?: string; icon?: string; className?: string }) {
   if (!host) return null;
   const h = host.toLowerCase();
   const label = h.includes('cursor') ? 'Cursor' : h.includes('windsurf') ? 'Windsurf' : h.includes('codium') ? 'VSCodium' : 'VS Code';
+  // the editor's own app icon, read from its install
+  if (icon) return <img src={icon} alt={label} title={label} className={cn('inline-block size-4 shrink-0 rounded-[3px] object-contain', className)} />;
   const style = h.includes('cursor')
     ? { background: '#000', color: '#fff', text: 'Cu' }
     : h.includes('windsurf')

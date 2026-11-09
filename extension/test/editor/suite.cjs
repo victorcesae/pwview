@@ -50,7 +50,7 @@ async function run() {
     await vscode.commands.executeCommand('agentlens.newChat');
     await wait(2500);
     const tabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs).map((t) => t.label);
-    assert.ok(tabs.some((t) => t.includes('✦')), `tabs: ${tabs.join(', ')}`);
+    assert.ok(vscode.window.tabGroups.all.flatMap((g) => g.tabs).some((t) => t.input?.viewType?.endsWith('agentlens.chat')), `tabs: ${tabs.join(', ')}`);
   });
   await check('check setup runs', async () => {
     await vscode.commands.executeCommand('agentlens.refresh');

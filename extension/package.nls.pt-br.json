@@ -61,5 +61,12 @@
   "cmd.claude.accounts": "Contas Claude…",
   "cmd.add.model.provider.ollama.openrouter.litellm": "Adicionar provedor de modelos (Ollama, OpenRouter, LiteLLM…)…",
   "setting.hide.sessions.that.ran.inside.the.system.temp.folder.scratch": "Ocultar sessões que rodaram na pasta temporária do sistema (testes e execuções descartáveis).",
-  "cmd.manage.connectors.mcp": "Gerenciar conectores (MCP)"
+  "cmd.manage.connectors.mcp": "Gerenciar conectores (MCP)",
+  "setting.browser": "Navegador para os links que o AgentLens abre (pull requests, docs, o visualizador do pwview). No Remote-SSH os links sempre abrem no seu computador, no navegador padrão.",
+  "setting.browser.default": "O navegador padrão deste computador",
+  "setting.browser.custom": "O executável em agentlens.browserPath",
+  "setting.browserPath": "Executável do navegador usado quando agentlens.browser é \"custom\" (caminho completo ou nome no PATH, ex.: brave).",
+  "cmd.edit.my.rules": "Editar minhas regras (todos os projetos)",
+  "cmd.edit.project.rules": "Editar regras do projeto",
+  "cmd.open.rules": "Abrir arquivo de regras"
 }

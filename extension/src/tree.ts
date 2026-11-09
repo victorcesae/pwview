@@ -1,7 +1,9 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AgentInfo, Change, Engine, HotFile, Session, State } from './engine';
 import { norm } from './paths';
+import { projectRules, userRules, type RuleFile } from './rules';
 import { listAccounts } from './accounts';
 import { modelLabel } from './pricing';
 import { vendorOf } from './providers';
@@ -15,7 +17,50 @@ export type Node =
   | { kind: 'session'; s: Session; via?: string }
   | { kind: 'agent'; s: Session; a: AgentInfo; via?: string }
   | { kind: 'changes'; s: Session; agentId?: string; list: Change[]; via?: string }
-  | { kind: 'change'; s: Session; c: Change; via?: string };
+  | { kind: 'change'; s: Session; c: Change; via?: string }
+  /** the project's folders and files, like the Explorer; files agents changed are marked */
+  | { kind: 'rules'; scope: 'user' | 'project'; root?: string }
+  | { kind: 'rule'; scope: 'user' | 'project'; r: RuleFile }
+  | { kind: 'files'; root: string; s?: Session; sessions: Session[]; via?: string }
+  | { kind: 'fs'; path: string; dir: boolean; root: string; s?: Session; sessions: Session[]; via?: string };
+
+// Names hidden by the user's files.exclude (a "**/.git" pattern hides ".git").
+function excluded(): Set<string> {
+  const ex = vscode.workspace.getConfiguration('files').get<Record<string, boolean>>('exclude') ?? {};
+  return new Set(Object.entries(ex).filter(([, on]) => on === true).map(([g]) => g.replace(/^\*\*\//, '')).filter((g) => !/[*?{[]/.test(g)));
+}
+
+/** Per changed file: edits and lines, from the given sessions (and their sub-agents). */
+export function changedFiles(sessions: Session[]): Map<string, { added: number; removed: number; edits: number }> {
+  const out = new Map<string, { added: number; removed: number; edits: number }>();
+  for (const s of sessions)
+    for (const c of [...s.t.changes, ...s.agents.flatMap((a) => a.t.changes)]) {
+      const k = norm(c.file);
+      const e = out.get(k) ?? { added: 0, removed: 0, edits: 0 };
+      e.added += c.added;
+      e.removed += c.removed;
+      e.edits++;
+      out.set(k, e);
+    }
+  return out;
+}
+
+const MAX_ENTRIES = 2000;
+
+/** One folder's entries: folders first, then files, by name; hidden ones left out. */
+export function listDir(dir: string, hide: Set<string>): { path: string; dir: boolean }[] {
+  let entries: fs.Dirent[] = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((e) => !hide.has(e.name))
+    .map((e) => ({ path: path.join(dir, e.name), dir: e.isDirectory() }))
+    .sort((a, b) => Number(b.dir) - Number(a.dir) || path.basename(a.path).localeCompare(path.basename(b.path)))
+    .slice(0, MAX_ENTRIES);
+}
 
 /** media/vendors/<vendor>.svg, set by the extension at activation. */
 let mediaRoot: vscode.Uri | undefined;
@@ -56,6 +101,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         out.push({ kind: 'hint', text: h === 'some' ? 'Update hooks to enable steering & send now' : 'Enable messages to agents (steer, queue, send now)', command: 'agentlens.installHooks', icon: 'warning' });
       const hot = Engine.hotFiles(sessions);
       if (hot.length) out.push({ kind: 'hot', files: hot });
+      out.push({ kind: 'rules', scope: 'user' });
       const roots = this.workspaceRoots();
       const byProject = new Map<string, Session[]>();
       for (const s of sessions) (byProject.get(s.info.project) ?? byProject.set(s.info.project, []).get(s.info.project)!).push(s);
@@ -75,13 +121,27 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         return node.files.map((hot) => ({ kind: 'hotfile', hot }));
       case 'hotfile':
         return sessions.filter((s) => node.hot.sessions.includes(s.info.id)).map((s) => ({ kind: 'session', s, via: `hot:${node.hot.file}` }));
-      case 'project':
-        return node.sessions.map((s) => ({ kind: 'session', s }));
+      case 'project': {
+        const files: Node[] = fs.existsSync(node.path) ? [{ kind: 'files', root: node.path, sessions: node.sessions }] : [];
+        const rules: Node[] = fs.existsSync(node.path) ? [{ kind: 'rules', scope: 'project', root: node.path }] : [];
+        return [...rules, ...files, ...node.sessions.map((s): Node => ({ kind: 'session', s }))];
+      }
+      case 'rules': {
+        const list = node.scope === 'user' ? userRules() : projectRules(node.root!);
+        return list.map((r): Node => ({ kind: 'rule', scope: node.scope, r }));
+      }
       case 'session': {
         const out: Node[] = node.s.agents.map((a) => ({ kind: 'agent', s: node.s, a: a.info, via: node.via }));
         const own = node.s.t.changes;
         if (own.length) out.push({ kind: 'changes', s: node.s, list: own, via: node.via });
+        if (fs.existsSync(node.s.info.project)) out.push({ kind: 'files', root: node.s.info.project, s: node.s, sessions: [node.s], via: node.via });
         return out;
+      }
+      case 'files':
+      case 'fs': {
+        const dir = node.kind === 'files' ? node.root : node.path;
+        if (node.kind === 'fs' && !node.dir) return [];
+        return listDir(dir, excluded()).map((e): Node => ({ kind: 'fs', path: e.path, dir: e.dir, root: node.root, s: node.s, sessions: node.sessions, via: node.via }));
       }
       case 'agent': {
         const a = node.s.agents.find((x) => x.info.id === node.a.id);
@@ -127,7 +187,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
       }
       case 'session': {
         const i = node.s.info;
-        const it = new vscode.TreeItem(clip(i.title, 70), i.agents.length || i.edits ? C.Collapsed : C.None);
+        const it = new vscode.TreeItem(clip(i.title, 70), C.Collapsed);
         it.id = `${node.via ?? ''}|s:${i.id}`;
         // the agent's own mark (Claude, GPT, Llama…); a spinner while it works
         it.iconPath = i.state === 'working' ? stateIcon('working') : vendorIcon(i.model);
@@ -162,6 +222,54 @@ $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
         const it = new vscode.TreeItem('Changes', C.Collapsed);
         it.iconPath = new vscode.ThemeIcon('diff');
         it.description = String(node.list.length);
+        return it;
+      }
+      case 'rules': {
+        const list = node.scope === 'user' ? userRules() : projectRules(node.root!);
+        const it = new vscode.TreeItem(node.scope === 'user' ? vscode.l10n.t('My rules') : vscode.l10n.t('Project rules'), C.Collapsed);
+        it.id = `rules:${node.scope}:${node.root ?? ''}`;
+        it.iconPath = new vscode.ThemeIcon(node.scope === 'user' ? 'account' : 'law');
+        const n = list.filter((r) => r.exists).length;
+        it.description = n ? String(n) : vscode.l10n.t('none yet');
+        it.tooltip = node.scope === 'user' ? vscode.l10n.t('Rules every agent follows in every project') : vscode.l10n.t('Rules agents follow in this project');
+        it.contextValue = node.scope === 'user' ? 'rules-user' : 'rules-project';
+        return it;
+      }
+      case 'rule': {
+        const it = new vscode.TreeItem(node.r.label, C.None);
+        it.id = `rule:${node.r.path}`;
+        it.resourceUri = vscode.Uri.file(node.r.path);
+        it.iconPath = new vscode.ThemeIcon(node.r.exists ? 'file' : 'new-file');
+        it.description = node.r.exists ? vscode.l10n.t(node.r.hint) : vscode.l10n.t('create') + ' · ' + vscode.l10n.t(node.r.hint);
+        it.tooltip = node.r.path;
+        it.command = { command: 'agentlens.openRules', title: 'Open', arguments: [node.r.path, node.scope] };
+        return it;
+      }
+      case 'files': {
+        const changed = changedFiles(node.sessions);
+        const it = new vscode.TreeItem('Files', C.Collapsed);
+        it.id = `${node.via ?? ''}|files:${node.s?.info.id ?? ''}:${node.root}`;
+        it.iconPath = new vscode.ThemeIcon('files');
+        it.description = changed.size ? `${changed.size} changed by ${node.s ? 'this session' : 'agents'}` : '';
+        it.tooltip = node.root;
+        return it;
+      }
+      case 'fs': {
+        const changed = changedFiles(node.sessions);
+        const key = norm(node.path);
+        const it = new vscode.TreeItem(path.basename(node.path), node.dir ? C.Collapsed : C.None);
+        it.id = `${node.via ?? ''}|fs:${node.s?.info.id ?? ''}:${node.path}`;
+        it.resourceUri = vscode.Uri.file(node.path); // file-type icons and git colors from the theme
+        if (node.dir) {
+          const inside = [...changed.keys()].filter((f) => f.startsWith(key + '/')).length;
+          if (inside) it.description = `${inside} changed`;
+        } else {
+          const c = changed.get(key);
+          if (c) it.description = `+${c.added} −${c.removed} · ${c.edits} edit${c.edits > 1 ? 's' : ''}`;
+          it.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(node.path)] };
+        }
+        it.tooltip = node.path;
+        it.contextValue = node.dir ? 'folder' : 'file';
         return it;
       }
       case 'change': {

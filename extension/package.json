@@ -2,7 +2,7 @@
   "name": "agentlens",
   "displayName": "AgentLens",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -277,6 +277,23 @@
         "title": "%cmd.manage.connectors.mcp%",
         "category": "AgentLens",
         "icon": "$(plug)"
+      },
+      {
+        "command": "agentlens.editUserRules",
+        "title": "%cmd.edit.my.rules%",
+        "category": "AgentLens",
+        "icon": "$(account)"
+      },
+      {
+        "command": "agentlens.editProjectRules",
+        "title": "%cmd.edit.project.rules%",
+        "category": "AgentLens",
+        "icon": "$(law)"
+      },
+      {
+        "command": "agentlens.openRules",
+        "title": "%cmd.open.rules%",
+        "category": "AgentLens"
       }
     ],
     "menus": {
@@ -412,6 +429,16 @@
           "command": "agentlens.resumeInTerminal",
           "when": "view == agentlens.sessions && viewItem == session",
           "group": "2_more@2"
+        },
+        {
+          "command": "agentlens.editProjectRules",
+          "when": "view == agentlens.sessions && viewItem == rules-project",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentlens.editUserRules",
+          "when": "view == agentlens.sessions && viewItem == rules-user",
+          "group": "inline@1"
         }
       ],
       "comments/commentThread/context": [
@@ -471,6 +498,10 @@
         {
           "command": "agentlens.comment.now",
           "when": "false"
+        },
+        {
+          "command": "agentlens.openRules",
+          "when": "false"
         }
       ],
       "terminal/title/context": [
@@ -507,6 +538,30 @@
           },
           "default": [],
           "description": "%setting.extra.arguments.for.every.agent.run.e.g.model.opus%"
+        },
+        "agentlens.browser": {
+          "type": "string",
+          "enum": [
+            "default",
+            "chrome",
+            "edge",
+            "firefox",
+            "custom"
+          ],
+          "enumDescriptions": [
+            "%setting.browser.default%",
+            "Google Chrome",
+            "Microsoft Edge",
+            "Mozilla Firefox",
+            "%setting.browser.custom%"
+          ],
+          "default": "default",
+          "description": "%setting.browser%"
+        },
+        "agentlens.browserPath": {
+          "type": "string",
+          "default": "",
+          "description": "%setting.browserPath%"
         },
         "agentlens.defaultSurface": {
           "type": "string",
@@ -625,7 +680,7 @@
     "build:webview": "vite build --config webview/vite.config.mts",
     "dev:webview": "vite --config webview/vite.config.mts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
-    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs",
+    "test": "node --test test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs",
     "test:e2e": "node --test test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs",
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs"

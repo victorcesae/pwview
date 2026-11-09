@@ -1,6 +1,9 @@
 // Hosts AgentLens chats: one webview panel per ChatSession.
 import * as vscode from 'vscode';
 import { ChatSession, historyFromTranscript, Priority } from './chat';
+import { hostIcon } from './hostIcon';
+import { openUrl } from './browser';
+import { vendorOf } from './providers';
 import type { Session } from './engine';
 import { addLink, briefing, loadLinks, removeLink } from './links';
 import { agentExecutable } from './util';
@@ -14,6 +17,7 @@ export type FromChat =
   | { type: 'editQueued'; id: string; text: string }
   | { type: 'interrupt' }
   | { type: 'loadEarlier'; all?: boolean }
+  | { type: 'openUrl'; url: string }
   | { type: 'contextDetail' }
   | { type: 'toggleMcp'; name: string; enabled: boolean }
   | { type: 'reconnectMcp'; name: string }
@@ -36,6 +40,8 @@ interface Open {
   panel: vscode.WebviewPanel;
   /** what the webview already has: item id -> serialized item, and the item order */
   sent?: { items: Map<string, string>; order: string[] };
+  /** vendor whose mark is the tab icon */
+  vendor?: string;
 }
 
 export class Chats {
@@ -76,7 +82,7 @@ export class Chats {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const transcript = opts.resume ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
     const history = transcript ? historyFromTranscript(transcript) : undefined;
-    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, host: vscode.env.appName, model: opts.account?.provider?.model }, () => {
+    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.account?.provider?.model }, () => {
       // throttle streaming updates to ~25 fps
       if (timer) return;
       timer = setTimeout(() => {
@@ -111,7 +117,13 @@ export class Chats {
 
   private post(o: Open) {
     const s = o.chat.state;
-    o.panel.title = `✦ ${s.title.slice(0, 40)}`;
+    o.panel.title = s.title.slice(0, 40);
+    // tab icon: the model's vendor mark (Claude, GPT, Llama…)
+    const vendor = s.model ? vendorOf(s.model) : s.account.gateway ? 'other' : 'anthropic';
+    if (o.vendor !== vendor) {
+      o.vendor = vendor;
+      o.panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'vendors', `${vendor}.svg`);
+    }
     const all = this.sessions();
     const linked = s.sessionId ? (loadLinks()[s.sessionId] ?? []) : [];
     const linkedInfo = linked.map((id) => {
@@ -183,6 +195,8 @@ export class Chats {
         return c.setUltracode(m.on).catch((e) => vscode.window.showWarningMessage(`AgentLens: ultracode not available: ${e?.message ?? e}`));
       case 'setMode':
         return c.setPermissionMode(m.mode);
+      case 'openUrl':
+        return openUrl(m.url);
       case 'openFile':
         return vscode.window.showTextDocument(vscode.Uri.file(m.path));
       case 'openChange':

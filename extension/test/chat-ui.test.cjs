@@ -9,7 +9,7 @@ const assert = require('node:assert');
 const root = path.join(__dirname, '..');
 const entry = path.join(__dirname, '.chat-ui-entry.tsx');
 const out = path.join(os.tmpdir(), 'agentlens-chat-ui', 'ui.cjs');
-fs.writeFileSync(entry, `export { groupTools, summarizeTools } from ${JSON.stringify(path.join(root, 'webview/src/views/toolSummary.ts').replace(/\\/g, '/'))};`);
+fs.writeFileSync(entry, `export { groupTools, summarizeTools, findPRs, changesByProject, projectOf, prettyModel } from ${JSON.stringify(path.join(root, 'webview/src/views/toolSummary.ts').replace(/\\/g, '/'))};`);
 execSync(`npx esbuild "${entry}" --bundle --platform=node --format=cjs --jsx=automatic --outfile="${out}" --alias:@=./webview/src --loader:.css=empty --log-level=error`, { cwd: root });
 
 const load = (lang) => {
@@ -47,4 +47,31 @@ test('chat ui: summary sentence in Portuguese', () => {
   assert.equal(summarizeTools([tool('1', 'Read', { file_path: '/x/chat.ts' }), tool('2', 'Edit', { file_path: '/x/chat.ts' }), tool('3', 'Bash', { command: 'x' })]), 'Leu e editou chat.ts, executou 1 comando');
   assert.equal(summarizeTools([tool('1', 'Bash', {}), tool('2', 'Bash', {})]), 'Executou 2 comandos');
   delete globalThis.document;
+});
+
+test('rail: PR links from tool output and answers, no repeats', () => {
+  const { findPRs } = load('en');
+  const prs = findPRs([
+    { kind: 'tool', result: 'https://github.com/acme/api/pull/214\n' },
+    { kind: 'assistant', text: 'See [#214](https://github.com/acme/api/pull/214) and https://gitlab.com/g/web/-/merge_requests/9' },
+  ]);
+  assert.deepStrictEqual(prs.map((p) => p.label), ['acme/api#214', '!9']);
+});
+
+test('rail: changed files grouped per project, the chat folder first, Windows paths too', () => {
+  const { changesByProject } = load('en');
+  const e = (file, lines = ['+a', '-b']) => ({ kind: 'tool', name: 'Edit', file, patch: [{ lines }] });
+  const g = changesByProject([e('/w/api/src/a.ts'), e('/w/web/app/p.tsx'), e('/w/web/app/p.tsx'), e('/w/ui/x.ts'), { kind: 'tool', name: 'Read', file: '/w/web/r.ts' }], '/w/web');
+  assert.deepStrictEqual(g.map((p) => p.name), ['web', 'api', 'ui']);
+  assert.deepStrictEqual(g[0].files[0], { path: '/w/web/app/p.tsx', rel: 'app/p.tsx', edits: 2, added: 2, removed: 2 });
+  const w = changesByProject([e('C:\\w\\api\\a.ts'), e('c:\\w\\web\\b.ts')], 'C:\\w\\web');
+  assert.deepStrictEqual(w.map((p) => p.name), ['web', 'api']);
+});
+
+test('model names: ids become friendly labels', () => {
+  const { prettyModel } = load('en');
+  assert.strictEqual(prettyModel('claude-opus-5-5'), 'Opus 5.5');
+  assert.strictEqual(prettyModel('claude-sonnet-4-5-20250929'), 'Sonnet 4.5');
+  assert.strictEqual(prettyModel('claude-opus-4[1m]'), 'Opus 4 (1M)');
+  assert.strictEqual(prettyModel('llama3.1:8b'), 'llama3.1:8b');
 });

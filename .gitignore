@@ -7,3 +7,4 @@ extension/test/.md-entry.tsx
 extension/test/.chat-ui-entry.tsx
 .claude/settings.local.json
 demo-screens/
+.pwview/

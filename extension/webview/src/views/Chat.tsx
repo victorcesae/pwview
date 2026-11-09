@@ -13,6 +13,7 @@ import { HunkView } from './Session';
 import { Composer, PRIORITY } from './Composer';
 import { LightboxProvider, Zoomable } from '@/components/Lightbox';
 import { fileOf, groupTools, inp, KIND, stat, summarizeTools, type ToolItem } from './toolSummary';
+import { SideRail } from '@/components/SideRail';
 import { HostMark, hostName, VendorMark, vendorName, vendorOf } from '@/components/VendorMark';
 import { t } from '@/i18n';
 
@@ -579,16 +580,16 @@ function rowText(g: ChatItem | ToolItem[]): string {
 }
 
 /** Which model and editor this chat runs on, for the answer avatars. */
-const AgentCtx = createContext<{ model?: string; host?: string }>({});
+const AgentCtx = createContext<{ model?: string; host?: string; hostIcon?: string }>({});
 
 /** The model's mark (Claude, GPT, Llama…) with a small editor badge (Cursor, VS Code…). */
 function AgentAvatar() {
-  const { model, host } = useContext(AgentCtx);
+  const { model, host, hostIcon } = useContext(AgentCtx);
   const vendor = vendorOf(model);
   return (
     <span className="relative mt-0.5 inline-flex h-5 shrink-0 self-start" title={`${vendorName(vendor)}${model ? ' · ' + model : ''}${host ? ' · ' + hostName(host) : ''}`}>
       <VendorMark vendor={vendor} className="size-5 rounded-md text-[9px]" />
-      {host && <HostMark host={host} className="ring-background absolute -right-1.5 -bottom-1 size-3 rounded-[3px] text-[5px] ring-2" />}
+      {host && <HostMark host={host} icon={hostIcon} className="ring-background absolute -right-1.5 -bottom-1 size-3 rounded-[3px] text-[5px] ring-2" />}
     </span>
   );
 }
@@ -680,12 +681,12 @@ export function ChatView({ data }: { data: ChatData }) {
 
   return (
     <LightboxProvider>
-    <AgentCtx.Provider value={{ model: chat.model, host: chat.host }}>
+    <AgentCtx.Provider value={{ model: chat.model, host: chat.host, hostIcon: chat.hostIcon }}>
     <div className="flex h-screen flex-col">
       <header className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
         <StateDot state={working ? 'working' : chat.status === 'idle' ? 'recent' : 'idle'} />
         <span className="inline-flex items-center gap-0.5" title={`${hostName(chat.host)}${chat.host ? ' + ' : ''}${vendorName(vendorOf(chat.model))}${chat.model ? ' · ' + chat.model : ''}`}>
-          <HostMark host={chat.host} />
+          <HostMark host={chat.host} icon={chat.hostIcon} />
           {chat.host && <span className="text-muted-foreground text-[10px]">+</span>}
           <VendorMark vendor={vendorOf(chat.model)} />
         </span>
@@ -766,9 +767,10 @@ export function ChatView({ data }: { data: ChatData }) {
         </div>
       )}
 
+      <div className="relative flex min-h-0 flex-1">
       <div
         ref={scroller}
-        className="flex-1 overflow-y-auto"
+        className="min-w-0 flex-1 overflow-y-auto"
         onScroll={(e) => {
           const el = e.currentTarget;
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
@@ -823,6 +825,8 @@ export function ChatView({ data }: { data: ChatData }) {
           {chat.error && <div className="border-removed/40 bg-removed/10 text-removed rounded-lg border px-3 py-2 text-[12px]">{chat.error}</div>}
           <div ref={end} />
         </div>
+      </div>
+      <SideRail chat={chat} />
       </div>
 
       <div className="relative mx-auto flex w-full max-w-[860px] flex-col gap-2 px-4 pt-1 pb-3">

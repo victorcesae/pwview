@@ -1,5 +1,6 @@
 // The dashboard webview (React + shadcn, built into dist/webview).
 import * as vscode from 'vscode';
+import { openUrl } from './browser';
 import { loadComments } from './comments';
 import { Engine, Session } from './engine';
 import { buildGraph } from './graph';
@@ -10,6 +11,7 @@ export type FromWebview =
   | { type: 'ready' }
   | { type: 'openSession'; id: string; agentId?: string }
   | { type: 'overview' }
+  | { type: 'openUrl'; url: string }
   | { type: 'openChange'; sessionId: string; changeId: string }
   | { type: 'openFile'; path: string }
   | { type: 'resume'; id: string }
@@ -60,6 +62,7 @@ export class Dashboard {
         if (m.type === 'ready') this.post();
         else if (m.type === 'openSession') this.show(m.id, m.agentId);
         else if (m.type === 'overview') this.show();
+        else if (m.type === 'openUrl') openUrl(m.url);
         else this.onMessage(m);
       });
       this.panel.onDidDispose(() => (this.panel = undefined));

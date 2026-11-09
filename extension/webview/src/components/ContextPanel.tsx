@@ -42,16 +42,16 @@ function cells(ctx: NonNullable<ChatState['context']>): { cat?: Cat; style: 'use
   return out;
 }
 
-export function ContextPanel({ chat, children }: { chat: ChatState; children: React.ReactNode }) {
+export function ContextPanel({ chat, children, side = 'top', className }: { chat: ChatState; children: React.ReactNode; side?: 'top' | 'left'; className?: string }) {
   return (
     <PopoverPrimitive.Root onOpenChange={(open) => open && chat.status !== 'starting' && post({ type: 'contextDetail' } as never)}>
       <PopoverPrimitive.Trigger asChild>
-        <button className="hover:bg-accent grid size-7 cursor-pointer place-items-center rounded-md" aria-label={t('Context')}>
+        <button className={cn('hover:bg-accent grid cursor-pointer place-items-center rounded-md', className ?? 'size-7')} aria-label={t('Context')}>
           {children}
         </button>
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
-        <PopoverPrimitive.Content side="top" align="end" sideOffset={8} className="bg-popover text-popover-foreground animate-in fade-in-0 zoom-in-95 z-50 w-[22rem] rounded-xl border p-3.5 shadow-xl">
+        <PopoverPrimitive.Content side={side} align={side === 'left' ? 'start' : 'end'} sideOffset={8} className="bg-popover text-popover-foreground animate-in fade-in-0 zoom-in-95 z-50 w-[22rem] rounded-xl border p-3.5 shadow-xl">
           <Body chat={chat} />
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { editRules, openRules } from './rules';
 import { addComment, cancelComment, editComment, loadComments, Mode } from './comments';
 import { changeDetail, Engine, Session } from './engine';
 import { hooksStatus, installHooks, installHookScript } from './hooks';
@@ -336,7 +337,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (prompt === undefined) return;
     const account = await pickAccount();
     if (!account) return;
-    if (surface() === 'terminal') runAgent(`✦ ${clip(prompt || 'agent', 30)}`, cwd, prompt ? [prompt] : [], await envFor(account));
+    if (surface() === 'terminal') runAgent(`${clip(prompt || 'agent', 30)}`, cwd, prompt ? [prompt] : [], await envFor(account));
     else chats.start({ cwd, prompt: prompt || undefined, account, env: await envFor(account) });
   }
 
@@ -404,6 +405,9 @@ export function activate(ctx: vscode.ExtensionContext) {
     treeView,
     vscode.commands.registerCommand('agentlens.refresh', () => refresh(true)),
     vscode.commands.registerCommand('agentlens.dashboard', () => dashboard.show()),
+    vscode.commands.registerCommand('agentlens.openRules', (file: string, scope: 'user' | 'project') => openRules(file, scope).then(() => tree.refresh())),
+    vscode.commands.registerCommand('agentlens.editUserRules', () => editRules('user').then(() => tree.refresh())),
+    vscode.commands.registerCommand('agentlens.editProjectRules', (n?: { root?: string }) => editRules('project', n?.root).then(() => tree.refresh())),
     vscode.commands.registerCommand('agentlens.openSession', (id: string, agentId?: string) => dashboard.show(id, agentId)),
     vscode.commands.registerCommand('agentlens.openChange', openChange),
     vscode.commands.registerCommand('agentlens.newSession', newSession),
@@ -421,12 +425,12 @@ export function activate(ctx: vscode.ExtensionContext) {
       const s = find(sessionArg(x) ?? '');
       if (!s) return;
       const account = accountOf(s.info.account);
-      if (surface() === 'terminal') runAgent(`✦ ${clip(s.info.title, 30)}`, s.info.project, ['--resume', s.info.id], await envFor(account));
+      if (surface() === 'terminal') runAgent(`${clip(s.info.title, 30)}`, s.info.project, ['--resume', s.info.id], await envFor(account));
       else chats.start({ cwd: s.info.project, resume: s.info.id, title: s.info.title, account, env: await envFor(account) });
     }),
     vscode.commands.registerCommand('agentlens.resumeInTerminal', async (x: unknown) => {
       const s = find(sessionArg(x) ?? '');
-      if (s) runAgent(`✦ ${clip(s.info.title, 30)}`, s.info.project, ['--resume', s.info.id], await envFor(accountOf(s.info.account)));
+      if (s) runAgent(`${clip(s.info.title, 30)}`, s.info.project, ['--resume', s.info.id], await envFor(accountOf(s.info.account)));
     }),
     vscode.commands.registerCommand('agentlens.newChat', () => {
       const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;

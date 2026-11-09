@@ -121,7 +121,7 @@ export async function runPrompt(d: Doc) {
   const cwd = d.scope === 'project' ? path.resolve(path.dirname(d.file), '..', '..') : folders()[0] ?? os.homedir();
   const args = d.meta.model ? ['--model', d.meta.model] : [];
   if (d.meta.mode === 'headless') runAgent(`⚡ ${d.name}`, cwd, [...args, '-p', prompt]);
-  else runAgent(`✦ ${d.name}`, cwd, [...args, prompt]);
+  else runAgent(`${d.name}`, cwd, [...args, prompt]);
 }
 
 async function pickScope(): Promise<Doc['scope'] | undefined> {
