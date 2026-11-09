@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.1
+- Same as 1.0.0, republished under a new version (Open VSX keeps removed version numbers reserved).
+
 ## 1.0.0
 - **Background commands**: dev servers, watchers and long test runs the agent started, per session (tree) and per chat (side bar): status, live output, local URLs, Stop, Follow in terminal, Open output.
 - **Open Terminal Here** from a chat (header button), a project or a folder in the Sessions tree.
