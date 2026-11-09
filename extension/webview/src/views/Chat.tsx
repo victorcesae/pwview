@@ -781,7 +781,7 @@ export function ChatView({ data }: { data: ChatData }) {
           <Link2 /> {t('Link session')}
         </Button>
         {chat.sessionId && (
-          <Button size="xs" variant="ghost" onClick={() => post({ type: 'deleteSession' })} title={t('Delete this session (moves it to the trash)')} aria-label={t('Delete session')}>
+          <Button size="xs" variant="ghost" onClick={() => post({ type: 'deleteSession' })} title={t('Delete this session')} aria-label={t('Delete session')}>
             <Trash2 />
           </Button>
         )}

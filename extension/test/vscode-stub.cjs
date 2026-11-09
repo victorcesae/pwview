@@ -50,9 +50,14 @@ module.exports = {
     getConfiguration: () => ({ get: (k, d) => (k in config ? config[k] : d) }),
     createFileSystemWatcher: () => ({ onDidCreate() {}, onDidDelete() {}, onDidChange() {}, dispose() {} }),
     asRelativePath: (u) => u.fsPath ?? u,
+    fs: { delete: async (uri, opts) => (globalThis.__fsDeletes ??= []).push({ path: uri.fsPath, ...opts }) },
   },
   window: { showInformationMessage: async () => undefined, showErrorMessage: async () => undefined, showWarningMessage: async () => undefined, createTerminal: () => ({ show() {}, sendText() {} }) },
   commands: { registerCommand: () => ({ dispose() {} }), executeCommand: async () => undefined },
-  env: { remoteName: undefined },
+  env: {
+    get remoteName() {
+      return process.env.TEST_REMOTE_NAME;
+    },
+  },
   l10n: { t: (s, ...a) => String(s).replace(/\{(\d+)\}/g, (_, i) => String(a[i])) },
 };

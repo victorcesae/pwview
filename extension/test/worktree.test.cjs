@@ -101,3 +101,22 @@ test('file actions: relative path from the right workspace folder; new names che
   assert.ok(F.checkNewName(dir, 'taken.ts'), 'exists');
   assert.ok(F.checkNewName(dir, '../escape.ts'), 'outside the folder');
 });
+
+test('delete: trash on this machine, never on a remote (its file system refuses useTrash)', async () => {
+  const F = require(path.join(os.tmpdir(), 'steerhouse-fa-build', 'fileActions.js'));
+  globalThis.__fsDeletes = [];
+  delete process.env.TEST_REMOTE_NAME;
+  assert.strictEqual(F.canTrash(), true);
+  await F.removePath('/a');
+  process.env.TEST_REMOTE_NAME = 'ssh-remote';
+  try {
+    assert.strictEqual(F.canTrash(), false);
+    await F.removePath('/b');
+  } finally {
+    delete process.env.TEST_REMOTE_NAME;
+  }
+  assert.deepStrictEqual(globalThis.__fsDeletes, [
+    { path: '/a', recursive: true, useTrash: true },
+    { path: '/b', recursive: true, useTrash: false },
+  ]);
+});

@@ -15,6 +15,14 @@ const isDir = (p: string) => {
   }
 };
 
+/**
+ * Whether deleting can go to the system trash. VS Code's remote file systems (SSH, WSL, containers)
+ * refuse `useTrash`, and extensions can't ask for that capability, so this follows the window's kind.
+ */
+export const canTrash = () => !vscode.env.remoteName;
+/** Delete a file or folder: to the trash when there is one, otherwise permanently (say so first). */
+export const removePath = (p: string) => vscode.workspace.fs.delete(vscode.Uri.file(p), { recursive: true, useTrash: canTrash() });
+
 /** Path for "Copy Relative Path": relative to the workspace folder that contains it. */
 export function relativeTo(file: string, roots: string[]): string {
   const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '');
@@ -90,16 +98,16 @@ export function registerFileActions(ctx: vscode.ExtensionContext, refresh: () =>
     refresh();
   });
 
-  // delete moves to the trash (recoverable) after a confirmation, like the Explorer
+  // delete asks first, then moves to the trash (recoverable) when the machine has one, like the Explorer
   reg('steerhouse.fs.delete', async (p) => {
     const base = path.basename(p);
     const ok = await vscode.window.showWarningMessage(
       isDir(p) ? vscode.l10n.t('Delete the folder {0} and everything in it?', base) : vscode.l10n.t('Delete {0}?', base),
-      { modal: true, detail: vscode.l10n.t('It moves to the trash (Recycle Bin), where you can restore it.') },
-      vscode.l10n.t('Move to Trash'),
+      { modal: true, detail: canTrash() ? vscode.l10n.t('It moves to the trash (Recycle Bin), where you can restore it.') : vscode.l10n.t('This is a remote machine, which has no trash: it is deleted permanently. This cannot be undone.') },
+      canTrash() ? vscode.l10n.t('Move to Trash') : vscode.l10n.t('Delete Permanently'),
     );
     if (!ok) return;
-    await vscode.workspace.fs.delete(vscode.Uri.file(p), { recursive: true, useTrash: true });
+    await removePath(p);
     refresh();
   });
 }

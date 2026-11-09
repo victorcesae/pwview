@@ -131,7 +131,7 @@ const PT: Record<string, string> = {
   'Loading…': 'Carregando…',
   '{0} of {1} viewed': '{0} de {1} vistos',
   Viewed: 'Visto',
-  'Delete this session (moves it to the trash)': 'Excluir esta sessão (vai para a lixeira)',
+  'Delete this session': 'Excluir esta sessão',
   'Delete session': 'Excluir sessão',
   'Folders this chat works in': 'Pastas em que este chat trabalha',
   'Working folder': 'Pasta de trabalho',

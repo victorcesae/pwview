@@ -7,7 +7,7 @@ import { installedAgents, runCliAgent } from './agents';
 import { addWorktree, removeWorktree, repoRoot, slug, validBranch, worktreeInfo } from './worktree';
 import { lanAddress, RemoteServer } from './remote';
 import { migrateFromAgentLens } from './migrate';
-import { registerFileActions } from './fileActions';
+import { canTrash, registerFileActions, removePath } from './fileActions';
 import { Scm, type ScmFile } from './scm';
 import { followCommand } from './bgtasks';
 import { claudeDir } from './paths';
@@ -504,6 +504,54 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   const sessionArg = (x: unknown): string | undefined => (typeof x === 'string' ? x : (x as { s?: Session } | undefined)?.s?.info.id);
 
+  // Confirm, then delete the conversations and their sub-agents: to the trash when this machine has
+  // one, otherwise permanently. Menus pass the clicked item and the selection; the Delete key passes
+  // nothing, so it reads the selection. A project means all its chats, also those too old to be listed.
+  const deleteChats = async (x: unknown, selected?: unknown[]) => {
+    const picked: unknown[] = selected?.length ? selected : x !== undefined ? [x] : [...treeView.selection];
+    const projects = [...new Set((picked as ({ kind?: string; path?: string } | undefined)[]).filter((n) => n?.kind === 'project' && n.path).map((n) => n!.path!))];
+    const list = new Map<string, Session>();
+    for (const n of picked) {
+      const s = find(sessionArg(n) ?? '');
+      if (s) list.set(s.info.id, s);
+    }
+    if (projects.length) for (const s of engine.scan(Infinity)) if (projects.includes(s.info.project)) list.set(s.info.id, s);
+    if (!list.size) return;
+    const items = [...list.values()];
+    const what = items.length === 1 ? `"${clip(items[0].info.title, 60)}"` : vscode.l10n.t('{0} sessions', items.length);
+    const working = items.filter((s) => s.info.state === 'working').length;
+    const detail = [
+      projects.length ? vscode.l10n.t('All chats of {0}, including older ones not listed here. The project folder and its files are not touched.', projects.map((p) => path.basename(p) || p).join(', ')) : '',
+      canTrash()
+        ? vscode.l10n.t('The conversation, its sub-agents and its change history move to the trash (Recycle Bin), where you can restore them.')
+        : vscode.l10n.t('This is a remote machine, which has no trash: the conversation, its sub-agents and its change history are deleted permanently. This cannot be undone.'),
+      working ? vscode.l10n.t('{0} of them is still working: its chat is closed first.', working) : '',
+    ];
+    const ok = await vscode.window.showWarningMessage(
+      vscode.l10n.t('Delete {0}?', what),
+      { modal: true, detail: detail.filter(Boolean).join('\n\n') },
+      canTrash() ? vscode.l10n.t('Move to Trash') : vscode.l10n.t('Delete Permanently'),
+    );
+    if (!ok) return;
+    let failed = 0;
+    let firstError = '';
+    for (const s of items) {
+      chats.closeSession(s.info.id);
+      try {
+        for (const p of [s.path, s.path.replace(/\.jsonl$/, '')]) if (fs.existsSync(p)) await removePath(p);
+      } catch (e) {
+        failed++;
+        firstError ||= String((e as Error)?.message ?? e);
+      }
+    }
+    if (failed) vscode.window.showErrorMessage(vscode.l10n.t('Could not delete {0}: {1}', failed === 1 && items.length === 1 ? what : vscode.l10n.t('{0} sessions', failed), firstError));
+    if (failed < items.length) {
+      const done = failed ? vscode.l10n.t('{0} sessions', items.length - failed) : what;
+      vscode.window.setStatusBarMessage(canTrash() ? vscode.l10n.t('$(trash) Steerhouse: moved {0} to the trash', done) : vscode.l10n.t('$(trash) Steerhouse: deleted {0}', done), 5000);
+    }
+    refresh(true);
+  };
+
   // Reload Window: reopen the chats that were open, in their tabs, with their settings
   const chatSerializer: vscode.WebviewPanelSerializer = {
     async deserializeWebviewPanel(panel, state: { sessionId?: string; cwd?: string; title?: string; account?: string } | undefined) {
@@ -644,29 +692,9 @@ export function activate(ctx: vscode.ExtensionContext) {
       const a = await vscode.window.showInformationMessage(vscode.l10n.t('Link copied. Open it on your phone: it holds a secret key, so share it only with yourself.'), openIt);
       if (a === openIt) await vscode.env.openExternal(vscode.Uri.parse(url));
     }),
-    // Delete sessions (several when selected together): confirm, then move the conversation and its
-    // sub-agents to the system trash, so it can be recovered.
-    vscode.commands.registerCommand('steerhouse.deleteSession', async (x: unknown, selected?: unknown[]) => {
-      const ids = [...new Set((selected?.length ? selected : [x]).map(sessionArg).filter((v): v is string => !!v))];
-      const list = ids.map(find).filter((s): s is Session => !!s);
-      if (!list.length) return;
-      const what = list.length === 1 ? `"${clip(list[0].info.title, 60)}"` : vscode.l10n.t('{0} sessions', list.length);
-      const working = list.filter((s) => s.info.state === 'working').length;
-      const ok = await vscode.window.showWarningMessage(
-        vscode.l10n.t('Delete {0}?', what),
-        { modal: true, detail: vscode.l10n.t('The conversation, its sub-agents and its change history move to the trash (Recycle Bin), where you can restore them.') + (working ? '\n\n' + vscode.l10n.t('{0} of them is still working: its chat is closed first.', working) : '') },
-        vscode.l10n.t('Move to Trash'),
-      );
-      if (!ok) return;
-      for (const s of list) {
-        chats.closeSession(s.info.id);
-        const dir = s.path.replace(/\.jsonl$/, '');
-        for (const p of [s.path, dir])
-          if (fs.existsSync(p)) await vscode.workspace.fs.delete(vscode.Uri.file(p), { recursive: true, useTrash: true }).then(undefined, (e) => vscode.window.showErrorMessage(String(e?.message ?? e)));
-      }
-      vscode.window.setStatusBarMessage(vscode.l10n.t('$(trash) Steerhouse: moved {0} to the trash', what), 5000);
-      refresh(true);
-    }),
+    // Delete sessions (several when selected together) or every chat of a project.
+    vscode.commands.registerCommand('steerhouse.deleteSession', deleteChats),
+    vscode.commands.registerCommand('steerhouse.deleteProjectChats', deleteChats),
     vscode.commands.registerCommand('steerhouse.resumeSession', async (x: unknown) => {
       const s = find(sessionArg(x) ?? '');
       if (!s) return;

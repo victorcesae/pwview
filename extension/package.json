@@ -2,7 +2,7 @@
   "name": "steerhouse",
   "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -307,6 +307,12 @@
       {
         "command": "steerhouse.deleteSession",
         "title": "%cmd.delete.session%",
+        "category": "Steerhouse",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "steerhouse.deleteProjectChats",
+        "title": "%cmd.delete.project.chats%",
         "category": "Steerhouse",
         "icon": "$(trash)"
       },
@@ -668,6 +674,11 @@
           "group": "9_delete@1"
         },
         {
+          "command": "steerhouse.deleteProjectChats",
+          "when": "view == steerhouse.sessions && viewItem =~ /^project\\b/",
+          "group": "9_delete@2"
+        },
+        {
           "command": "steerhouse.openTerminalHere",
           "when": "view == steerhouse.sessions && viewItem =~ /^project\b/",
           "group": "inline@2"
@@ -867,6 +878,10 @@
         },
         {
           "command": "steerhouse.deleteSession",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.deleteProjectChats",
           "when": "false"
         },
         {

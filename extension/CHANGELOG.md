@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6
+- Deleting works over Remote-SSH, WSL and containers: they have no trash, so the confirmation says the delete is permanent. Files in the Sessions tree too.
+- **Delete All Chats…** on a project (also older chats not listed); the project folder and its files are not touched.
+- The Delete key now deletes what is selected in the Sessions tree, one or many.
+- A failed delete no longer reports success.
+
 ## 1.0.5
 - Background commands are shown in the chat side panel only (removed from the Sessions tree).
 - **Source control** under each project and worktree in the Sessions tree (VS Code's own Git): branch, ahead / behind, changed files with their diff, Commit (all changes when nothing is staged), Push, Pull, Sync, Open Source Control.

@@ -71,6 +71,7 @@
   "cmd.open.rules": "Abrir arquivo de regras",
   "cmd.new.chat.here": "Novo chat aqui",
   "cmd.delete.session": "Excluir sessão…",
+  "cmd.delete.project.chats": "Excluir todos os chats…",
   "setting.notifications": "Avisar quando um chat que você não está vendo terminar ou esperar uma aprovação ou resposta.",
   "cmd.new.chat.worktree": "Novo chat em um worktree…",
   "cmd.remove.worktree": "Remover worktree…",
