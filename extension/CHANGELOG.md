@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.13
+- Jump to latest stays readable on hover: themes with a see-through hover colour (the GitHub themes) made it transparent over the chat.
+- The VS Code mark in the chat header is just the blue icon, with no box behind it.
+
 ## 1.0.12
 - Faster Tab with the Claude subscription: it asks after a 0.25 s pause instead of 0.7 s, with thinking off, and shows the suggestion as soon as its text ends. Most of the remaining wait (about 2 s) is before the model starts answering; a provider like Ollama or OpenRouter answers in well under a second.
 

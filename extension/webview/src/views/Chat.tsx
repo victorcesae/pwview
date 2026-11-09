@@ -946,7 +946,7 @@ export function ChatView({ data }: { data: ChatData }) {
               virtualizer.scrollToIndex(rows.length - 1, { align: 'end' });
               requestAnimationFrame(() => end.current?.scrollIntoView({ block: 'end' }));
             }}
-            className="bg-popover text-popover-foreground hover:bg-accent absolute -top-11 left-1/2 z-30 inline-flex -translate-x-1/2 cursor-pointer items-center gap-1 rounded-full border px-3 py-1 text-[11.5px] shadow-md"
+            className="bg-popover text-popover-foreground hover-solid absolute -top-11 left-1/2 z-30 inline-flex -translate-x-1/2 cursor-pointer items-center gap-1 rounded-full border px-3 py-1 text-[11.5px] shadow-md"
             aria-label={t('Jump to latest')}
           >
             <ChevronDown className="size-3.5" /> {t('Jump to latest')}
