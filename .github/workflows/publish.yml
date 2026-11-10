@@ -1,0 +1,42 @@
+name: publish
+
+# Publishes Steerhouse to Open VSX with trusted publishing: GitHub vouches for this workflow with a
+# short-lived OIDC token, so no access token is stored, and Open VSX shows where the release came from.
+on:
+  push:
+    tags: ["steerhouse-v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. steerhouse-v1.0.15)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # must match the environment registered as the trusted publisher on Open VSX
+    environment: production
+    permissions:
+      contents: read
+      id-token: write # lets ovsx ask GitHub for the OIDC token
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run package
+      # no OVSX_PAT: ovsx exchanges the OIDC token for a publishing token by itself
+      - run: npx --yes ovsx@1.4.0 publish *.vsix --trusted-publishing --skip-duplicate
