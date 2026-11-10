@@ -387,3 +387,59 @@ test('chat: a resumed session starts with the settings it had (model, effort, mo
   const d = new ChatSession({ cwd: '/r' }, () => {});
   assert.deepStrictEqual([d.state.effort, d.state.permissionMode, d.state.fastMode, d.state.ultracode], [undefined, 'default', false, false]);
 });
+
+test('auto mode blocks: the rule that allows commands like it, and the card in the history', () => {
+  const { ruleFor, autoModeBlock, agentNotice } = load('chat');
+  assert.strictEqual(ruleFor('Bash', { command: 'cd /w/app; gh pr merge 49 -R o/r --merge --admin 2>&1 | head -2' }), 'Bash(gh pr merge:*)');
+  assert.strictEqual(ruleFor('Bash', { command: 'git push --force origin main' }), 'Bash(git push:*)');
+  assert.strictEqual(ruleFor('Bash', { command: 'rm -rf build' }), 'Bash(rm:*)');
+  assert.strictEqual(ruleFor('mcp__github__merge', {}), 'mcp__github__merge');
+  assert.strictEqual(ruleFor('Read', {}), undefined);
+  const tool = { kind: 'tool', id: 'toolu_1', name: 'Bash', summary: '', input: { command: 'gh pr merge 7 --admin' }, status: 'done' };
+  const b = autoModeBlock(tool, 'Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Merge Without Review]. If you have other tasks…');
+  assert.strictEqual(b.reason, 'Merge Without Review');
+  assert.strictEqual(b.rule, 'Bash(gh pr merge:*)');
+  assert.strictEqual(autoModeBlock(tool, 'Exit code 1\nGraphQL: not found'), undefined);
+  // a subagent's report and a task ending are not the user's words
+  const n = agentNotice('Another Claude session sent a message:\n<agent-message from="a1">\n[Subagent hand-back] … The report follows:\n  Done.\n  - two\n</agent-message>\n<task-notification>\n<task-id>a1</task-id>\n<status>completed</status>\n<summary>Agent "x" finished</summary>\n</task-notification>');
+  assert.deepStrictEqual(n.map((x) => [x.from, x.text, x.title, x.status]), [['a1', 'Done.\n- two', undefined, undefined], ['a1', undefined, 'Agent "x" finished', 'completed']]);
+});
+
+test('allowing a rule writes settings.local.json and keeps it out of git', () => {
+  const { ChatSession } = load('chat');
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-allow-'));
+  fs.mkdirSync(path.join(cwd, '.git', 'info'), { recursive: true });
+  const c = new ChatSession({ cwd }, () => {});
+  c.state.items.push({ kind: 'blocked', id: 'b1', tool: 'Bash', command: 'gh pr merge 1', reason: 'x', rule: 'Bash(gh pr merge:*)' });
+  c.allowRule('b1', 'Bash(gh pr merge:*)');
+  c.allowRule('b1', 'Bash(gh pr merge:*)');
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'settings.local.json'), 'utf8')), { permissions: { allow: ['Bash(gh pr merge:*)'] } });
+  assert.match(fs.readFileSync(path.join(cwd, '.git', 'info', 'exclude'), 'utf8'), /\.claude\/settings\.local\.json/);
+  assert.strictEqual(c.state.items[0].status, 'allowed');
+});
+
+test('a question answered far up the chat reaches the page as answered', () => {
+  execSync(`npx esbuild src/chatPanel.ts --bundle --platform=node --format=cjs --outfile="${path.join(out, 'chatPanel.js')}" --alias:vscode="${stub}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --log-level=error`, { cwd: root });
+  const { changedItems } = load('chatPanel');
+  const q = { kind: 'question', id: 'q', questions: [], status: 'pending' };
+  const items = [q, ...Array.from({ length: 100 }, (_, i) => ({ kind: 'tool', id: `t${i}`, name: 'Bash', summary: '', input: {}, status: 'done' }))];
+  const sent = { items: new Map(), order: [], live: new Set() };
+  assert.strictEqual(changedItems(sent, items).length, 101, 'first: everything');
+  assert.strictEqual(changedItems(sent, items).length, 0, 'nothing changed');
+  q.status = 'answered';
+  assert.deepStrictEqual(changedItems(sent, items).map((x) => x.id), ['q']);
+  assert.strictEqual(changedItems(sent, items).length, 0);
+});
+
+test('a question asked again shows one card, and its answer reaches both', async () => {
+  const c = newChat();
+  const sig = () => new AbortController().signal;
+  const input = { questions: [{ question: 'Keep?', header: 'Keep', multiSelect: false, options: [{ label: 'Yes', description: '' }] }] };
+  const first = c.ask('AskUserQuestion', input, undefined, sig());
+  const again = c.ask('AskUserQuestion', input, undefined, sig());
+  const cards = c.state.items.filter((x) => x.kind === 'question');
+  assert.strictEqual(cards.length, 1);
+  c.respond(cards[0].id, 'allow', undefined, { 'Keep?': 'Yes' });
+  for (const r of await Promise.all([first, again])) assert.deepStrictEqual(r.updatedInput.answers, { 'Keep?': 'Yes' });
+  assert.strictEqual(cards[0].status, 'answered');
+});

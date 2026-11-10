@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { ChatSession, historyFromTranscript, Priority, type ChatPrefs } from './chat';
+import { ChatSession, historyFromTranscript, Priority, type ChatItem, type ChatPrefs } from './chat';
 import { hostIcon } from './hostIcon';
 import { blockedByPolicy, findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMethod } from './prs';
 import { openUrl } from './browser';
@@ -14,6 +14,7 @@ import { vendorOf } from './providers';
 import type { Session } from './engine';
 import { addLink, briefing, loadLinks, removeLink, sameConnection } from './links';
 import { agentExecutable } from './util';
+import { LOCAL_COMMANDS, runLocalCommand, type LocalCommand } from './localCommands';
 import { accountEnv, type Account } from './accounts';
 
 const tabCompletion = () => vscode.workspace.getConfiguration('steerhouse').get<boolean>('tabCompletion', true);
@@ -27,6 +28,8 @@ export type FromChat =
   | { type: 'interrupt' }
   | { type: 'loadEarlier'; all?: boolean }
   | { type: 'openUrl'; url: string }
+  | { type: 'localCommand'; name: string }
+  | { type: 'allowRule'; id: string; rule: string }
   | { type: 'revealFolder'; path: string }
   | { type: 'deleteSession' }
   | { type: 'openTerminal' }
@@ -70,7 +73,8 @@ interface Open {
   /** pending repaint (streaming updates are throttled to ~25 fps) */
   timer?: ReturnType<typeof setTimeout>;
   /** what the webview already has: item id -> serialized item, and the item order */
-  sent?: { items: Map<string, string>; order: string[] };
+  /** what the page has: each item as sent, and which were still live (running, waiting for an answer) */
+  sent?: Sent;
   /** vendor whose mark is the tab icon */
   vendor?: string;
   /** last settings saved for its session */
@@ -86,6 +90,29 @@ interface Open {
 /** PR links in an item's text (answers, tool output). */
 const itemPrUrls = (it: any): string[] => findPrUrls(`${it.text ?? ''}
 ${it.result ?? ''}`);
+
+/** An item that can still change: running, streaming, or waiting for the user. */
+export const isLive = (it: ChatItem) => !!(it as any).streaming || ['running', 'pending', 'waiting'].includes((it as any).status);
+
+export type Sent = { items: Map<string, string>; order: string[]; live: Set<string> };
+
+/** The items the page doesn't have yet, or has an older copy of (and the record of what it has now).
+ *  Old finished items don't change, so only the recent tail and anything live is compared: cheap even
+ *  for very long chats. Live as last sent counts too: a question answered far up the chat has to
+ *  reach the page as answered. */
+export function changedItems(sent: Sent, items: ChatItem[]): ChatItem[] {
+  const tail = Math.max(0, items.length - 60);
+  return items.filter((it, i) => {
+    const prev = sent.items.get(it.id);
+    if (prev !== undefined && i < tail && !isLive(it) && !sent.live.has(it.id)) return false;
+    const json = JSON.stringify(it);
+    if (isLive(it)) sent.live.add(it.id);
+    else sent.live.delete(it.id);
+    if (json === prev) return false;
+    sent.items.set(it.id, json);
+    return true;
+  });
+}
 
 export class Chats {
   /** live status of the PRs the chats' agents opened */
@@ -350,22 +377,13 @@ export class Chats {
     };
     if (!o.sent) {
       // first paint: the whole conversation once
-      o.sent = { items: new Map(items.map((it) => [it.id, JSON.stringify(it)])), order: items.map((it) => it.id) };
+      o.sent = { items: new Map(items.map((it) => [it.id, JSON.stringify(it)])), order: items.map((it) => it.id), live: new Set(items.filter(isLive).map((it) => it.id)) };
       this.send(o, { type: 'data', data: { view: 'chat', chat: { ...s, prs: prsOf(items), stash: this.stash(), tabCompletion: tabCompletion() }, linked: linkedInfo } });
       return;
     }
     // afterwards only items that are new or changed. Old finished items don't change, so only the
     // recent tail and anything still live is compared: cheap even for very long chats.
-    const live = new Set(['running', 'pending', 'waiting']);
-    const tail = Math.max(0, items.length - 60);
-    const upserts = items.filter((it, i) => {
-      const prev = o.sent!.items.get(it.id);
-      if (prev !== undefined && i < tail && !(it as any).streaming && !live.has((it as any).status)) return false;
-      const json = JSON.stringify(it);
-      if (json === prev) return false;
-      o.sent!.items.set(it.id, json);
-      return true;
-    });
+    const upserts = changedItems(o.sent, items);
     const order = items.map((it) => it.id);
     const orderChanged = order.length !== o.sent.order.length || order.some((id, i) => id !== o.sent!.order[i]);
     if (orderChanged) o.sent.order = order;
@@ -380,6 +398,20 @@ export class Chats {
         return this.post(o);
       case 'send':
         return c.send(m.text, m.images, m.priority);
+      case 'allowRule':
+        try {
+          const file = c.allowRule(m.id, m.rule);
+          vscode.window.showInformationMessage(vscode.l10n.t('Allowed {0} in {1}. Ask the agent to try again.', m.rule, path.relative(c.state.cwd, file)));
+        } catch (e: any) {
+          vscode.window.showErrorMessage(`Steerhouse: ${e?.message ?? e}`);
+        }
+        return;
+      case 'localCommand':
+        if (!(LOCAL_COMMANDS as readonly string[]).includes(m.name)) return;
+        return runLocalCommand(m.name as LocalCommand, c).then(
+          () => {},
+          (e) => vscode.window.showWarningMessage(`Steerhouse: /${m.name}: ${e?.message ?? e}`),
+        );
       case 'promote':
         return c.promote(m.id, m.priority);
       case 'editQueued':

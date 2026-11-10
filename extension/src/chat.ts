@@ -26,6 +26,8 @@ export type ChatItem =
   | { kind: 'result'; id: string; text: string; isError: boolean; costUsd?: number; durationMs?: number }
   | { kind: 'system'; id: string; text: string }
   /** a subagent's final report, or a background task ending (Claude Code injects these as user turns) */
+  /** auto mode's classifier refused a tool call: it never asks, so this is where the user can allow it */
+  | { kind: 'blocked'; id: string; tool: string; command: string; reason: string; rule?: string; status?: 'allowed' }
   | { kind: 'agentReport'; id: string; from: string; title?: string; text?: string; status?: string; ts?: string };
 
 export type Question = { question: string; header: string; multiSelect: boolean; options: { label: string; description: string }[] };
@@ -260,6 +262,26 @@ export function agentNotice(text: string, ts?: string, items: ChatItem[] = []): 
 }
 const isNotice = (t: string) => /^\s*(Another Claude session sent a message:\s*)?<(agent-message|task-notification)\b/.test(t);
 
+/** The permission rule that allows commands like this one: the program and its subcommand. */
+export function ruleFor(tool: string, input: any): string | undefined {
+  if (tool !== 'Bash' && tool !== 'PowerShell') return tool.startsWith('mcp__') || ['WebFetch', 'WebSearch', 'Write', 'Edit'].includes(tool) ? tool : undefined;
+  const cmd = String(input?.command ?? '');
+  // the step that matters, after any "cd somewhere &&"
+  const step = cmd.split(/&&|;|\|\||\n/).map((x) => x.trim()).find((x) => x && !/^cd\s/.test(x));
+  const words = step?.split(/\s+/).filter((w) => /^[\w.@/-]+$/.test(w) && !w.startsWith('-')) ?? [];
+  if (!words.length) return undefined;
+  // "gh pr merge", "git push", "npm publish": the program and its (sub)commands, not the arguments
+  const n = ['gh', 'glab', 'az', 'gcloud', 'aws', 'kubectl', 'docker'].includes(words[0]) ? 3 : ['git', 'npm', 'pnpm', 'yarn', 'cargo', 'go', 'pip', 'uv'].includes(words[0]) ? 2 : 1;
+  return `${tool}(${words.slice(0, n).join(' ')}:*)`;
+}
+
+/** Auto mode's classifier refusing a tool call reads like this in its result. */
+export function autoModeBlock(t: Extract<ChatItem, { kind: 'tool' }>, result: string): Extract<ChatItem, { kind: 'blocked' }> | undefined {
+  const m = /denied by the Claude Code auto mode classifier\.?\s*(?:Reason:\s*\[?([^\].\n]+)\]?)?/i.exec(result);
+  if (!m) return undefined;
+  return { kind: 'blocked', id: `blocked-${t.id}`, tool: t.name, command: t.name === 'Bash' || t.name === 'PowerShell' ? String((t.input as any)?.command ?? '') : t.summary, reason: (m[1] ?? '').trim(), rule: ruleFor(t.name, t.input) };
+}
+
 const NOISE = ['<system-reminder>', '<local-command', '<command-', 'Caveat:', '[Request interrupted'];
 
 /** Rebuild the conversation from a session transcript (JSONL) so resumed chats show their history. */
@@ -323,6 +345,8 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
           if (!t) continue;
           t.status = c.is_error ? 'error' : 'done';
           t.result = clip(resultText(c.content), 6000);
+          const block = autoModeBlock(t, t.result);
+          if (block) items.push(block);
           const pics = resultImages(c.content).images;
           if (pics.length) t.images = pics;
           const r = rec.toolUseResult;
@@ -861,8 +885,50 @@ export class ChatSession {
 
   // ------------------------------------------------------------------ permissions, plans, questions
 
+  /** Saves an allow rule for this project, just for this user (.claude/settings.local.json). Claude Code
+   *  reads its settings again when they change, and auto mode applies allow rules before its classifier. */
+  allowRule(id: string, rule: string) {
+    const file = path.join(this.state.cwd, '.claude', 'settings.local.json');
+    let cfg: any = {};
+    try {
+      cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (e: any) {
+      if (e?.code !== 'ENOENT') throw new Error(`${file} is not valid JSON: fix it first`);
+    }
+    cfg.permissions ??= {};
+    cfg.permissions.allow = [...new Set([...(cfg.permissions.allow ?? []), rule])];
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const created = !fs.existsSync(file);
+    fs.writeFileSync(file, JSON.stringify(cfg, null, 2) + '\n');
+    // personal, like Claude Code's own: kept out of git without touching the committed .gitignore
+    const exclude = path.join(this.state.cwd, '.git', 'info', 'exclude');
+    if (created && fs.existsSync(path.dirname(exclude))) {
+      const cur = fs.existsSync(exclude) ? fs.readFileSync(exclude, 'utf8') : '';
+      if (!/settings\.local\.json/.test(cur)) fs.appendFileSync(exclude, `${cur && !cur.endsWith('\n') ? '\n' : ''}.claude/settings.local.json\n`);
+    }
+    const it = this.state.items.find((x) => x.id === id);
+    if (it?.kind === 'blocked') it.status = 'allowed';
+    this.changed();
+    return file;
+  }
+
+  /** a card standing for earlier identical requests: their ids */
+  private copies = new Map<string, string[]>();
+
   private ask(tool: string, input: Record<string, unknown>, suggestions: PermissionUpdate[] | undefined, signal: AbortSignal): Promise<PermissionResult> {
     const id = uid();
+    // asked again (after a reconnect Claude Code hands back what is still waiting, or two agents ask the
+    // same): one card, and its answer goes to every copy
+    const same = JSON.stringify(input);
+    const copies: string[] = [];
+    this.state.items = this.state.items.filter((x) => {
+      if (!(x.kind === 'permission' || x.kind === 'plan' || x.kind === 'question') || x.status !== 'pending') return true;
+      const ctx = (this as any)[`ctx_${x.id}`] as { input: unknown } | undefined;
+      const repeat = !!ctx && JSON.stringify(ctx.input) === same && (x.kind !== 'permission' || x.tool === tool);
+      if (repeat) copies.push(x.id, ...(this.copies.get(x.id) ?? []));
+      return !repeat;
+    });
+    if (copies.length) this.copies.set(id, copies);
     if (tool === 'ExitPlanMode') {
       this.state.items.push({ kind: 'plan', id, plan: str(input.plan) || JSON.stringify(input, null, 2), status: 'pending' });
     } else if (tool === 'AskUserQuestion') {
@@ -897,13 +963,19 @@ export class ChatSession {
   }
 
   respond(id: string, decision: 'allow' | 'always' | 'deny', message?: string, answers?: Record<string, string>) {
+    for (const copy of this.copies.get(id) ?? []) this.respondOne(copy, decision, message, answers);
+    this.copies.delete(id);
+    this.respondOne(id, decision, message, answers);
+  }
+
+  private respondOne(id: string, decision: 'allow' | 'always' | 'deny', message?: string, answers?: Record<string, string>) {
     const resolve = this.pending.get(id);
     if (!resolve) return;
     const ctx = (this as any)[`ctx_${id}`] as { input: Record<string, unknown>; suggestions?: PermissionUpdate[] };
     delete (this as any)[`ctx_${id}`];
     const it = this.state.items.find((x) => x.id === id);
-    if (it?.kind === 'question' && answers) {
-      it.answers = answers;
+    if (answers && (it?.kind === 'question' || !it)) {
+      if (it?.kind === 'question') it.answers = answers;
       resolve({ behavior: 'allow', updatedInput: { ...ctx.input, answers } });
       this.mark(id, 'allowed');
       return;
@@ -1040,6 +1112,8 @@ export class ChatSession {
           if (!t) continue;
           t.status = c.is_error ? 'error' : 'done';
           t.result = clip(resultText(c.content), 6000);
+          const block = !t.parent ? autoModeBlock(t, t.result) : undefined;
+          if (block && !this.state.items.some((x) => x.id === block.id)) this.state.items.push(block);
           const pics = resultImages(c.content).images;
           if (pics.length) t.images = pics;
           const r: any = (m as any).tool_use_result;

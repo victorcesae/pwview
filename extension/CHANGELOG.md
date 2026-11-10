@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.19
+- Claude Code's own commands work in the chat: /config, /permissions, /model, /mcp, /hooks, /memory, /agents, /login, /doctor and /clear open the same settings in Steerhouse instead of being sent to the model as text, and /terminal opens the session in Claude Code for anything else.
+- When auto mode blocks a command without asking (a merge with --admin, for example), the chat says so and why, with Always allow, which saves a rule like Bash(gh pr merge:*) for you in the project's .claude/settings.local.json.
+- An answered question no longer stays open on screen in long chats, and a question asked again after a reload shows once, with the answer going to both.
+
 ## 1.0.18
 - Faster Tab: typing what the suggestion says keeps the rest of it on screen with no new request, a key typed while a suggestion is on its way no longer throws it away, and Claude Code is started when you open a file instead of on the first suggestion. An empty answer no longer waits for Claude Code's report.
 - Cleaner Tab suggestions: only the text to insert, without labels or quotes around it.

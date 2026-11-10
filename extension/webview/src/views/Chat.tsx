@@ -549,6 +549,35 @@ function UserMessage({ it }: { it: Extract<ChatItem, { kind: 'user' }> }) {
   );
 }
 
+/** Auto mode refused a tool call without asking: say why, and offer the rule that allows it. */
+function BlockedCard({ it }: { it: Extract<ChatItem, { kind: 'blocked' }> }) {
+  return (
+    <div className="border-warn/40 bg-warn/10 flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-[12px]">
+      <div className="flex items-center gap-1.5">
+        <ShieldQuestion className="text-warn size-3.5 shrink-0" />
+        <span className="font-medium">{t('Auto mode blocked this')}</span>
+        {it.reason && <span className="text-muted-foreground truncate">· {it.reason}</span>}
+      </div>
+      <code className="bg-muted/60 truncate rounded px-1.5 py-0.5 font-mono text-[11px]" title={it.command}>
+        {it.command}
+      </code>
+      {it.rule &&
+        (it.status === 'allowed' ? (
+          <span className="text-added flex items-center gap-1">
+            <Check className="size-3" /> {t('Allowed: {0}. Ask the agent to try again.', it.rule)}
+          </span>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" className="h-6 text-[11px]" onClick={() => post({ type: 'allowRule', id: it.id, rule: it.rule! } as never)}>
+              {t('Always allow {0}', it.rule)}
+            </Button>
+            <span className="text-muted-foreground text-[11px]">{t('Saved for you in this project (.claude/settings.local.json)')}</span>
+          </div>
+        ))}
+    </div>
+  );
+}
+
 /** What a subagent sent back, or a background task ending: from the agent, not typed by the user. */
 function AgentReport({ it }: { it: Extract<ChatItem, { kind: 'agentReport' }> }) {
   const [open, setOpen] = useState(false);
@@ -617,6 +646,8 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
       return <div className="border-removed/40 bg-removed/10 text-removed rounded-lg border px-3 py-2 text-[12px]">{it.text}</div>;
     case 'agentReport':
       return <AgentReport it={it} />;
+    case 'blocked':
+      return <BlockedCard it={it} />;
     case 'system':
       return (
         <div className="text-muted-foreground flex items-center justify-center gap-1.5 text-[11px]">
@@ -696,6 +727,8 @@ function rowText(g: ChatItem | ToolItem[]): string {
       return g.text;
     case 'agentReport':
       return `${g.title ?? ''} ${g.text ?? ''}`;
+    case 'blocked':
+      return `${g.command} ${g.reason}`;
     case 'shell':
       return `${g.command} ${g.output}`;
     case 'tool':

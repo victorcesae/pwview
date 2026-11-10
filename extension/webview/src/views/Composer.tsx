@@ -18,6 +18,32 @@ import type { ChatState, Effort, PermissionMode, Priority, ToChat } from '@/type
 const post = (m: ToChat) => postAny(m as never);
 const MAX_UPLOAD = 100 * 1024 * 1024;
 
+/** Claude Code's interactive commands, which only exist in its terminal app: the chat opens the same
+ *  settings here (src/localCommands.ts). A skill or command of the project with the same name wins. */
+export const LOCAL_COMMANDS: { name: string; hint: string }[] = [
+  { name: 'config', hint: 'Claude Code settings files' },
+  { name: 'permissions', hint: 'Permission mode, allow and deny rules' },
+  { name: 'model', hint: 'Change the model' },
+  { name: 'mcp', hint: 'Connectors (MCP servers)' },
+  { name: 'hooks', hint: 'Hooks, in a settings file' },
+  { name: 'memory', hint: 'CLAUDE.md rules' },
+  { name: 'agents', hint: 'Subagents: open or create one' },
+  { name: 'login', hint: 'Claude accounts' },
+  { name: 'doctor', hint: 'Check the setup' },
+  { name: 'clear', hint: 'New chat in this folder' },
+  { name: 'terminal', hint: 'Open this session in Claude Code, for any other command' },
+];
+/** "/permissions" alone (no arguments) when the chat runs it itself. */
+export function localCommandOf(text: string, sdkCommands: string[]): string | undefined {
+  const m = /^\/([a-z-]+)\s*$/.exec(text.trim());
+  return m && !sdkCommands.includes(m[1]) && LOCAL_COMMANDS.some((c) => c.name === m[1]) ? m[1] : undefined;
+}
+
+/** The built-in commands first, then the session's own. */
+const allCommands = (sdk: string[]) => [...LOCAL_COMMANDS.map((c) => c.name).filter((n) => !sdk.includes(n)), ...sdk];
+/** What a built-in command does; undefined for the session's own commands. */
+const localHint = (c: string, sdk: string[]) => (sdk.includes(c) ? undefined : LOCAL_COMMANDS.find((x) => x.name === c)?.hint);
+
 export const PRIORITY: Record<Priority, { label: string; icon: React.ComponentType<{ className?: string }>; hint: string }> = {
   next: { label: 'Steer', icon: Navigation, hint: 'Picked up at its next step, without stopping' },
   later: { label: 'Queue', icon: ListOrdered, hint: 'Sent when the current turn ends' },
@@ -99,14 +125,14 @@ function PlusMenu({ chat, onFiles, onSlash }: { chat: ChatState; onFiles: () => 
         <DropdownMenuItem onSelect={() => post({ type: 'setTabCompletion', on: chat.tabCompletion === false })} title={t('Tab completes @files, /commands and the suggested prompt')}>
           <CornerDownRight /> {chat.tabCompletion === false ? t('Turn Tab completion on') : t('Turn Tab completion off')}
         </DropdownMenuItem>
-        {chat.slashCommands.length > 0 && (
+        {allCommands(chat.slashCommands).length > 0 && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <SquareSlash /> {t('Slash commands')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
-              {chat.slashCommands.map((c) => (
-                <DropdownMenuItem key={c} onSelect={() => onSlash(c)} className="font-mono">
+              {allCommands(chat.slashCommands).map((c) => (
+                <DropdownMenuItem key={c} onSelect={() => (localHint(c, chat.slashCommands) ? post({ type: 'localCommand', name: c }) : onSlash(c))} className="font-mono">
                   /{c}
                 </DropdownMenuItem>
               ))}
@@ -159,7 +185,9 @@ export function Composer({ chat }: { chat: ChatState }) {
   const [over, setOver] = useState(false);
   const [sel, setSel] = useState(0);
 
-  const slash = text.startsWith('/') && !/\s/.test(text) ? chat.slashCommands.filter((c) => `/${c}`.startsWith(text.trim())).slice(0, 8) : [];
+  const commands = allCommands(chat.slashCommands);
+  const hintOf = (c: string) => localHint(c, chat.slashCommands);
+  const slash = text.startsWith('/') && !/\s/.test(text) ? commands.filter((c) => `/${c}`.startsWith(text.trim())).slice(0, 8) : [];
 
   // ---- Tab completion (can be turned off): @ finds files in the chat's folder
   const tabOn = chat.tabCompletion !== false;
@@ -223,12 +251,26 @@ export function Composer({ chat }: { chat: ChatState }) {
     }
     const md = input.current?.getMarkdown() ?? '';
     if (!md.trim() && !images.length) return;
+    const local = !images.length && localCommandOf(md, chat.slashCommands);
+    if (local) {
+      post({ type: 'localCommand', name: local });
+      input.current?.clear();
+      setText('');
+      return;
+    }
     post({ type: 'send', text: md, images, priority: working ? p : 'later' });
     input.current?.clear();
     setText('');
     setImages([]);
   };
   const pickSlash = (c: string) => {
+    if (hintOf(c)) {
+      // it opens something here instead of being sent: no arguments to type
+      post({ type: 'localCommand', name: c });
+      input.current?.clear();
+      setText('');
+      return;
+    }
     input.current?.setMarkdown(`/${c} `);
     setText(`/${c} `);
     input.current?.focus();
@@ -367,9 +409,10 @@ export function Composer({ chat }: { chat: ChatState }) {
                 e.preventDefault();
                 pickSlash(c);
               }}
-              className={cn('cursor-pointer px-2.5 py-1 text-left font-mono text-[12px]', i === sel ? 'bg-accent' : 'hover:bg-accent')}
+              className={cn('flex cursor-pointer items-baseline gap-2 px-2.5 py-1 text-left font-mono text-[12px]', i === sel ? 'bg-accent' : 'hover:bg-accent')}
             >
               /{c}
+              {hintOf(c) && <span className="text-muted-foreground truncate font-sans text-[11px]">{t(hintOf(c)!)}</span>}
             </button>
           ))}
         </div>
