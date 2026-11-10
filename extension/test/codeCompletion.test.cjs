@@ -29,7 +29,7 @@ test('the reply is cleaned: fences, repeats, overlap, cut lines', () => {
   assert.strictEqual(C.cleanCompletion('foo(a);', 'foo(', 'a);'), undefined, 'nothing new to suggest');
   assert.strictEqual(C.cleanCompletion('one\ntwo\nthr', 'x', '', true), 'one\ntwo', 'a line cut by the token limit is dropped');
   assert.strictEqual(C.cleanCompletion('   \n', 'x', ''), undefined);
-  assert.strictEqual(C.cleanCompletion(Array(50).fill('l').join('\n'), 'x', '').split('\n').length, 20);
+  assert.strictEqual(C.cleanCompletion(Array(50).fill('l').join('\n'), 'x', '').split('\n').length, 8);
 });
 
 test('local means on this machine', () => {

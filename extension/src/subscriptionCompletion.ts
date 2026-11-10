@@ -5,6 +5,9 @@ import { SYSTEM, type CompletionReply } from './codeCompletion';
 
 const MODEL = 'haiku';
 const IDLE_MS = 2 * 60_000;
+// Claude Code's own cap is kept well above this: when it hits its cap it retries the reply several
+// times and then reports an "API Error", which is slow. The suggestion is cut here instead.
+const MAX_CHARS = 500;
 type Warm = Awaited<ReturnType<typeof startup>>;
 
 /** One account: a process kept warm for the next suggestion, gone after a while without any. */
@@ -30,7 +33,7 @@ export class SubscriptionCompleter {
         thinking: { type: 'disabled' },
         includePartialMessages: true,
         // no telemetry or update checks competing with the request
-        env: { ...process.env, ...this.env, CLAUDE_CODE_MAX_OUTPUT_TOKENS: '256', MAX_THINKING_TOKENS: '0', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
+        env: { ...process.env, ...this.env, CLAUDE_CODE_MAX_OUTPUT_TOKENS: '2048', MAX_THINKING_TOKENS: '0', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
       },
     });
   }
@@ -55,16 +58,27 @@ export class SubscriptionCompleter {
         if (m.type === 'stream_event') {
           const e: any = m.event;
           if (e.type === 'content_block_start') kinds.set(e.index, e.content_block?.type);
-          if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta') text += e.delta.text;
+          if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta') {
+            text += e.delta.text;
+            if (text.length >= MAX_CHARS) {
+              cut = true;
+              break;
+            }
+          }
+          if (e.type === 'message_delta' && e.delta?.stop_reason) {
+            cut ||= e.delta.stop_reason === 'max_tokens';
+            if (text) break;
+          }
           if (e.type === 'content_block_stop' && kinds.get(e.index) === 'text' && text) break;
           continue;
         }
-        if (m.type === 'assistant' && !text) {
+        // a reply Claude Code made up to report an error isn't a suggestion
+        if (m.type === 'assistant' && !text && !(m as any).error && m.message.model !== '<synthetic>') {
           text += m.message.content.flatMap((c) => (c.type === 'text' ? [c.text] : [])).join('');
           cut = m.message.stop_reason === 'max_tokens';
         }
         if (m.type === 'result') {
-          if (m.is_error) throw new Error(m.subtype === 'success' ? m.result : m.subtype);
+          if (m.is_error && !text) throw new Error(m.subtype === 'success' ? m.result : m.subtype);
           break;
         }
       }

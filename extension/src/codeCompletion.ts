@@ -10,7 +10,7 @@ import { agentExecutable } from './util';
 const PREFIX_CHARS = 6000;
 const SUFFIX_CHARS = 2000;
 const MAX_TOKENS = 256;
-const MAX_LINES = 20;
+const MAX_LINES = 8;
 const TIMEOUT_MS = 15_000;
 
 export interface CompletionReply {
@@ -52,7 +52,7 @@ export function isSensitive(file: string): boolean {
 /** Only where a suggestion can flow: at the end of the line, or before closing characters. */
 export const worthSuggesting = (restOfLine: string) => /^[\s)\]}'"`;,:>]*$/.test(restOfLine);
 
-export const SYSTEM = 'You are a code completion engine. Reply with only the exact text to insert at <CURSOR>: no explanation, no Markdown, no code fences, and nothing that is already before or after the cursor. Keep it short: finish the current statement or block. If nothing useful fits, reply with nothing.';
+export const SYSTEM = 'You are a code completion engine. Reply with only the exact text to insert at <CURSOR>: no explanation, no Markdown, no code fences, and nothing that is already before or after the cursor. Keep it short, like an editor suggestion: finish the current line, or at most a few lines of the current block. If nothing useful fits, reply with nothing.';
 
 export function userPrompt(language: string, fileName: string, prefix: string, suffix: string) {
   return `Language: ${language}\nFile: ${fileName}\n\n${prefix.slice(-PREFIX_CHARS)}<CURSOR>${suffix.slice(0, SUFFIX_CHARS)}`;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.15
+- Tab with the Claude subscription no longer fails with "API Error: Claude's response exceeded the 256 output token maximum" after a long wait: a long suggestion is trimmed right away instead.
+- Suggestions are shorter, like the editor's own: the rest of the line, or a few lines of the current block (at most 8).
+
 ## 1.0.14
 - Uses pwview 0.2.1, which caps each project's browser cache at 100 MB (it reached 807 MB in one project).
 - Pictures a tool returns (the agent reading a .png, a screenshot) are shown in its output, and enlarge on click, instead of the word [image]. Up to 4 per call.
