@@ -12,6 +12,8 @@ const SUFFIX_CHARS = 2000;
 const MAX_TOKENS = 256;
 const MAX_LINES = 8;
 const TIMEOUT_MS = 15_000;
+const TIMED_OUT = 'timeout';
+const timedOut = (a: AbortController) => a.signal.reason === TIMED_OUT;
 
 export interface CompletionReply {
   text: string;
@@ -52,7 +54,14 @@ export function isSensitive(file: string): boolean {
 /** Only where a suggestion can flow: at the end of the line, or before closing characters. */
 export const worthSuggesting = (restOfLine: string) => /^[\s)\]}'"`;,:>]*$/.test(restOfLine);
 
-export const SYSTEM = 'You are a code completion engine. Reply with only the exact text to insert at <CURSOR>: no explanation, no Markdown, no code fences, and nothing that is already before or after the cursor. Keep it short, like an editor suggestion: finish the current line, or at most a few lines of the current block. If nothing useful fits, reply with nothing.';
+export const SYSTEM = `You are a code completion engine inside an editor, like Copilot. The user message is a file with a <CURSOR> marker. Reply with ONLY the raw characters to insert at <CURSOR>, exactly as they would appear in the file: never a label, a name, a quote, backticks, Markdown, an explanation or anything already before or after the cursor. Usually the rest of the current line; at most a few lines of the current block. If nothing useful fits, reply with nothing.
+
+Example. File:
+function area(r: number) {
+  return <CURSOR>
+}
+Reply:
+Math.PI * r * r;`;
 
 export function userPrompt(language: string, fileName: string, prefix: string, suffix: string) {
   return `Language: ${language}\nFile: ${fileName}\n\n${prefix.slice(-PREFIX_CHARS)}<CURSOR>${suffix.slice(0, SUFFIX_CHARS)}`;
@@ -94,11 +103,35 @@ export async function requestCompletion(p: Provider, key: string | undefined, mo
   return { text, cut: body.stop_reason === 'max_tokens' };
 }
 
+/** A suggestion still fits after more typing when the new characters are its start: the rest of it,
+ *  shown right away with no new request (what Cursor and Copilot do while you type through one). */
+export function typedThrough(shownAt: string, text: string | undefined, prefix: string): string | undefined {
+  if (!text || !prefix.startsWith(shownAt)) return undefined;
+  const typed = prefix.slice(shownAt.length);
+  if (!text.startsWith(typed)) return undefined;
+  const rest = text.slice(typed.length);
+  return rest.trim() ? rest : undefined;
+}
+
 /** Whether completions stay on this machine (the extension's machine: over SSH, the remote one). */
 export const isLocal = (p: Provider) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(p.baseUrl);
 
+interface Asked {
+  /** provider, model, language and the text after the cursor: what has to stay the same to reuse it */
+  where: string;
+  prefix: string;
+  done: boolean;
+  reply: Promise<string | undefined>;
+  abort: AbortController;
+  /** the answer, once it came */
+  text?: string;
+}
+
 export class CodeCompletion implements vscode.InlineCompletionItemProvider {
-  private last?: { key: string; text: string | undefined };
+  /** the latest request: kept when a key is typed while it runs, since the answer may still fit */
+  private asked?: Asked;
+  /** whoever wants Claude Code started before the first suggestion */
+  onTyping?: (source: CompletionSource, model: string) => void;
   /** the latest failure, for the status bar; cleared by the next success */
   onStatus?: (error?: string) => void;
 
@@ -121,37 +154,56 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
     const prefix = all.slice(Math.max(0, offset - PREFIX_CHARS), offset);
     const suffix = all.slice(offset, offset + SUFFIX_CHARS);
     if (!prefix.trim()) return;
-    const key = `${s.provider}\0${s.model}\0${doc.languageId}\0${prefix}\0${suffix}`;
-    let text: string | undefined;
-    if (this.last?.key === key) text = this.last.text;
-    else {
+    const where = `${s.provider}\0${s.model}\0${doc.languageId}\0${suffix}`;
+    let asked = this.asked?.where === where && prefix.startsWith(this.asked.prefix) ? this.asked : undefined;
+    // typed through the suggestion on screen: the rest of it at once
+    let text = asked && typedThrough(asked.prefix, asked.text, prefix);
+    if (!text && asked && !asked.done) {
+      // asked a moment ago and still on its way: its answer may still fit what was typed since
+      text = typedThrough(asked.prefix, await asked.reply, prefix);
+      if (token.isCancellationRequested) return;
+    }
+    if (!text) {
+      if (asked?.done && asked.prefix === prefix) return; // asked for exactly this already: nothing fits here
       // wait for a pause in typing: VS Code cancels this request on the next key, so nothing is sent
+      this.onTyping?.(provider, s.model);
       await new Promise((r) => setTimeout(r, Math.max(isSubscription(provider) ? SUBSCRIPTION_MIN_DELAY_MS : 0, s.delayMs)));
       if (token.isCancellationRequested) return;
+      this.asked?.abort.abort(); // somewhere else now: its answer is no use
       const abort = new AbortController();
-      const timer = setTimeout(() => abort.abort(), TIMEOUT_MS);
-      const sub = token.onCancellationRequested(() => abort.abort());
-      try {
-        const user = userPrompt(doc.languageId, path.basename(doc.uri.fsPath), prefix, suffix);
-        const reply = isSubscription(provider)
-          ? await this.subscription!(provider.account, s.model, user, abort.signal)
-          : await requestCompletion(provider, provider.hasKey ? await this.secret(provider.id) : undefined, s.model, SYSTEM, user, abort.signal);
-        text = cleanCompletion(reply.text, prefix, suffix, reply.cut);
-        this.last = { key, text };
-        this.onStatus?.();
-      } catch (e) {
-        if (!token.isCancellationRequested) this.onStatus?.(abort.signal.aborted ? `${provider.name}: no answer in ${TIMEOUT_MS / 1000} s` : String((e as Error)?.message ?? e));
-        return;
-      } finally {
-        clearTimeout(timer);
-        sub.dispose();
-      }
+      const user = userPrompt(doc.languageId, path.basename(doc.uri.fsPath), prefix, suffix);
+      const now: Asked = { where, prefix, done: false, abort, reply: Promise.resolve(undefined) };
+      // not tied to this request's cancellation: the next key cancels it, and the answer may still fit
+      now.reply = this.ask(provider, s.model, user, abort).then((r) => {
+        now.text = r && cleanCompletion(r.text, prefix, suffix, r.cut);
+        now.done = !!r; // stopped or failed: asked again next time
+        return now.text;
+      });
+      this.asked = now;
+      text = await now.reply;
     }
     if (!text || token.isCancellationRequested) return;
     return [new vscode.InlineCompletionItem(text, new vscode.Range(pos, pos))];
   }
-}
 
+  private async ask(provider: CompletionSource, model: string, user: string, abort: AbortController): Promise<CompletionReply | undefined> {
+    const timer = setTimeout(() => abort.abort(TIMED_OUT), TIMEOUT_MS);
+    try {
+      const reply = isSubscription(provider)
+        ? await this.subscription!(provider.account, model, user, abort.signal)
+        : await requestCompletion(provider, provider.hasKey ? await this.secret(provider.id) : undefined, model, SYSTEM, user, abort.signal);
+      this.onStatus?.();
+      return reply;
+    } catch (e) {
+      // stopped because the cursor moved on: not an error
+      if (abort.signal.aborted && !timedOut(abort)) return undefined;
+      this.onStatus?.(timedOut(abort) ? `${provider.name}: no answer in ${TIMEOUT_MS / 1000} s` : String((e as Error)?.message ?? e));
+      return undefined;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
 export function registerCodeCompletion(ctx: vscode.ExtensionContext) {
   const section = () => vscode.workspace.getConfiguration('steerhouse.codeCompletion');
   const settings = (): CompletionSettings => ({ enabled: section().get('enabled', false), provider: section().get('provider', ''), model: section().get('model', ''), delayMs: section().get('delayMs', 250) });
@@ -193,6 +245,17 @@ export function registerCodeCompletion(ctx: vscode.ExtensionContext) {
     item.show();
   };
   engine.onStatus = paint;
+  // Claude Code takes about half a second to start: have one ready before the first suggestion
+  const prewarm = (source?: CompletionSource, model = settings().model) => {
+    const s = settings();
+    const src = source ?? (s.enabled ? providers().find((p) => p.id === s.provider) : undefined);
+    if (!src || !isSubscription(src)) return;
+    try {
+      require('fs').mkdirSync(ctx.globalStorageUri.fsPath, { recursive: true });
+      completerFor(src.account).prewarm(model);
+    } catch {}
+  };
+  engine.onTyping = prewarm;
   paint();
 
   const toggle = async () => {
@@ -222,6 +285,7 @@ export function registerCodeCompletion(ctx: vscode.ExtensionContext) {
     item,
     vscode.languages.registerInlineCompletionItemProvider({ scheme: 'file' }, engine),
     vscode.commands.registerCommand('steerhouse.codeCompletion.toggle', toggle),
+    vscode.window.onDidChangeActiveTextEditor((e) => e?.document.uri.scheme === 'file' && prewarm()),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration('steerhouse.codeCompletion')) return;
       stopCompleters(); // the model or the account may have changed, and when off nothing stays warm

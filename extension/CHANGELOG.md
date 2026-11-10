@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.18
+- Faster Tab: typing what the suggestion says keeps the rest of it on screen with no new request, a key typed while a suggestion is on its way no longer throws it away, and Claude Code is started when you open a file instead of on the first suggestion. An empty answer no longer waits for Claude Code's report.
+- Cleaner Tab suggestions: only the text to insert, without labels or quotes around it.
+- Merging a pull request that the base branch's rules block (a ruleset, required reviews) offers Merge as Admin, for repository admins, instead of only showing GitHub's error.
+
 ## 1.0.17
 - Links in the chat and panel open once instead of twice: VS Code no longer opens them as well.
 - A subagent's report shows as a "Report from subagent" card named after the agent, and a background task ending as a one-line status, instead of raw <task-notification> text in your own message (or nothing at all, in reopened chats).

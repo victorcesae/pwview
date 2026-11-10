@@ -149,6 +149,9 @@ test('prs (real GitHub): open PR with Actions checks and review decision', { ski
 test('prs: merge arguments and GitHub PR links', () => {
   assert.deepStrictEqual(P.mergeArgs('https://github.com/a/b/pull/3', 'squash', true), ['pr', 'merge', 'https://github.com/a/b/pull/3', '--squash', '--delete-branch']);
   assert.deepStrictEqual(P.mergeArgs('https://github.com/a/b/pull/3', 'rebase', false), ['pr', 'merge', 'https://github.com/a/b/pull/3', '--rebase']);
+  assert.deepStrictEqual(P.mergeArgs('https://github.com/a/b/pull/3', 'squash', false, true), ['pr', 'merge', 'https://github.com/a/b/pull/3', '--squash', '--admin']);
+  assert.ok(P.blockedByPolicy('X Pull request o/r#39 is not mergeable: the base branch policy prohibits the merge. To have the pull request merged after all the requirements have been met, add the `--auto` flag.'));
+  assert.ok(!P.blockedByPolicy('GraphQL: Pull Request is not mergeable (mergePullRequest)'));
   assert.deepStrictEqual(P.parseGithubPr('https://github.com/cli/cli/pull/1'), { owner: 'cli', repo: 'cli', number: 1 });
   assert.strictEqual(P.parseGithubPr('https://gitlab.com/g/web/-/merge_requests/9'), undefined);
 });

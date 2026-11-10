@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ChatSession, historyFromTranscript, Priority, type ChatPrefs } from './chat';
 import { hostIcon } from './hostIcon';
-import { findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMethod } from './prs';
+import { blockedByPolicy, findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMethod } from './prs';
 import { openUrl } from './browser';
 import { findUrls } from './bgtasks';
 import { completeFiles } from './folders';
@@ -453,7 +453,19 @@ export class Chats {
           keep,
         );
         if (!ok) return;
-        const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Merging…') }, () => mergePr(m.url, how.method, ok === del));
+        const merge = (admin: boolean) => vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Merging…') }, () => mergePr(m.url, how.method, ok === del, admin));
+        let r = await merge(false);
+        if (!r.ok && blockedByPolicy(r.out)) {
+          // the base branch's rules block it (reviews, a ruleset): repository admins can bypass them, like on GitHub
+          const bypass = vscode.l10n.t('Merge as Admin');
+          const again = await vscode.window.showWarningMessage(
+            vscode.l10n.t("The base branch's rules block this merge"),
+            { modal: true, detail: vscode.l10n.t('GitHub says the pull request does not meet the branch rules yet (required reviews, checks or a ruleset). If you are an admin of the repository you can bypass them and merge now; otherwise, get it approved first.') },
+            bypass,
+          );
+          if (again !== bypass) return;
+          r = await merge(true);
+        }
         if (!r.ok) return vscode.window.showErrorMessage(vscode.l10n.t('Merge failed: {0}', r.out.slice(0, 300)));
         vscode.window.showInformationMessage(vscode.l10n.t('Merged {0}.', st?.title ?? m.url));
         await this.prs.check(m.url);

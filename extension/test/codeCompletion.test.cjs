@@ -142,3 +142,43 @@ test('a subscription answers through its account, waits for a real pause, and is
   assert.strictEqual(await ask(e, doc('TOKEN=', '/w/.env'), 6), undefined);
   assert.strictEqual(asked.length, 1);
 });
+
+test('typing through a suggestion keeps the rest of it', () => {
+  assert.strictEqual(C.typedThrough('let x = ', 'foo(1);', 'let x = fo'), 'o(1);');
+  assert.strictEqual(C.typedThrough('let x = ', 'foo(1);', 'let x = '), 'foo(1);');
+  assert.strictEqual(C.typedThrough('let x = ', 'foo(1);', 'let x = b'), undefined, 'typed something else');
+  assert.strictEqual(C.typedThrough('let x = ', 'foo(1);', 'let x = foo(1);'), undefined, 'typed all of it');
+  assert.strictEqual(C.typedThrough('let x = ', 'foo', 'let '), undefined, 'deleted back past it');
+});
+
+test('typing what the suggestion says sends no new request', async (t) => {
+  const { calls, provider } = await setup(t, 'foo(1);');
+  const e = engine(provider);
+  assert.strictEqual((await ask(e, doc('let x = '), 8))[0].insertText, 'foo(1);');
+  assert.strictEqual((await ask(e, doc('let x = fo'), 10))[0].insertText, 'o(1);');
+  assert.strictEqual((await ask(e, doc('let x = foo('), 12))[0].insertText, '1);');
+  assert.strictEqual(calls.length, 1);
+  // typing something else asks again
+  await ask(e, doc('let x = bar'), 11);
+  assert.strictEqual(calls.length, 2);
+});
+
+test('a key typed while the answer is on its way does not throw it away', async () => {
+  let n = 0;
+  let release;
+  const source = { id: 'claude:default', name: 'Claude', account: 'default' };
+  const e = new C.CodeCompletion(() => ({ enabled: true, provider: 'claude:default', model: '', delayMs: 0 }), () => [source], async () => undefined, async () => {
+    n++;
+    await new Promise((r) => (release = r));
+    return { text: 'foo(1);', cut: false };
+  });
+  const first = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose() {} }) };
+  const p1 = ask(e, doc('let x = '), 8, {}, first);
+  await new Promise((r) => setTimeout(r, C.SUBSCRIPTION_MIN_DELAY_MS + 50)); // asked, waiting for the answer
+  first.isCancellationRequested = true; // the user typed "f"
+  const p2 = ask(e, doc('let x = f'), 9);
+  release();
+  assert.strictEqual(await p1, undefined);
+  assert.strictEqual((await p2)[0].insertText, 'oo(1);');
+  assert.strictEqual(n, 1, 'one request for both');
+});

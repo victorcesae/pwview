@@ -236,5 +236,8 @@
   "$(git-commit) Committed in {0}": "$(git-commit) Commit feito em {0}",
   "Pushing {0}…": "Fazendo push de {0}…",
   "Pulling {0}…": "Fazendo pull de {0}…",
-  "Git: {0}": "Git: {0}"
+  "Git: {0}": "Git: {0}",
+  "The base branch's rules block this merge": "As regras do branch de destino bloqueiam esta mesclagem",
+  "GitHub says the pull request does not meet the branch rules yet (required reviews, checks or a ruleset). If you are an admin of the repository you can bypass them and merge now; otherwise, get it approved first.": "O GitHub diz que o pull request ainda não cumpre as regras do branch (revisões obrigatórias, verificações ou um ruleset). Se você é administrador do repositório, pode ignorá-las e mesclar agora; senão, consiga a aprovação primeiro.",
+  "Merge as Admin": "Mesclar como administrador"
 }

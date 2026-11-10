@@ -38,6 +38,15 @@ export class SubscriptionCompleter {
     });
   }
 
+  /** Starts Claude Code before the first suggestion is wanted (it takes about half a second). */
+  prewarm(model: string) {
+    if (this.spare) return;
+    this.spare = this.warmUp(model);
+    this.spare.catch(() => (this.spare = undefined));
+    clearTimeout(this.idle);
+    this.idle = setTimeout(() => this.dispose(), IDLE_MS);
+  }
+
   async complete(model: string, user: string, signal: AbortSignal): Promise<CompletionReply> {
     clearTimeout(this.idle);
     const warm = await (this.spare ?? this.warmUp(model));
@@ -65,9 +74,10 @@ export class SubscriptionCompleter {
               break;
             }
           }
+          // the reply is over, even when it is empty: Claude Code's own report comes later
           if (e.type === 'message_delta' && e.delta?.stop_reason) {
             cut ||= e.delta.stop_reason === 'max_tokens';
-            if (text) break;
+            break;
           }
           if (e.type === 'content_block_stop' && kinds.get(e.index) === 'text' && text) break;
           continue;

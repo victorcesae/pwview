@@ -221,9 +221,12 @@ export async function setFileViewed(prId: string, file: string, viewed: boolean)
 export type MergeMethod = 'squash' | 'merge' | 'rebase';
 
 /** gh pr merge arguments. */
-export const mergeArgs = (url: string, method: MergeMethod, deleteBranch: boolean) => ['pr', 'merge', url, `--${method}`, ...(deleteBranch ? ['--delete-branch'] : [])];
+export const mergeArgs = (url: string, method: MergeMethod, deleteBranch: boolean, admin = false) => ['pr', 'merge', url, `--${method}`, ...(deleteBranch ? ['--delete-branch'] : []), ...(admin ? ['--admin'] : [])];
 
-export async function mergePr(url: string, method: MergeMethod, deleteBranch: boolean): Promise<{ ok: boolean; out: string }> {
-  const r = await ghJson(mergeArgs(url, method, deleteBranch));
+/** gh refused because of the base branch's rules (required reviews, a ruleset): an admin can bypass them. */
+export const blockedByPolicy = (out: string) => /base branch policy prohibits the merge|--admin/i.test(out);
+
+export async function mergePr(url: string, method: MergeMethod, deleteBranch: boolean, admin = false): Promise<{ ok: boolean; out: string }> {
+  const r = await ghJson(mergeArgs(url, method, deleteBranch, admin));
   return { ok: r.ok, out: r.out.trim() };
 }
