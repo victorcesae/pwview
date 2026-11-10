@@ -69,7 +69,9 @@ export type ChatItem =
   | { kind: 'plan'; id: string; plan: string; status: 'pending' | 'approved' | 'rejected' }
   | { kind: 'question'; id: string; questions: Question[]; status: 'pending' | 'answered'; answers?: Record<string, string> }
   | { kind: 'result'; id: string; text: string; isError: boolean; costUsd?: number; durationMs?: number }
-  | { kind: 'system'; id: string; text: string };
+  | { kind: 'system'; id: string; text: string }
+  /** a subagent's final report, or a background task ending (Claude Code injects these as user turns) */
+  | { kind: 'agentReport'; id: string; from: string; title?: string; text?: string; status?: string; ts?: string };
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto';
 export interface ChatState {
   key: string; sessionId?: string; cwd: string; title: string; model?: string; models: { value: string; displayName: string }[];

@@ -34,7 +34,9 @@ export function App() {
     const onClick = (e: MouseEvent) => {
       const a = (e.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
       if (!a || !/^https?:/i.test(a.href)) return;
+      // VS Code's webview host opens links on its own too (bubble phase on window): stop it there
       e.preventDefault();
+      e.stopPropagation();
       post({ type: 'openUrl', url: a.href } as never);
     };
     document.addEventListener('click', onClick, true);

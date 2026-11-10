@@ -24,7 +24,9 @@ export type ChatItem =
   | { kind: 'plan'; id: string; plan: string; status: 'pending' | 'approved' | 'rejected' }
   | { kind: 'question'; id: string; questions: Question[]; status: 'pending' | 'answered'; answers?: Record<string, string> }
   | { kind: 'result'; id: string; text: string; isError: boolean; costUsd?: number; durationMs?: number }
-  | { kind: 'system'; id: string; text: string };
+  | { kind: 'system'; id: string; text: string }
+  /** a subagent's final report, or a background task ending (Claude Code injects these as user turns) */
+  | { kind: 'agentReport'; id: string; from: string; title?: string; text?: string; status?: string; ts?: string };
 
 export type Question = { question: string; header: string; multiSelect: boolean; options: { label: string; description: string }[] };
 
@@ -235,6 +237,29 @@ function resultText(content: unknown): string {
   return skipped ? [text, `[${skipped} image(s) too large to show]`].filter(Boolean).join('\n') : text;
 }
 
+/** Claude Code delivers a subagent's hand-back and task endings as user turns: recognise them so they
+ *  are not shown as something the user typed. */
+export function agentNotice(text: string, ts?: string, items: ChatItem[] = []): Extract<ChatItem, { kind: 'agentReport' }>[] {
+  // the Agent call that launched it says "agentId: <id>"; its description names it
+  const named = (id: string) => {
+    const t = items.find((x) => x.kind === 'tool' && (x.name === 'Agent' || x.name === 'Task') && x.result?.includes(`agentId: ${id}`));
+    return t?.kind === 'tool' ? str((t.input as any)?.description) || undefined : undefined;
+  };
+  const out: Extract<ChatItem, { kind: 'agentReport' }>[] = [];
+  for (const m of text.matchAll(/<agent-message from="([^"]*)"[^>]*>([\s\S]*?)(?:<\/agent-message>|$)/g)) {
+    let body = m[2];
+    const f = body.indexOf('The report follows:');
+    if (f >= 0) body = body.slice(f + 'The report follows:'.length).replace(/^\r?\n/, '').replace(/^  /gm, '');
+    out.push({ kind: 'agentReport', id: uid(), from: m[1], title: named(m[1]), text: body.trim(), ts });
+  }
+  for (const b of text.match(/<task-notification>[\s\S]*?<\/task-notification>/g) ?? []) {
+    const tag = (n: string) => new RegExp(`<${n}>([\\s\\S]*?)</${n}>`).exec(b)?.[1]?.trim();
+    out.push({ kind: 'agentReport', id: uid(), from: tag('task-id') ?? '', title: tag('summary'), status: tag('status'), ts });
+  }
+  return out;
+}
+const isNotice = (t: string) => /^\s*(Another Claude session sent a message:\s*)?<(agent-message|task-notification)\b/.test(t);
+
 const NOISE = ['<system-reminder>', '<local-command', '<command-', 'Caveat:', '[Request interrupted'];
 
 /** Rebuild the conversation from a session transcript (JSONL) so resumed chats show their history. */
@@ -262,6 +287,12 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
       continue;
     }
     if (rec.type === 'custom-title') title = rec.customTitle;
+    if (!rec.isSidechain && rec.type === 'user' && (rec.origin?.kind === 'peer' || rec.origin?.kind === 'task-notification')) {
+      const t = textsOf(rec.message?.content);
+      bg.text(t, rec.timestamp);
+      items.push(...agentNotice(t, rec.timestamp, items));
+      continue;
+    }
     if (rec.isSidechain || rec.isMeta) continue;
     // messages sent while the agent was working are stored as queued commands, not user records
     if (rec.type === 'attachment' && rec.attachment?.type === 'queued_command') {
@@ -269,6 +300,10 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
       const blocks: any[] = typeof p === 'string' ? [{ type: 'text', text: p }] : p ?? [];
       const text = withoutShellContext(blocks.filter((b) => b?.type === 'text').map((b) => b.text).join('\n')).trim();
       const images = blocks.filter((b) => b?.type === 'image' && b.source?.type === 'base64').map((b) => `data:${b.source.media_type};base64,${b.source.data}`);
+      if (rec.attachment.commandMode === 'task-notification' || isNotice(text)) {
+        items.push(...agentNotice(text, rec.timestamp ?? rec.attachment.timestamp, items));
+        continue;
+      }
       if ((text && !NOISE.some((n) => text.startsWith(n))) || images.length)
         items.push({ kind: 'user', id: rec.uuid ?? uid(), text, images, priority: 'next', ts: rec.timestamp ?? rec.attachment.timestamp ?? '' });
       continue;
@@ -279,7 +314,8 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
       const texts: string[] = [];
       const images: string[] = [];
       for (const c of typeof content === 'string' ? [{ type: 'text', text: content }] : content ?? []) {
-        if (c.type === 'text' && !NOISE.some((n) => String(c.text).trimStart().startsWith(n))) texts.push(withoutShellContext(c.text));
+        if (c.type === 'text' && isNotice(String(c.text))) items.push(...agentNotice(String(c.text), rec.timestamp, items));
+        else if (c.type === 'text' && !NOISE.some((n) => String(c.text).trimStart().startsWith(n))) texts.push(withoutShellContext(c.text));
         else if (c.type === 'image' && c.source?.type === 'base64') images.push(`data:${c.source.media_type};base64,${c.source.data}`);
         else if (c.type === 'tool_result') {
           bg.toolResult(c.tool_use_id, textsOf(c.content), rec.timestamp);
@@ -989,6 +1025,12 @@ export class ChatSession {
       }
       case 'user': {
         const content = (m.message as any).content;
+        const said = typeof content === 'string' ? content : Array.isArray(content) ? content.filter((c: any) => c?.type === 'text').map((c: any) => c.text).join('\n') : '';
+        if (!(m as any).parent_tool_use_id && isNotice(said)) {
+          this.state.items.push(...agentNotice(said, new Date().toISOString(), this.state.items));
+          this.bg.text(said, new Date().toISOString());
+          this.syncTasks();
+        }
         if (!Array.isArray(content)) break;
         for (const c of content) {
           if (c?.type !== 'tool_result') continue;

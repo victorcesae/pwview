@@ -26,6 +26,8 @@ const PT: Record<string, string> = {
   Auto: 'Automático',
   'Bypass permissions': 'Ignorar permissões',
   // chat: plan, tools, cards
+  'Report from subagent': 'Relatório do subagente',
+  'Background task {0}: {1}': 'Tarefa em segundo plano {0}: {1}',
   Plan: 'Plano',
   '{0}/{1} done': '{0}/{1} feitos',
   'Sub-agent': 'Sub-agente',

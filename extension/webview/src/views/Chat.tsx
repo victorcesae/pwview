@@ -549,6 +549,31 @@ function UserMessage({ it }: { it: Extract<ChatItem, { kind: 'user' }> }) {
   );
 }
 
+/** What a subagent sent back, or a background task ending: from the agent, not typed by the user. */
+function AgentReport({ it }: { it: Extract<ChatItem, { kind: 'agentReport' }> }) {
+  const [open, setOpen] = useState(false);
+  if (!it.text) {
+    const failed = it.status === 'failed' || it.status === 'stopped' || it.status === 'killed';
+    return (
+      <div className={cn('flex items-center justify-center gap-1.5 text-[11px]', failed ? 'text-removed' : 'text-muted-foreground')}>
+        <Bot className="size-3" />
+        {it.title || t('Background task {0}: {1}', it.from, it.status ?? '')}
+      </div>
+    );
+  }
+  return (
+    <div className="bg-muted/30 rounded-lg border text-[12px]">
+      <button type="button" className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left" onClick={() => setOpen(!open)}>
+        {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+        <Bot className="text-muted-foreground size-3.5" />
+        <span className="text-muted-foreground">{t('Report from subagent')}</span>
+        <span className="truncate font-medium">{it.title ?? it.from}</span>
+      </button>
+      {open && <Markdown text={it.text} className="border-t px-3 py-1" />}
+    </div>
+  );
+}
+
 function Item({ it, children, sessionId }: { it: ChatItem; children?: React.ReactNode; sessionId?: string }) {
   switch (it.kind) {
     case 'user':
@@ -590,6 +615,8 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
       return <QuestionCard it={it} />;
     case 'result':
       return <div className="border-removed/40 bg-removed/10 text-removed rounded-lg border px-3 py-2 text-[12px]">{it.text}</div>;
+    case 'agentReport':
+      return <AgentReport it={it} />;
     case 'system':
       return (
         <div className="text-muted-foreground flex items-center justify-center gap-1.5 text-[11px]">
@@ -667,6 +694,8 @@ function rowText(g: ChatItem | ToolItem[]): string {
     case 'system':
     case 'result':
       return g.text;
+    case 'agentReport':
+      return `${g.title ?? ''} ${g.text ?? ''}`;
     case 'shell':
       return `${g.command} ${g.output}`;
     case 'tool':

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.17
+- Links in the chat and panel open once instead of twice: VS Code no longer opens them as well.
+- A subagent's report shows as a "Report from subagent" card named after the agent, and a background task ending as a one-line status, instead of raw <task-notification> text in your own message (or nothing at all, in reopened chats).
+
 ## 1.0.16
 - Published to the VS Code Marketplace and Open VSX straight from GitHub Actions with trusted publishing: no stored access token, and both registries show which repository and workflow the release came from.
 
