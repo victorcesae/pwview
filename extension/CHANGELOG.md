@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.16
+- Published to the VS Code Marketplace and Open VSX straight from GitHub Actions with trusted publishing: no stored access token, and both registries show which repository and workflow the release came from.
+
 ## 1.0.15
 - Tab with the Claude subscription no longer fails with "API Error: Claude's response exceeded the 256 output token maximum" after a long wait: a long suggestion is trimmed right away instead.
 - Suggestions are shorter, like the editor's own: the rest of the line, or a few lines of the current block (at most 8).
