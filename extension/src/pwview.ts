@@ -98,6 +98,14 @@ const run = (bin: string, args: string[], cwd?: string, timeout = 30_000) =>
     execFile(bin, args, { cwd, timeout, windowsHide: true, maxBuffer: 4_000_000 }, (err, stdout, stderr) => (err ? reject(new Error(`${String(stderr).trim() || err.message}`)) : resolve(String(stdout)))),
   );
 
+/** Something answers on this local port. */
+const listening = (port: number) =>
+  new Promise<boolean>((resolve) => {
+    const sock = net.connect(port, '127.0.0.1');
+    sock.once('connect', () => (sock.destroy(), resolve(true)));
+    sock.once('error', () => resolve(false));
+  });
+
 export class Pwview {
   private found?: Promise<string>;
   private live = new Map<string, LiveBrowser>();
@@ -201,11 +209,28 @@ export class Pwview {
       });
       const open = this.live.get(st.root);
       if (open) return open.reveal();
-      const view = new LiveBrowser(path.basename(st.root), st.ports.cdp, () => this.live.delete(st.root));
+      const view = new LiveBrowser(path.basename(st.root), st.ports.cdp, () => this.live.delete(st.root), () => this.testRuns(st.root, st.ports.ui));
       this.live.set(st.root, view);
     } catch (e) {
       vscode.window.showErrorMessage(vscode.l10n.t('Steerhouse: the browser did not start: {0}', String((e as Error)?.message ?? e).split('\n').slice(-1)[0]));
     }
+  }
+
+  /** Playwright UI mode, where test runs can be watched (they use a browser of their own). */
+  async testRuns(root: string, port: number) {
+    const url = `http://localhost:${port}`;
+    if (!(await listening(port))) {
+      const bin = await this.binary();
+      const term = vscode.window.createTerminal({ name: vscode.l10n.t('Playwright UI · {0}', path.basename(root)), cwd: root, shellPath: bin, shellArgs: ['-C', root, 'ui'] });
+      term.show(true);
+      const until = Date.now() + 60_000;
+      while (!(await listening(port))) {
+        if (Date.now() > until || term.exitStatus) return vscode.window.showWarningMessage(vscode.l10n.t('Playwright UI mode did not start: see its terminal.'));
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+    // over Remote-SSH this forwards the port to your machine
+    await vscode.env.openExternal(await vscode.env.asExternalUri(vscode.Uri.parse(url)));
   }
 
   async stop(cwd: string) {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.20
+- The browser view follows the newest real page instead of staying on the blank start tab; a tab you pick stays shown while it is open.
+- With only a blank tab it explains that Playwright tests run in a browser of their own, and Watch Test Runs opens Playwright UI mode, where each test can be watched live.
+
 ## 1.0.19
 - Claude Code's own commands work in the chat: /config, /permissions, /model, /mcp, /hooks, /memory, /agents, /login, /doctor and /clear open the same settings in Steerhouse instead of being sent to the model as text, and /terminal opens the session in Claude Code for anything else.
 - When auto mode blocks a command without asking (a merge with --admin, for example), the chat says so and why, with Always allow, which saves a rule like Bash(gh pr merge:*) for you in the project's .claude/settings.local.json.

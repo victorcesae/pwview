@@ -157,3 +157,15 @@ test('chat box: @ completion finds what is being typed and keeps paths intact', 
   assert.strictEqual(F.filePattern('a/[1]'), '**/*[aA]/[[]1[]]*');
   assert.strictEqual(F.filePattern(''), '**/**');
 });
+
+test('the browser view shows a real page, not the blank start tab, unless one was picked', () => {
+  const { pickTab } = require(path.join(out, 'liveBrowser.js'));
+  const blank = { id: 'b', type: 'page', title: '', url: 'about:blank' };
+  const app = { id: 'a', type: 'page', title: 'App', url: 'http://localhost:3000/' };
+  const docs = { id: 'd', type: 'page', title: 'Docs', url: 'http://localhost:3000/docs' };
+  assert.strictEqual(pickTab([blank, app]).id, 'a');
+  assert.strictEqual(pickTab([docs, blank, app]).id, 'd', 'the newest real page');
+  assert.strictEqual(pickTab([docs, blank, app], 'b').id, 'b', 'picked by hand');
+  assert.strictEqual(pickTab([blank]).id, 'b');
+  assert.strictEqual(pickTab([]), undefined);
+});

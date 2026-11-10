@@ -267,5 +267,9 @@
   "current": "atual",
   "just me": "só eu",
   "project": "projeto",
-  "Allowed {0} in {1}. Ask the agent to try again.": "Permitido {0} em {1}. Peça ao agente para tentar de novo."
+  "Allowed {0} in {1}. Ask the agent to try again.": "Permitido {0} em {1}. Peça ao agente para tentar de novo.",
+  "Nothing open yet. This is the browser the agent drives. Playwright tests run in a browser of their own, so they show in Playwright UI mode instead.": "Nada aberto ainda. Este é o navegador que o agente usa. Os testes do Playwright rodam num navegador próprio, então aparecem no modo UI do Playwright.",
+  "Watch Test Runs": "Ver execuções de teste",
+  "Playwright UI · {0}": "Playwright UI · {0}",
+  "Playwright UI mode did not start: see its terminal.": "O modo UI do Playwright não iniciou: veja o terminal dele."
 }
