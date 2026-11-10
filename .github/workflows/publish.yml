@@ -1,7 +1,7 @@
 name: publish
 
-# Publishes Steerhouse to Open VSX with trusted publishing: GitHub vouches for this workflow with a
-# short-lived OIDC token, so no access token is stored, and Open VSX shows where the release came from.
+# Publishes Steerhouse to the VS Code Marketplace and Open VSX with trusted publishing: GitHub vouches for this workflow with a
+# short-lived OIDC token, so no access token is stored, and both registries show where the release came from.
 on:
   push:
     tags: ["steerhouse-v*"]
@@ -21,7 +21,7 @@ jobs:
     environment: production
     permissions:
       contents: read
-      id-token: write # lets ovsx ask GitHub for the OIDC token
+      id-token: write # lets vsce and ovsx ask GitHub for the OIDC token
     defaults:
       run:
         working-directory: extension
@@ -40,3 +40,5 @@ jobs:
       - run: npm run package
       # no OVSX_PAT: ovsx exchanges the OIDC token for a publishing token by itself
       - run: npx --yes ovsx@1.4.0 publish *.vsix --trusted-publishing --skip-duplicate
+      # same for the Marketplace: --oidc exchanges the token instead of using VSCE_PAT
+      - run: npx --yes @vscode/vsce@4.1.0 publish --packagePath *.vsix --oidc --skip-duplicate
