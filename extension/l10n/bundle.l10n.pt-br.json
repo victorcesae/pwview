@@ -272,5 +272,6 @@
   "Watch Test Runs": "Ver execuções de teste",
   "Playwright UI · {0}": "Playwright UI · {0}",
   "Playwright UI mode did not start: see its terminal.": "O modo UI do Playwright não iniciou: veja o terminal dele.",
-  "{0} has no Playwright tests (no playwright.config), so there are no test runs to watch. Pages the agent opens show in the browser view.": "{0} não tem testes do Playwright (sem playwright.config), então não há execuções de teste para ver. As páginas que o agente abre aparecem na visualização do navegador."
+  "{0} has no Playwright tests (no playwright.config), so there are no test runs to watch. Pages the agent opens show in the browser view.": "{0} não tem testes do Playwright (sem playwright.config), então não há execuções de teste para ver. As páginas que o agente abre aparecem na visualização do navegador.",
+  "This chat started before bypassing permissions was allowed. Start a new chat, or close this one and open it again, to use Bypass permissions.": "Este chat começou antes de ignorar permissões ser permitido. Comece um novo chat, ou feche este e abra de novo, para usar Ignorar permissões."
 }

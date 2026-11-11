@@ -443,7 +443,12 @@ export class Chats {
       case 'setUltracode':
         return c.setUltracode(m.on).catch((e) => vscode.window.showWarningMessage(`Steerhouse: ultracode not available: ${e?.message ?? e}`));
       case 'setMode':
-        return c.setPermissionMode(m.mode);
+        return c.setPermissionMode(m.mode).catch((e) => {
+          const msg = String(e?.message ?? e);
+          // chats started before Steerhouse allowed it: the running Claude Code can't take it
+          if (/dangerously-skip-permissions/.test(msg)) return vscode.window.showWarningMessage(vscode.l10n.t('This chat started before bypassing permissions was allowed. Start a new chat, or close this one and open it again, to use Bypass permissions.'));
+          return vscode.window.showWarningMessage(`Steerhouse: ${msg}`);
+        });
       case 'prFiles': {
         const r = await prFiles(m.url);
         return this.send(o, { type: 'prFilesResult', url: m.url, ...r });

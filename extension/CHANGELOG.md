@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.22
+- Bypass permissions can be chosen in a running chat: chats now start with it allowed (the mode stays the one you picked until you change it). A chat started before this update says to start a new chat, or close it and open it again, instead of failing.
+
 ## 1.0.21
 - Pages the agent opens from its own scripts show in the browser view: chats in a project with pwview tell the agent to attach its Playwright scripts to the shared browser (connectOverCDP) instead of launching an invisible one.
 - Watch Test Runs says when a project has no Playwright tests instead of opening an empty UI mode.

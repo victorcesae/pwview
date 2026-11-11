@@ -488,6 +488,9 @@ export class ChatSession {
         resume: this.opts.resume,
         model: this.opts.prefs?.model ?? this.opts.model,
         permissionMode: this.state.permissionMode,
+        // lets the user switch to "Bypass permissions" later from the menu; the mode itself stays
+        // whatever they picked (without this, Claude Code refuses the switch for the whole session)
+        allowDangerouslySkipPermissions: true,
         includePartialMessages: true,
         abortController: this.abort,
         pathToClaudeCodeExecutable: this.opts.executable,
