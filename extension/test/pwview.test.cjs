@@ -169,3 +169,10 @@ test('the browser view shows a real page, not the blank start tab, unless one wa
   assert.strictEqual(pickTab([blank]).id, 'b');
   assert.strictEqual(pickTab([]), undefined);
 });
+
+test('the agent is told how a script attaches to the browser the user watches', () => {
+  const { browserNote } = require(path.join(out, 'pwview.js'));
+  const note = browserNote('/bin/pwview', '/w/app', 9322);
+  assert.match(note, /connectOverCDP\('http:\/\/127\.0\.0\.1:9322'\)/);
+  assert.match(note, /\/bin\/pwview -C \/w\/app up/);
+});

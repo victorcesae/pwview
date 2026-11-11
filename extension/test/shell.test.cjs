@@ -81,6 +81,7 @@ test('agent context: says what ran, and the message reads as written when reopen
   assert.ok(S.tail('x'.repeat(50), 10).startsWith('[…earlier output cut…]'));
   assert.strictEqual(S.withoutShellContext(`fix it\n\n${note}\n\n${note}`), 'fix it');
   assert.strictEqual(S.withoutShellContext(note), '');
+  assert.strictEqual(S.withoutShellContext('look at it\n\n<steerhouse-note>\nthe browser is at …\n</steerhouse-note>'), 'look at it', 'Steerhouse\'s notes to the agent stay out of the bubble');
   assert.strictEqual(S.withoutShellContext('plain'), 'plain');
 });
 

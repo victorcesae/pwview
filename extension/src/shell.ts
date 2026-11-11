@@ -57,4 +57,4 @@ export class ShellRun {
 }
 
 /** A message as the user wrote it, without the command output that was added for the agent. */
-export const withoutShellContext = (text: string) => text.replace(/\s*<user-ran-command\b[^>]*>[\s\S]*?<\/user-ran-command>/g, '');
+export const withoutShellContext = (text: string) => text.replace(/\s*<(user-ran-command|steerhouse-note)\b[^>]*>[\s\S]*?<\/\1>/g, '');

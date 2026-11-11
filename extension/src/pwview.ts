@@ -98,6 +98,18 @@ const run = (bin: string, args: string[], cwd?: string, timeout = 30_000) =>
     execFile(bin, args, { cwd, timeout, windowsHide: true, maxBuffer: 4_000_000 }, (err, stdout, stderr) => (err ? reject(new Error(`${String(stderr).trim() || err.message}`)) : resolve(String(stdout)))),
   );
 
+/** Tells the agent which browser the user can watch: a script's own chromium.launch() is invisible. */
+export function browserNote(bin: string, root: string, port: number) {
+  const url = `http://127.0.0.1:${port}`;
+  return [
+    `The user can watch one browser live in Steerhouse: the shared one at ${url} (Chrome DevTools protocol). Use it whenever you open web pages, so they see what you do:`,
+    `- the browser tools (Playwright MCP) already drive it;`,
+    `- a script using Playwright should attach to it instead of launching its own: \`const browser = await chromium.connectOverCDP('${url}')\`, then \`const context = await browser.newContext()\` and work in that context. At the end close the context, not the browser. A browser from \`chromium.launch()\` is invisible to the user;`,
+    `- if nothing answers at ${url}, start it with \`${bin} -C ${root} up\`.`,
+    `Test runners (\`npx playwright test\`) keep their own browsers; the user watches those in Playwright UI mode.`,
+  ].join('\n');
+}
+
 /** Something answers on this local port. */
 const listening = (port: number) =>
   new Promise<boolean>((resolve) => {
@@ -180,12 +192,13 @@ export class Pwview {
   }
 
   /** Gives a chat the browser tools. Never gets in the chat's way: problems only go to the log. */
-  async attach(cwd: string, chat: { addMcp(name: string, config: Record<string, unknown>): Promise<unknown> }) {
+  async attach(cwd: string, chat: { addMcp(name: string, config: Record<string, unknown>): Promise<unknown>; addNote(text: string): void }) {
     try {
       if (!this.cfg().get<boolean>('enabled', true)) return;
       const bin = await this.binary();
       const st = await this.status(bin, cwd);
       if (!wantsBrowser(st.root) || st.root === os.homedir()) return;
+      chat.addNote(browserNote(bin, st.root, st.ports.cdp));
       const mcpJson = path.join(st.root, '.mcp.json');
       if (fs.existsSync(mcpJson) && hasBrowserServer(fs.readFileSync(mcpJson, 'utf8'))) return;
       await this.excludeFromGit(st.root, '.pwview/');
@@ -218,6 +231,8 @@ export class Pwview {
 
   /** Playwright UI mode, where test runs can be watched (they use a browser of their own). */
   async testRuns(root: string, port: number) {
+    if (!fs.readdirSync(root).some((f) => /^playwright(-ct)?\.config\.[cm]?[jt]s$/.test(f)))
+      return vscode.window.showInformationMessage(vscode.l10n.t('{0} has no Playwright tests (no playwright.config), so there are no test runs to watch. Pages the agent opens show in the browser view.', path.basename(root)));
     const url = `http://localhost:${port}`;
     if (!(await listening(port))) {
       const bin = await this.binary();

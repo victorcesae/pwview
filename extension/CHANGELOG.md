@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.21
+- Pages the agent opens from its own scripts show in the browser view: chats in a project with pwview tell the agent to attach its Playwright scripts to the shared browser (connectOverCDP) instead of launching an invisible one.
+- Watch Test Runs says when a project has no Playwright tests instead of opening an empty UI mode.
+
 ## 1.0.20
 - The browser view follows the newest real page instead of staying on the blank start tab; a tab you pick stays shown while it is open.
 - With only a blank tab it explains that Playwright tests run in a browser of their own, and Watch Test Runs opens Playwright UI mode, where each test can be watched live.

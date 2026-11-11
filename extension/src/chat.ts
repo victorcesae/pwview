@@ -749,6 +749,11 @@ export class ChatSession {
   private shells = new Map<string, ShellRun>();
   private shellNotes: string[] = [];
 
+  /** Context for the agent that goes with the user's next message, not shown in their bubble. */
+  addNote(text: string) {
+    this.shellNotes.push(`<steerhouse-note>\n${text}\n</steerhouse-note>`);
+  }
+
   /** Runs what the user typed after ! in their own shell. It costs nothing: the agent reads the result with the next message. */
   runShell(command: string) {
     const id = uid();
