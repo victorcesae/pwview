@@ -1096,7 +1096,7 @@ export function ChatView({ data }: { data: ChatData }) {
           setTopRow(rowAtTop());
         }}
       >
-        <div className="mx-auto flex w-full max-w-[46rem] flex-col gap-1.5 px-5 py-5">
+        <div className="mx-auto flex w-full max-w-[min(72rem,100%)] flex-col gap-1.5 px-5 py-5">
           {!top.length && (
             <div className="text-muted-foreground py-16 text-center">
               <Bot className="mx-auto mb-3 size-8 opacity-60" />
@@ -1157,7 +1157,7 @@ export function ChatView({ data }: { data: ChatData }) {
       <SideRail chat={chat} />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-[46rem] flex-col gap-2 px-5 pt-1 pb-4">
+      <div className="relative mx-auto flex w-full max-w-[min(72rem,100%)] flex-col gap-2 px-5 pt-1 pb-4">
         {!atBottom && (
           <button
             onClick={() => {

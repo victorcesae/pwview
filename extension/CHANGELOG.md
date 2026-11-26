@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.27
+- Bigger message box: the chat and the box use up to 72rem of width (was 46rem), and the box starts about 4 lines tall and grows to almost half the window.
+
 ## 1.0.26
 - Side questions: `/btw <question>` asks about the chat while it keeps working. A copy of the conversation answers with what is running right now; the agent doing the work never sees it.
 - Steer is more reliable: a steer sent while the final answer is being written keeps the chat working until it is answered (it no longer looks ignored), and a waiting message you are editing when the turn ends is sent with your edit.

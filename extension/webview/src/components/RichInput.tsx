@@ -76,7 +76,7 @@ export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput({
       PasteChip,
     ],
     editorProps: {
-      attributes: { class: 'rich-input outline-none min-h-11 max-h-64 overflow-y-auto px-1 py-0.5 text-[13px] leading-relaxed' },
+      attributes: { class: 'rich-input outline-none min-h-20 max-h-[45vh] overflow-y-auto px-1 py-0.5 text-[13px] leading-relaxed' },
       // pasted lines stay lines, exactly as copied (code keeps its indentation and blank lines)
       clipboardTextParser: (text, $context) => {
         const { schema } = $context.doc.type;
