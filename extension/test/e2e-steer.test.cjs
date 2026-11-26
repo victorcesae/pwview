@@ -96,3 +96,22 @@ test('e2e: a Steer sent while the final answer is being written is not lost', { 
     await removeTestSession(c.state.cwd);
   }
 });
+
+test('e2e: a side question is answered while the agent keeps working, and the agent never sees it', { skip, timeout: 420_000 }, async () => {
+  const { c, said, bash } = setup();
+  try {
+    c.send(SLOW_TASK, [], 'later');
+    await until(c, () => bash().length >= 1);
+    c.askAside('Which step is running now? Answer in one short sentence.');
+    const aside = () => c.state.items.find((i) => i.kind === 'aside');
+    await until(c, () => aside() && !aside().streaming, 120_000);
+    console.log(`aside: answer=${JSON.stringify(aside().answer.slice(0, 120))}, error=${aside().error}, main status=${c.state.status}`);
+    assert.ok(aside().answer.trim(), 'the side question got an answer');
+    await until(c, () => c.state.status === 'idle' && c.turns >= 1);
+    assert.equal(bash().length, 3, 'the main task carried on to the end');
+    assert.doesNotMatch(said(), /which step is running/i);
+  } finally {
+    c.close();
+    await removeTestSession(c.state.cwd);
+  }
+});

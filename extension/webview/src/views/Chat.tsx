@@ -1,4 +1,4 @@
-import { Ban, Bot, History, MessageSquare, Command, Globe, ChevronUp, Copy, SquareTerminal, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
+import { Ban, Bot, MessageCircleQuestion, History, MessageSquare, Command, Globe, ChevronUp, Copy, SquareTerminal, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
@@ -561,6 +561,34 @@ function UserMessage({ it }: { it: Extract<ChatItem, { kind: 'user' }> }) {
   );
 }
 
+/** A side question and its answer: off to the side, the agent doing the work never sees it. */
+function AsideCard({ it }: { it: Extract<ChatItem, { kind: 'aside' }> }) {
+  return (
+    <div className="border-primary/30 bg-primary/5 ml-8 flex flex-col gap-1 rounded-lg border border-dashed px-3 py-2 text-[12.5px]" data-aside>
+      <div className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+        <MessageCircleQuestion className="size-3.5" />
+        <span className="font-medium">{t('Side question')}</span>
+        <span className="truncate">· {it.question}</span>
+        <span className="ml-auto shrink-0 opacity-70">{t('not sent to the agent')}</span>
+        <Button size="xs" variant="ghost" onClick={() => post({ type: 'dismissAside', id: it.id })} title={it.streaming ? t('Stop') : t('Dismiss')} aria-label={t('Dismiss')}>
+          <X />
+        </Button>
+      </div>
+      {it.error ? (
+        <span className="text-error">{it.error}</span>
+      ) : it.answer ? (
+        <Fold live={it.streaming}>
+          <Markdown text={it.answer} />
+        </Fold>
+      ) : (
+        <span className="text-muted-foreground inline-flex items-center gap-1.5">
+          <Loader2 className="size-3.5 animate-spin" /> {t('Looking at the conversation…')}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** Auto mode refused a tool call without asking: say why, and offer the rule that allows it. */
 function BlockedCard({ it }: { it: Extract<ChatItem, { kind: 'blocked' }> }) {
   return (
@@ -667,6 +695,8 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
       return <div className="border-error/40 bg-error/10 text-error rounded-lg border px-3 py-2 text-[12px]">{it.text}</div>;
     case 'agentReport':
       return <AgentReport it={it} />;
+    case 'aside':
+      return <AsideCard it={it} />;
     case 'blocked':
       return <BlockedCard it={it} />;
     case 'system':
@@ -754,6 +784,8 @@ function rowText(g: ChatItem | ToolItem[]): string {
       return g.text;
     case 'agentReport':
       return `${g.title ?? ''} ${g.text ?? ''}`;
+    case 'aside':
+      return `${g.question} ${g.answer}`;
     case 'blocked':
       return `${g.command} ${g.reason}`;
     case 'shell':

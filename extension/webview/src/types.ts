@@ -74,7 +74,9 @@ export type ChatItem =
   | { kind: 'system'; id: string; text: string }
   /** a subagent's final report, or a background task ending (Claude Code injects these as user turns) */
   | { kind: 'blocked'; id: string; tool: string; command: string; reason: string; rule?: string; status?: 'allowed' }
-  | { kind: 'agentReport'; id: string; from: string; title?: string; text?: string; status?: string; ts?: string };
+  | { kind: 'agentReport'; id: string; from: string; title?: string; text?: string; status?: string; ts?: string }
+  /** a side question ("/btw"), answered without touching the running work */
+  | { kind: 'aside'; id: string; question: string; answer: string; streaming?: boolean; error?: string };
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto';
 export interface ChatState {
   key: string; sessionId?: string; cwd: string; title: string; model?: string; models: { value: string; displayName: string }[];
@@ -93,6 +95,8 @@ export type ToChat =
   | { type: 'cancelQueued'; id: string }
   | { type: 'editQueued'; id: string; text: string }
   | { type: 'holdQueued'; id: string; hold: boolean }
+  | { type: 'aside'; text: string }
+  | { type: 'dismissAside'; id: string }
   | { type: 'interrupt' }
   | { type: 'loadEarlier'; all?: boolean }
   | { type: 'openUrl'; url: string }

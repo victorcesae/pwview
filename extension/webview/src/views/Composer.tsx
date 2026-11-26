@@ -31,6 +31,7 @@ export const LOCAL_COMMANDS: { name: string; hint: string }[] = [
   { name: 'agents', hint: 'Subagents: open or create one' },
   { name: 'login', hint: 'Claude accounts' },
   { name: 'doctor', hint: 'Check the setup' },
+  { name: 'btw', hint: 'Ask a side question: answered without stopping or changing the work' },
   { name: 'clear', hint: 'Clear the context, keep this tab and what was said' },
   { name: 'terminal', hint: 'Open this session in Claude Code, for any other command' },
 ];
@@ -284,6 +285,14 @@ export function Composer({ chat }: { chat: ChatState }) {
     }
     const md = input.current?.getMarkdown() ?? '';
     if (!md.trim() && !images.length) return;
+    // /btw <question>: a side question, the running work is not interrupted
+    const btw = /^\s*\/btw\b\s*([\s\S]*)$/.exec(md);
+    if (btw && !chat.slashCommands.includes('btw')) {
+      if (btw[1].trim()) post({ type: 'aside', text: btw[1].trim() });
+      input.current?.clear();
+      setText('');
+      return;
+    }
     const local = !images.length && localCommandOf(md, chat.slashCommands);
     if (local) {
       post({ type: 'localCommand', name: local });

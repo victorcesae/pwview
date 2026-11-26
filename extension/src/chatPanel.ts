@@ -30,6 +30,8 @@ export type FromChat =
   | { type: 'cancelQueued'; id: string }
   | { type: 'editQueued'; id: string; text: string }
   | { type: 'holdQueued'; id: string; hold: boolean }
+  | { type: 'aside'; text: string }
+  | { type: 'dismissAside'; id: string }
   | { type: 'interrupt' }
   | { type: 'loadEarlier'; all?: boolean }
   | { type: 'openUrl'; url: string }
@@ -579,6 +581,10 @@ export class Chats {
       case 'ready':
         o.sent = undefined; // (re)load: send everything
         return this.post(o);
+      case 'aside':
+        return c.askAside(m.text);
+      case 'dismissAside':
+        return c.dismissAside(m.id);
       case 'send': {
         // @problems, @diff, @chat:, @url:, path#L5-10: the agent reads what they stand for, the bubble keeps the names
         for (const note of await resolveMentions(m.text, { cwd: c.state.cwd, problems: () => problemsIn(c.state.cwd), chat: (t) => this.chatSummary(o, t) })) c.addNote(note);

@@ -30,7 +30,9 @@ export type ChatItem =
   /** a subagent's final report, or a background task ending (Claude Code injects these as user turns) */
   /** auto mode's classifier refused a tool call: it never asks, so this is where the user can allow it */
   | { kind: 'blocked'; id: string; tool: string; command: string; reason: string; rule?: string; status?: 'allowed' }
-  | { kind: 'agentReport'; id: string; from: string; title?: string; text?: string; status?: string; ts?: string };
+  | { kind: 'agentReport'; id: string; from: string; title?: string; text?: string; status?: string; ts?: string }
+  /** a side question ("/btw"): answered by a copy of the conversation, the running work isn't touched */
+  | { kind: 'aside'; id: string; question: string; answer: string; streaming?: boolean; error?: string };
 
 export type Question = { question: string; header: string; multiSelect: boolean; options: { label: string; description: string }[] };
 
@@ -824,6 +826,110 @@ export class ChatSession {
 
   stopShell(id: string) {
     this.shells.get(id)?.stop();
+  }
+
+  // ------------------------------------------------------------------ side questions
+
+  private asides = new Map<string, AbortController>();
+
+  /** What is happening right now, for a side question (the transcript on disk may lag a step behind). */
+  liveSummary(): string {
+    const recent = this.state.items.filter((i) => !('parent' in i && i.parent)).slice(-25);
+    const line = (i: ChatItem): string | undefined => {
+      switch (i.kind) {
+        case 'user':
+          return `User: ${clip(i.text, 300)}`;
+        case 'assistant':
+          return `Agent: ${clip(i.text, 400)}`;
+        case 'tool':
+          return `Tool ${i.name} (${i.status}): ${clip(i.summary, 200)}`;
+        case 'shell':
+          return `User shell (${i.status}): ${clip(i.command, 200)}`;
+        case 'permission':
+          return i.status === 'pending' ? `Waiting for the user's approval: ${i.tool} ${clip(i.summary, 150)}` : undefined;
+        default:
+          return undefined;
+      }
+    };
+    const todos = this.state.todos.map((t) => `- [${t.status}] ${t.content}`).join('\n');
+    return [
+      `Status: ${this.state.status}${this.state.activity ? ` (${this.state.activity})` : ''}`,
+      todos && `Todo list:\n${todos}`,
+      `Latest activity:\n${recent.map(line).filter(Boolean).join('\n')}`,
+    ].filter(Boolean).join('\n\n');
+  }
+
+  /**
+   * Ask about the chat without stopping it: a throwaway copy of the conversation (forked, not saved,
+   * no tools) answers, with a note of what is running right now. Nothing goes to the running agent.
+   */
+  askAside(question: string) {
+    if (!question.trim()) return;
+    const id = uid();
+    const item: Extract<ChatItem, { kind: 'aside' }> = { kind: 'aside', id, question, answer: '', streaming: true };
+    this.state.items.push(item);
+    this.changed();
+    const abort = new AbortController();
+    this.asides.set(id, abort);
+    const prompt = `<side-question>
+The user asks a quick side question about this conversation while the main work goes on in parallel. Answer it briefly and directly from the conversation so far and the live status below. Do not continue the task, do not use tools, and do not promise to do anything: this answer is not seen by the agent doing the work.
+
+Live status:
+${this.liveSummary()}
+</side-question>
+
+${question}`;
+    const q = query({
+      prompt,
+      options: {
+        cwd: this.opts.cwd,
+        ...(this.state.sessionId ? { resume: this.state.sessionId, forkSession: true } : {}),
+        persistSession: false,
+        model: this.state.model ?? this.opts.model,
+        tools: [],
+        maxTurns: 1,
+        permissionMode: 'dontAsk',
+        settingSources: [],
+        includePartialMessages: true,
+        abortController: abort,
+        pathToClaudeCodeExecutable: this.opts.executable,
+        env: { ...process.env, ...(this.opts.account?.env ?? {}), CLAUDE_AGENT_SDK_CLIENT_APP: 'steerhouse' },
+      } as any,
+    });
+    (async () => {
+      let streamed = false;
+      for await (const m of q as AsyncIterable<any>) {
+        if (m.type === 'stream_event' && m.event?.type === 'content_block_delta' && m.event.delta?.type === 'text_delta') {
+          streamed = true;
+          item.answer += m.event.delta.text;
+          this.changed();
+        } else if (m.type === 'assistant' && !streamed) {
+          item.answer += (m.message?.content ?? []).filter((c: any) => c.type === 'text').map((c: any) => c.text).join('');
+        } else if (m.type === 'result') {
+          this.state.costUsd += m.total_cost_usd ?? 0;
+          if (m.is_error && !item.answer) item.error = String(m.result ?? m.subtype);
+          break;
+        }
+      }
+    })()
+      .catch((e) => {
+        if (!abort.signal.aborted) item.error = String(e?.message ?? e);
+      })
+      .finally(() => {
+        item.streaming = false;
+        this.asides.delete(id);
+        try {
+          q.close();
+        } catch {}
+        this.changed();
+      });
+  }
+
+  /** Stop a side question, or remove its answer. */
+  dismissAside(id: string) {
+    this.asides.get(id)?.abort();
+    this.state.items = this.state.items.filter((i) => !(i.kind === 'aside' && i.id === id));
+    this.changed();
   }
 
   /** Before VS Code goes away: messages waiting here go to Claude Code's own queue, so they aren't lost. */
