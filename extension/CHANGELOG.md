@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.30
+- Images open in a gallery: ← / → (or the buttons) go through every image in the chat, with a counter, wheel zoom and "Open in editor".
+- Files the agent writes or mentions get a preview under the message: images, video and audio players, and a card with Open / Reveal / Open externally for PDFs, Word, Excel, zips and other files.
+- A terminal beside the chat takes 20% of the width (the chat keeps 80%), and your own resize is remembered for the next one.
+- The chat tab shows its status as a dot on the icon (blue: working, amber: waiting for you) instead of ● / ⚠ in the title.
+
 ## 1.0.29
 - Terminals open beside the chat, as a tab on the right (Open terminal, /terminal, following a command's output). Set steerhouse.terminalLocation to "bottom" for the bottom panel.
 
