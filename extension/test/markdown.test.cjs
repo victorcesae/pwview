@@ -44,3 +44,11 @@ test('markdown: no HTML injection', () => {
   assert.doesNotMatch(html, /<img/);
   assert.match(html, /&lt;img/);
 });
+
+test('markdown: file paths in inline code are links; mermaid and unclosed fences show code', () => {
+  const html = render('See `src/foo.ts:12` and `npm test`.\n\n```mermaid\ngraph TD; A-->B\n```\n\n```ts\nconst a = 1');
+  assert.match(html, /data-file-ref[^>]*>src\/foo\.ts:12<\/code>/);
+  assert.doesNotMatch(html, /data-file-ref[^>]*>npm test/);
+  assert.match(html, />mermaid<\/span>/);
+  assert.match(html, /const a = 1/);
+});

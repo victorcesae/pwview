@@ -16,7 +16,8 @@ export default defineConfig({
     emptyOutDir: true,
     cssCodeSplit: false,
     rollupOptions: {
-      output: { entryFileNames: 'index.js', assetFileNames: 'index.[ext]', inlineDynamicImports: true },
+      // highlight.js and mermaid load on demand from chunks/ (the CSP allows scripts from the webview root)
+      output: { entryFileNames: 'index.js', chunkFileNames: 'chunks/[name]-[hash].js', assetFileNames: 'index.[ext]' },
     },
   },
 });

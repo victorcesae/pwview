@@ -1,11 +1,45 @@
-// Small, safe markdown renderer for agent messages (no HTML injection: builds React nodes).
-import { Fragment, useState, type ReactNode } from 'react';
+// Small, safe markdown renderer for agent messages (no HTML injection: builds React nodes; the only
+// raw HTML is highlight.js output, which escapes the code, and mermaid SVG rendered in strict mode).
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Check, Copy } from 'lucide-react';
+import { post } from '@/bridge';
 import { t } from '@/i18n';
 
-/** A fenced code block: readable text, long lines wrap (no sideways scrolling), language and Copy. */
-function CodeBlock({ lang, code }: { lang?: string; code: string }) {
+type Highlighter = typeof import('@/lib/highlight');
+let hl: Highlighter | undefined;
+let hlLoad: Promise<Highlighter> | undefined;
+/** highlight.js loads once, the first time a finished code block with a language shows up. */
+const loadHighlighter = () => (hlLoad ??= import('@/lib/highlight').then((m) => (hl = m)));
+
+type Mermaid = typeof import('mermaid').default;
+let mermaidLoad: Promise<Mermaid> | undefined;
+let mermaidSeq = 0;
+const loadMermaid = () => (mermaidLoad ??= import('mermaid').then((m) => m.default));
+
+/** Dark unless the editor theme is a light one (VS Code puts the kind on <body>), updated live. */
+function useDarkTheme() {
+  const read = () => typeof document !== 'undefined' && !/\bvscode-(light|high-contrast-light)\b/.test(document.body.className);
+  const [dark, setDark] = useState(read);
+  useEffect(() => {
+    const o = new MutationObserver(() => setDark(read()));
+    o.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => o.disconnect();
+  }, []);
+  return dark;
+}
+
+/**
+ * A fenced code block: header with the language and Copy, readable text (long lines wrap, tall blocks
+ * scroll). Highlighted only once the block is closed, so streaming text isn't re-highlighted per token.
+ */
+function CodeBlock({ lang, code, closed = true, children }: { lang?: string; code: string; closed?: boolean; children?: ReactNode }) {
   const [copied, setCopied] = useState(false);
+  const [ready, setReady] = useState(!!hl);
+  const language = lang?.toLowerCase();
+  useEffect(() => {
+    if (closed && language && !children) loadHighlighter().then(() => setReady(true), () => {});
+  }, [closed, language, children]);
+  const html = useMemo(() => (ready && closed && language && hl ? hl.highlight(code, language) : undefined), [ready, closed, language, code]);
   const copy = () => {
     navigator.clipboard?.writeText(code);
     setCopied(true);
@@ -20,12 +54,62 @@ function CodeBlock({ lang, code }: { lang?: string; code: string }) {
           {copied ? t('Copied') : t('Copy')}
         </button>
       </div>
-      <pre className="text-foreground m-0 max-h-[28rem] overflow-y-auto px-3 py-2 font-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap">
-        <code className="text-foreground bg-transparent p-0 font-mono">{code}</code>
-      </pre>
+      {children ?? (
+        <pre className="text-foreground m-0 max-h-[28rem] overflow-y-auto px-3 py-2 font-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap">
+          {html !== undefined ? (
+            <code className="hljs text-foreground bg-transparent p-0 font-mono" dangerouslySetInnerHTML={{ __html: html }} />
+          ) : (
+            <code className="text-foreground bg-transparent p-0 font-mono">{code}</code>
+          )}
+        </pre>
+      )}
     </div>
   );
 }
+
+/** A ```mermaid block drawn as a diagram (mermaid loads on first use); the code block if it doesn't parse. */
+function MermaidBlock({ code, closed }: { code: string; closed: boolean }) {
+  const dark = useDarkTheme();
+  const [svg, setSvg] = useState<string>();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!closed) return;
+    let live = true;
+    const id = `steerhouse-mermaid-${++mermaidSeq}`;
+    (async () => {
+      try {
+        const m = await loadMermaid();
+        m.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'default' });
+        await m.parse(code);
+        const out = await m.render(id, code);
+        if (live) {
+          setSvg(out.svg);
+          setFailed(false);
+        }
+      } catch {
+        // mermaid leaves its error drawing in the page; take it out
+        document.getElementById(id)?.remove();
+        document.getElementById(`d${id}`)?.remove();
+        if (live) setFailed(true);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [code, closed, dark]);
+  if (!closed || failed || !svg) return <CodeBlock lang="mermaid" code={code} closed={closed} />;
+  return (
+    <CodeBlock lang="mermaid" code={code}>
+      <div className="flex max-h-[36rem] justify-center overflow-auto p-3 [&_svg]:h-auto [&_svg]:max-w-full" data-mermaid dangerouslySetInnerHTML={{ __html: svg }} />
+    </CodeBlock>
+  );
+}
+
+/** `src/foo.ts:12`, `./a/b.tsx`, `/abs/x.py:3:7`: a path with a folder or a line number. */
+const FILE_REF = /^(?:\.{1,2}\/|\/|~\/)?[\w@.+-]+(?:\/[\w@.+-]+)*\.[A-Za-z0-9]{1,10}(?::\d+(?::\d+)?)?$/;
+const isFileRef = (s: string) => FILE_REF.test(s) && (s.includes('/') || /:\d+/.test(s));
+const openRef = (path: string) => post({ type: 'openFile', path });
+
 import { cn } from '@/lib/utils';
 
 function inline(text: string, key: string): ReactNode[] {
@@ -38,7 +122,27 @@ function inline(text: string, key: string): ReactNode[] {
     if (m.index > last) out.push(text.slice(last, m.index));
     const t = m[0];
     const k = `${key}-${i++}`;
-    if (m[1]) out.push(<code key={k} className="bg-muted rounded px-1 py-px font-mono text-[0.92em] [overflow-wrap:anywhere]">{t.slice(1, -1)}</code>);
+    if (m[1]) {
+      const body = t.slice(1, -1);
+      out.push(
+        isFileRef(body) ? (
+          <code
+            key={k}
+            role="link"
+            tabIndex={0}
+            title={body}
+            data-file-ref
+            onClick={() => openRef(body)}
+            onKeyDown={(e) => e.key === 'Enter' && openRef(body)}
+            className="bg-muted cursor-pointer rounded px-1 py-px font-mono text-[0.92em] text-[var(--vscode-textLink-foreground,#60a5fa)] [overflow-wrap:anywhere] hover:underline"
+          >
+            {body}
+          </code>
+        ) : (
+          <code key={k} className="bg-muted rounded px-1 py-px font-mono text-[0.92em] [overflow-wrap:anywhere]">{body}</code>
+        ),
+      );
+    }
     else if (m[2]) out.push(<strong key={k}>{t.slice(2, -2)}</strong>);
     else if (m[3]) {
       const [, label, href] = /\[([^\]]+)\]\(([^)\s]+)\)/.exec(t)!;
@@ -62,9 +166,14 @@ export function Markdown({ text, className }: { text: string; className?: string
       const code: string[] = [];
       i++;
       while (i < lines.length && !lines[i].startsWith('```')) code.push(lines[i++]);
+      const closed = i < lines.length; // still streaming while the closing fence hasn't arrived
       i++;
       blocks.push(
-        <CodeBlock key={k++} lang={fence[1]} code={code.join('\n')} />,
+        fence[1]?.toLowerCase() === 'mermaid' ? (
+          <MermaidBlock key={k++} code={code.join('\n')} closed={closed} />
+        ) : (
+          <CodeBlock key={k++} lang={fence[1]} code={code.join('\n')} closed={closed} />
+        ),
       );
       continue;
     }
@@ -95,7 +204,7 @@ export function Markdown({ text, className }: { text: string; className?: string
             <thead className="bg-muted/60">
               <tr>
                 {head.map((c, j) => (
-                  <th key={j} style={{ textAlign: align[j] as 'left' }} className="border-b px-2.5 py-1.5 font-semibold">
+                  <th key={j} style={{ textAlign: align[j] as 'left' }} className="border-r border-b px-2.5 py-1.5 font-semibold last:border-r-0">
                     {inline(c, `th${k}-${j}`)}
                   </th>
                 ))}
@@ -103,9 +212,9 @@ export function Markdown({ text, className }: { text: string; className?: string
             </thead>
             <tbody>
               {rows.map((r, ri) => (
-                <tr key={ri} className="border-b last:border-b-0">
+                <tr key={ri} className="even:bg-muted/40 border-b last:border-b-0">
                   {head.map((_, j) => (
-                    <td key={j} style={{ textAlign: align[j] as 'left' }} className="px-2.5 py-1.5 align-top">
+                    <td key={j} style={{ textAlign: align[j] as 'left' }} className="border-r px-2.5 py-1.5 align-top last:border-r-0">
                       {inline(r[j] ?? '', `td${k}-${ri}-${j}`)}
                     </td>
                   ))}

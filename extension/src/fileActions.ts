@@ -111,3 +111,19 @@ export function registerFileActions(ctx: vscode.ExtensionContext, refresh: () =>
     refresh();
   });
 }
+
+/**
+ * Open a file the webview asked for: absolute or relative (to `cwd`, then each workspace folder),
+ * with an optional `:line` or `:line:col` suffix (`src/foo.ts:12`). Missing files are ignored.
+ */
+export function openFileAt(spec: string, cwd?: string) {
+  const m = /^(.*?)(?::(\d+))?(?::(\d+))?$/.exec(spec.trim())!;
+  const file = m[1];
+  const roots = [cwd, ...(vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath)].filter((r): r is string => !!r);
+  const full = path.isAbsolute(file) ? file : roots.map((r) => path.join(r, file)).find((p) => fs.existsSync(p));
+  if (!full || !fs.existsSync(full) || isDir(full)) return;
+  const line = m[2] ? Math.max(0, Number(m[2]) - 1) : undefined;
+  const col = m[3] ? Math.max(0, Number(m[3]) - 1) : 0;
+  const selection = line !== undefined ? new vscode.Range(line, col, line, col) : undefined;
+  return vscode.window.showTextDocument(vscode.Uri.file(full), { selection });
+}

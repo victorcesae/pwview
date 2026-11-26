@@ -7,7 +7,7 @@ import { installedAgents, runCliAgent } from './agents';
 import { addWorktree, removeWorktree, repoRoot, slug, validBranch, worktreeInfo } from './worktree';
 import { lanAddress, RemoteServer } from './remote';
 import { migrateFromAgentLens } from './migrate';
-import { canTrash, registerFileActions, removePath } from './fileActions';
+import { canTrash, openFileAt, registerFileActions, removePath } from './fileActions';
 import { registerCodeCompletion } from './codeCompletion';
 import { followPty } from './follow';
 import { pickFolder } from './folders';
@@ -492,7 +492,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       case 'openChange':
         return openChange(m.sessionId, m.changeId);
       case 'openFile':
-        return fs.existsSync(m.path) && vscode.window.showTextDocument(vscode.Uri.file(m.path));
+        return openFileAt(m.path);
       case 'resume':
         return vscode.commands.executeCommand('steerhouse.resumeSession', m.id);
       case 'message': {

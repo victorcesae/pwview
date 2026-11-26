@@ -93,6 +93,82 @@ body.vscode-light {
 body.vscode-dark {
   color-scheme: dark;
 }
+
+/* ---- code block syntax colours (highlight.js classes): light by default, dark under vscode-dark */
+:root {
+  --hl-comment: #6a737d;
+  --hl-keyword: #d73a49;
+  --hl-string: #032f62;
+  --hl-number: #005cc5;
+  --hl-title: #6f42c1;
+  --hl-type: #e36209;
+  --hl-tag: #22863a;
+  --hl-deletion: #b31d28;
+}
+body.vscode-dark,
+body.vscode-high-contrast {
+  --hl-comment: #8b949e;
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-number: #79c0ff;
+  --hl-title: #d2a8ff;
+  --hl-type: #ffa657;
+  --hl-tag: #7ee787;
+  --hl-deletion: #ffa198;
+}
+.hljs-comment,
+.hljs-quote,
+.hljs-meta {
+  color: var(--hl-comment);
+}
+.hljs-comment,
+.hljs-quote,
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-meta .hljs-keyword {
+  color: var(--hl-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-meta .hljs-string {
+  color: var(--hl-string);
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-variable.language_,
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-selector-class,
+.hljs-selector-id {
+  color: var(--hl-number);
+}
+.hljs-title,
+.hljs-section {
+  color: var(--hl-title);
+}
+.hljs-title.class_,
+.hljs-type,
+.hljs-built_in {
+  color: var(--hl-type);
+}
+.hljs-tag,
+.hljs-name {
+  color: var(--hl-tag);
+}
+.hljs-deletion {
+  color: var(--hl-deletion);
+}
+.hljs-strong {
+  font-weight: 600;
+}
 /* high contrast themes: use the theme's contrast border everywhere instead of soft borders */
 body.vscode-high-contrast,
 body.vscode-high-contrast-light {
