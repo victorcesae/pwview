@@ -182,3 +182,20 @@ test('a key typed while the answer is on its way does not throw it away', async 
   assert.strictEqual((await p2)[0].insertText, 'oo(1);');
   assert.strictEqual(n, 1, 'one request for both');
 });
+
+test('context: picks the part of another open file that shares names with the cursor', () => {
+  const other = Array.from({ length: 60 }, (_, i) => `const filler${i} = ${i};`).join('\n') + '\nexport function computeTotal(cartItems, taxRate) { return 0; }\n';
+  const block = C.contextBlock('const sum = computeTotal(cartItems, taxRate', [{ name: 'cart.ts', text: other }, { name: 'none.ts', text: 'nothing in common here' }], ['app.ts:3: let x = 1']);
+  assert.match(block, /cart\.ts/);
+  assert.match(block, /computeTotal\(cartItems, taxRate\)/);
+  assert.doesNotMatch(block, /none\.ts/);
+  assert.match(block, /recent edits by the user[\s\S]*app\.ts:3/);
+  assert.strictEqual(C.contextBlock('abc', [], []), '');
+  assert.match(C.userPrompt('ts', 'a.ts', 'x', '', 'CTX\n'), /^CTX\nLanguage: ts/);
+});
+
+test('length: a block after an opening brace, about a line elsewhere', () => {
+  assert.strictEqual(C.maxLinesAt('function f() {\n  '), 8);
+  assert.strictEqual(C.maxLinesAt('const a = foo'), 3);
+  assert.strictEqual(C.cleanCompletion('a\nb\nc\nd\ne', 'x', '', false, 3), 'a\nb\nc');
+});

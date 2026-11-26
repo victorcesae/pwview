@@ -130,5 +130,7 @@
   "setting.sidebarGrouping.chats": "Por chat: chats fixados, ativos e recentes de todas as pastas, com os projetos no final.",
   "setting.sidebarGrouping.projects": "Por pasta de projeto, com os chats de cada projeto dentro (o layout antigo).",
   "cmd.send.terminal.selection": "Enviar seleção do terminal para o chat",
-  "cmd.chat.palette": "Paleta de comandos do chat"
+  "cmd.chat.palette": "Paleta de comandos do chat",
+  "setting.code.completion.useOpenFiles": "Envia também trechos dos seus outros arquivos abertos e suas edições recentes, para as sugestões usarem seus nomes e tipos reais (o mesmo provedor; arquivos .env e chaves nunca são enviados).",
+  "setting.code.completion.disabledLanguages": "Linguagens em que a conclusão de código fica desligada, como [\"markdown\", \"plaintext\"]."
 }

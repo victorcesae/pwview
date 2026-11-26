@@ -1323,6 +1323,17 @@
           "minimum": 0,
           "description": "%setting.code.completion.delay%"
         },
+        "steerhouse.codeCompletion.useOpenFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "%setting.code.completion.useOpenFiles%"
+        },
+        "steerhouse.codeCompletion.disabledLanguages": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "%setting.code.completion.disabledLanguages%"
+        },
         "steerhouse.keepChatsRunning": {
           "type": "boolean",
           "default": true,

@@ -130,5 +130,7 @@
   "setting.sidebarGrouping.chats": "By chat: Pinned, Active and Recent chats from all folders, with projects at the bottom.",
   "setting.sidebarGrouping.projects": "By project folder, with each project's chats inside (the old layout).",
   "cmd.send.terminal.selection": "Send Terminal Selection to Chat",
-  "cmd.chat.palette": "Command Palette of the Chat"
+  "cmd.chat.palette": "Command Palette of the Chat",
+  "setting.code.completion.useOpenFiles": "Also send excerpts of your other open files and your recent edits, so suggestions use your real names and types (the same provider; .env and key files are never sent).",
+  "setting.code.completion.disabledLanguages": "Languages where code completion stays off, like [\"markdown\", \"plaintext\"]."
 }

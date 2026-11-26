@@ -63,18 +63,59 @@ function area(r: number) {
 Reply:
 Math.PI * r * r;`;
 
-export function userPrompt(language: string, fileName: string, prefix: string, suffix: string) {
-  return `Language: ${language}\nFile: ${fileName}\n\n${prefix.slice(-PREFIX_CHARS)}<CURSOR>${suffix.slice(0, SUFFIX_CHARS)}`;
+export function userPrompt(language: string, fileName: string, prefix: string, suffix: string, context = '') {
+  return `${context}Language: ${language}\nFile: ${fileName}\n\n${prefix.slice(-PREFIX_CHARS)}<CURSOR>${suffix.slice(0, SUFFIX_CHARS)}`;
 }
 
+const CONTEXT_CHARS = 3000;
+const SNIPPET_CHARS = 1200;
+/** Words of the code near the cursor, to find the parts of other files that matter here. */
+const words = (s: string) => new Set(s.match(/[A-Za-z_$][\w$]{2,}/g) ?? []);
+
+/** The window of another file that shares the most names with the code at the cursor (like Copilot's neighboring tabs). */
+export function bestSnippet(text: string, near: Set<string>, size = SNIPPET_CHARS): { text: string; score: number } {
+  const lines = text.split('\n');
+  let best = { text: '', score: 0 };
+  const step = 10;
+  for (let i = 0; i < lines.length; i += step) {
+    let chunk = '';
+    for (let j = i; j < lines.length && chunk.length < size; j++) chunk += lines[j] + '\n';
+    let score = 0;
+    for (const w of words(chunk)) if (near.has(w)) score++;
+    if (score > best.score) best = { text: chunk, score };
+  }
+  return best;
+}
+
+/** Context from other open files and the user's recent edits, put before the file in the prompt. */
+export function contextBlock(near: string, others: { name: string; text: string }[], edits: string[]): string {
+  const w = words(near);
+  const picks = others
+    .map((o) => ({ name: o.name, ...bestSnippet(o.text, w) }))
+    .filter((o) => o.score >= 2)
+    .sort((a, b) => b.score - a.score);
+  let out = '';
+  for (const p of picks) {
+    const add = `--- ${p.name} (excerpt) ---\n${p.text}\n`;
+    if (out.length + add.length > CONTEXT_CHARS) break;
+    out += add;
+  }
+  const recent = edits.slice(-5).join('\n');
+  if (recent) out += `--- recent edits by the user ---\n${recent}\n`;
+  return out ? `Related code (for reference only, do not repeat it):\n${out}\n` : '';
+}
+
+/** Right after an opening brace or a colon at the end of a line, a whole block is welcome; else about a line. */
+export const maxLinesAt = (prefix: string) => (/[{:(\[]\s*\n?\s*$/.test(prefix.slice(-80)) ? MAX_LINES : 3);
+
 /** The model's reply as text to insert: no fences, nothing the file already has, not too long. */
-export function cleanCompletion(reply: string, prefix: string, suffix: string, cut = false): string | undefined {
+export function cleanCompletion(reply: string, prefix: string, suffix: string, cut = false, maxLines = MAX_LINES): string | undefined {
   let text = reply.replace(/<\/?CURSOR>/g, '');
   const fence = /^\s*```[^\n]*\n([\s\S]*?)(?:\n?```\s*)?$/.exec(text);
   if (fence) text = fence[1];
   let lines = text.split('\n');
   if (cut && lines.length > 1) lines = lines.slice(0, -1); // the reply stopped mid-line
-  text = lines.slice(0, MAX_LINES).join('\n');
+  text = lines.slice(0, maxLines).join('\n');
   // repeated what is already typed on this line
   const typed = prefix.slice(prefix.lastIndexOf('\n') + 1);
   if (typed.trim() && text.startsWith(typed)) text = text.slice(typed.length);
@@ -127,7 +168,28 @@ interface Asked {
   text?: string;
 }
 
+/** Suggestions already received, by what came before the cursor: backspace and retype shows them at once. */
+class SuggestionCache {
+  private m = new Map<string, string>();
+  get(k: string) {
+    const v = this.m.get(k);
+    if (v !== undefined) (this.m.delete(k), this.m.set(k, v));
+    return v;
+  }
+  set(k: string, v: string) {
+    this.m.set(k, v);
+    if (this.m.size > 100) this.m.delete(this.m.keys().next().value!);
+  }
+}
+
 export class CodeCompletion implements vscode.InlineCompletionItemProvider {
+  private cache = new SuggestionCache();
+  /** extra context (other files, recent edits) for a document; set by the extension */
+  context?: (doc: vscode.TextDocument, near: string) => string;
+  /** languages where it stays quiet, and until when it is snoozed */
+  skip?: (doc: vscode.TextDocument) => boolean;
+  /** last answer time, for the status bar */
+  onLatency?: (ms: number) => void;
   /** the latest request: kept when a key is typed while it runs, since the answer may still fit */
   private asked?: Asked;
   /** whoever wants Claude Code started before the first suggestion */
@@ -144,7 +206,7 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
 
   async provideInlineCompletionItems(doc: vscode.TextDocument, pos: vscode.Position, context: vscode.InlineCompletionContext, token: vscode.CancellationToken): Promise<vscode.InlineCompletionItem[] | undefined> {
     const s = this.settings();
-    if (!s.enabled || !s.provider || isSensitive(doc.uri.fsPath)) return;
+    if (!s.enabled || !s.provider || isSensitive(doc.uri.fsPath) || this.skip?.(doc)) return;
     if (context.selectedCompletionInfo) return; // the suggestions list is open: it goes first
     if (!worthSuggesting(doc.lineAt(pos.line).text.slice(pos.character))) return;
     const provider = this.providers().find((p) => p.id === s.provider);
@@ -155,6 +217,9 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
     const suffix = all.slice(offset, offset + SUFFIX_CHARS);
     if (!prefix.trim()) return;
     const where = `${s.provider}\0${s.model}\0${doc.languageId}\0${suffix}`;
+    const cacheKey = `${where}\0${prefix.slice(-400)}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached) return [new vscode.InlineCompletionItem(cached, new vscode.Range(pos, pos))];
     let asked = this.asked?.where === where && prefix.startsWith(this.asked.prefix) ? this.asked : undefined;
     // typed through the suggestion on screen: the rest of it at once
     let text = asked && typedThrough(asked.prefix, asked.text, prefix);
@@ -171,11 +236,15 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
       if (token.isCancellationRequested) return;
       this.asked?.abort.abort(); // somewhere else now: its answer is no use
       const abort = new AbortController();
-      const user = userPrompt(doc.languageId, path.basename(doc.uri.fsPath), prefix, suffix);
+      const user = userPrompt(doc.languageId, path.basename(doc.uri.fsPath), prefix, suffix, this.context?.(doc, prefix.slice(-1500) + suffix.slice(0, 300)) ?? '');
+      const lines = maxLinesAt(prefix);
+      const started = Date.now();
       const now: Asked = { where, prefix, done: false, abort, reply: Promise.resolve(undefined) };
       // not tied to this request's cancellation: the next key cancels it, and the answer may still fit
       now.reply = this.ask(provider, s.model, user, abort).then((r) => {
-        now.text = r && cleanCompletion(r.text, prefix, suffix, r.cut);
+        now.text = r && cleanCompletion(r.text, prefix, suffix, r.cut, lines);
+        if (r) this.onLatency?.(Date.now() - started);
+        if (now.text) this.cache.set(cacheKey, now.text);
         now.done = !!r; // stopped or failed: asked again next time
         return now.text;
       });
@@ -241,10 +310,35 @@ export function registerCodeCompletion(ctx: vscode.ExtensionContext) {
     const s = settings();
     const name = providers().find((p) => p.id === s.provider)?.name;
     item.text = error ? '$(warning) Tab' : s.enabled ? '$(sparkle) Tab' : '$(circle-slash) Tab';
-    item.tooltip = error ?? (s.enabled ? vscode.l10n.t('Code completion is on ({0}). Click to turn it off.', name ?? '?') : vscode.l10n.t('Code completion is off. Click to turn it on.'));
+    const snoozed = Date.now() < snoozedUntil;
+    if (s.enabled && snoozed && !error) item.text = '$(debug-pause) Tab';
+    item.tooltip =
+      error ??
+      (s.enabled
+        ? (snoozed ? vscode.l10n.t('Code completion is snoozed until {0}.', new Date(snoozedUntil).toLocaleTimeString()) : vscode.l10n.t('Code completion is on ({0}).', name ?? '?')) +
+          (latency !== undefined ? ' ' + vscode.l10n.t('Last suggestion in {0} ms.', String(latency)) : '') +
+          ' ' + vscode.l10n.t('Click for options. Ctrl+→ accepts a word at a time.')
+        : vscode.l10n.t('Code completion is off. Click to turn it on.'));
     item.show();
   };
   engine.onStatus = paint;
+  // ---- context: other open files and what the user just changed
+  const edits: string[] = [];
+  engine.context = (doc, near) => {
+    if (!section().get('useOpenFiles', true)) return '';
+    const others = vscode.workspace.textDocuments
+      .filter((d) => d !== doc && d.uri.scheme === 'file' && !isSensitive(d.uri.fsPath) && d.getText().length < 200_000)
+      .slice(0, 20)
+      .map((d) => ({ name: vscode.workspace.asRelativePath(d.uri), text: d.getText() }));
+    return contextBlock(near, others, edits);
+  };
+  let snoozedUntil = 0;
+  engine.skip = (doc) => Date.now() < snoozedUntil || section().get<string[]>('disabledLanguages', []).includes(doc.languageId);
+  let latency: number | undefined;
+  engine.onLatency = (ms) => {
+    latency = ms;
+    paint();
+  };
   // Claude Code takes about half a second to start: have one ready before the first suggestion
   const prewarm = (source?: CompletionSource, model = settings().model) => {
     const s = settings();
@@ -260,7 +354,25 @@ export function registerCodeCompletion(ctx: vscode.ExtensionContext) {
 
   const toggle = async () => {
     const save = (k: string, v: unknown) => section().update(k, v, vscode.ConfigurationTarget.Global);
-    if (settings().enabled) return save('enabled', false);
+    if (settings().enabled) {
+      const lang = vscode.window.activeTextEditor?.document.languageId;
+      const off = section().get<string[]>('disabledLanguages', []);
+      const snoozed = Date.now() < snoozedUntil;
+      const opts = [
+        snoozed ? { label: vscode.l10n.t('$(debug-start) Resume now'), id: 'resume' } : { label: vscode.l10n.t('$(debug-pause) Snooze for 15 minutes'), id: 'snooze' },
+        ...(lang ? [off.includes(lang) ? { label: vscode.l10n.t('$(check) Turn on for {0}', lang), id: 'lang-on' } : { label: vscode.l10n.t('$(circle-slash) Turn off for {0}', lang), id: 'lang-off' }] : []),
+        { label: vscode.l10n.t('$(arrow-swap) Change provider…'), id: 'provider' },
+        { label: vscode.l10n.t('$(close) Turn off'), id: 'off' },
+      ];
+      const pick = await vscode.window.showQuickPick(opts, { title: vscode.l10n.t('Code completion') });
+      if (!pick) return;
+      if (pick.id === 'snooze') snoozedUntil = Date.now() + 15 * 60_000;
+      if (pick.id === 'resume') snoozedUntil = 0;
+      if (pick.id === 'lang-off' && lang) await save('disabledLanguages', [...off, lang]);
+      if (pick.id === 'lang-on' && lang) await save('disabledLanguages', off.filter((l) => l !== lang));
+      if (pick.id === 'off') return save('enabled', false);
+      if (pick.id !== 'provider') return paint();
+    }
     const list = providers();
     if (!list.length) {
       const add = vscode.l10n.t('Add a Provider');
@@ -286,6 +398,19 @@ export function registerCodeCompletion(ctx: vscode.ExtensionContext) {
     vscode.languages.registerInlineCompletionItemProvider({ scheme: 'file' }, engine),
     vscode.commands.registerCommand('steerhouse.codeCompletion.toggle', toggle),
     vscode.window.onDidChangeActiveTextEditor((e) => e?.document.uri.scheme === 'file' && prewarm()),
+    // the user's own small edits (not whole-file changes, not secrets): what they are doing right now
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      if (e.document.uri.scheme !== 'file' || isSensitive(e.document.uri.fsPath)) return;
+      for (const c of e.contentChanges) {
+        if (c.text.length > 400 || c.rangeLength > 400 || (!c.text.trim() && !c.rangeLength)) continue;
+        const line = e.document.lineAt(Math.min(c.range.start.line, e.document.lineCount - 1)).text.trim();
+        if (!line) continue;
+        const entry = `${vscode.workspace.asRelativePath(e.document.uri)}:${c.range.start.line + 1}: ${line.slice(0, 160)}`;
+        if (edits[edits.length - 1]?.startsWith(entry.split(': ')[0] + ':')) edits[edits.length - 1] = entry;
+        else edits.push(entry);
+        if (edits.length > 20) edits.shift();
+      }
+    }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration('steerhouse.codeCompletion')) return;
       stopCompleters(); // the model or the account may have changed, and when off nothing stays warm

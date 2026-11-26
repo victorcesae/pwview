@@ -304,5 +304,15 @@
   "Open a chat first, then send the selection to it.": "Abra um chat primeiro e depois envie a seleção para ele.",
   "Switch anyway": "Trocar mesmo assim",
   "{0} has uncommitted changes. Git carries them over to {1}, or refuses if they conflict.": "{0} tem alterações não commitadas. O git as leva para {1}, ou recusa se houver conflito.",
-  "Could not switch to {0}: {1}": "Não foi possível trocar para {0}: {1}"
+  "Could not switch to {0}: {1}": "Não foi possível trocar para {0}: {1}",
+  "Code completion is snoozed until {0}.": "Conclusão de código pausada até {0}.",
+  "Code completion is on ({0}).": "Conclusão de código ligada ({0}).",
+  "Last suggestion in {0} ms.": "Última sugestão em {0} ms.",
+  "Click for options. Ctrl+→ accepts a word at a time.": "Clique para opções. Ctrl+→ aceita uma palavra por vez.",
+  "$(debug-start) Resume now": "$(debug-start) Retomar agora",
+  "$(debug-pause) Snooze for 15 minutes": "$(debug-pause) Pausar por 15 minutos",
+  "$(check) Turn on for {0}": "$(check) Ligar para {0}",
+  "$(circle-slash) Turn off for {0}": "$(circle-slash) Desligar para {0}",
+  "$(arrow-swap) Change provider…": "$(arrow-swap) Trocar provedor…",
+  "$(close) Turn off": "$(close) Desligar"
 }
