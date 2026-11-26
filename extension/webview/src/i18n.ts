@@ -269,6 +269,7 @@ const PT: Record<string, string> = {
   'Working…': 'Trabalhando…',
   'Context usage appears after the first answer': 'O uso de contexto aparece após a primeira resposta',
   'Jump to latest': 'Ir para o fim',
+  'Click to open': 'Clique para abrir',
   'Working for': 'Trabalhando há',
   'Worked for {0}': 'Trabalhou por {0}',
   'Worked': 'Trabalhou',

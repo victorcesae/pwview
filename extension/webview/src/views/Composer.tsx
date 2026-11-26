@@ -2,6 +2,7 @@
 // a context-usage ring, and a neutral look that follows the editor theme.
 import { SquareTerminal, CornerDownRight, Archive, ArchiveRestore, Blocks, Bot, ListOrdered, Navigation, Paperclip, Plus, Send, ShieldCheck, Sparkles, Square, SquareSlash, Zap, Gauge, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger, Switch } from '@/components/ui/dropdown-menu';
+import { FileAttachment } from '@/components/FileAttachment';
 import { Zoomable } from '@/components/Lightbox';
 import { UsagePanel } from '@/components/UsagePanel';
 import { prettyModel } from '@/views/toolSummary';
@@ -221,6 +222,8 @@ export function Composer({ chat }: { chat: ChatState }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
   const [images, setImages] = useState<Img[]>([]);
+  // attached files (dropped, pasted or uploaded): shown like images, sent along with the message
+  const [attached, setAttached] = useState<string[]>([]);
   const [priority, setPriority] = useState<Priority>('next'); // Steer by default
   const [over, setOver] = useState(false);
   const [sel, setSel] = useState(0);
@@ -252,7 +255,8 @@ export function Composer({ chat }: { chat: ChatState }) {
     input.current?.focus();
   };
 
-  const addPaths = (paths: string[]) => input.current?.insertText(paths.map((p) => mention(p, chat.cwd)).join(' ') + ' ');
+  // dropped, pasted or uploaded files: a chip with the name; the agent reads the path
+  const addPaths = (paths: string[]) => setAttached((a) => [...a, ...paths.filter((p) => !a.includes(p))]);
   const addPathsRef = useRef(addPaths);
   addPathsRef.current = addPaths;
   useEffect(() => {
@@ -261,6 +265,19 @@ export function Composer({ chat }: { chat: ChatState }) {
     return () => window.removeEventListener('message', on);
   }, []);
   const [dropNote, setDropNote] = useState('');
+  // drops anywhere in the chat attach the files, not only on this box (VS Code passes files to a
+  // chat only while Shift is held; without it, it opens them itself)
+  const dropRef = useRef<(e: DragEvent) => void>(() => {});
+  useEffect(() => {
+    const over = (e: DragEvent) => e.preventDefault();
+    const drop = (e: DragEvent) => dropRef.current(e);
+    window.addEventListener('dragover', over);
+    window.addEventListener('drop', drop);
+    return () => {
+      window.removeEventListener('dragover', over);
+      window.removeEventListener('drop', drop);
+    };
+  }, []);
   const addFiles = async (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'));
     // anything else from this computer: the agent can't open a path here, so the content is copied over
@@ -280,6 +297,14 @@ export function Composer({ chat }: { chat: ChatState }) {
       setImages((p) => [...p, ...read]);
     }
   };
+  dropRef.current = (e: DragEvent) => {
+    if (e.defaultPrevented || !e.dataTransfer) return;
+    e.preventDefault();
+    const dt = e.dataTransfer;
+    const paths = droppedPaths((type) => dt.getData(type));
+    if (paths.length) addPaths(paths);
+    else addFiles([...dt.files]);
+  };
   const send = (p: Priority = priority) => {
     // ! runs in the user's shell, from the text as typed (Markdown would escape my_file and *.ts)
     const command = shellCommand(input.current?.getText() ?? '');
@@ -290,7 +315,7 @@ export function Composer({ chat }: { chat: ChatState }) {
       return;
     }
     const md = input.current?.getMarkdown() ?? '';
-    if (!md.trim() && !images.length) return;
+    if (!md.trim() && !images.length && !attached.length) return;
     // /btw <question>: a side question, the running work is not interrupted
     const btw = /^\s*\/btw\b\s*([\s\S]*)$/.exec(md);
     if (btw && !chat.slashCommands.includes('btw')) {
@@ -299,17 +324,18 @@ export function Composer({ chat }: { chat: ChatState }) {
       setText('');
       return;
     }
-    const local = !images.length && localCommandOf(md, chat.slashCommands);
+    const local = !images.length && !attached.length && localCommandOf(md, chat.slashCommands);
     if (local) {
       post({ type: 'localCommand', name: local });
       input.current?.clear();
       setText('');
       return;
     }
-    post({ type: 'send', text: md, images, priority: working ? p : 'later' });
+    post({ type: 'send', text: md, images, files: attached, priority: working ? p : 'later' });
     input.current?.clear();
     setText('');
     setImages([]);
+    setAttached([]);
   };
   const pickSlash = (c: string) => {
     if (hintOf(c)) {
@@ -489,6 +515,13 @@ export function Composer({ chat }: { chat: ChatState }) {
           ))}
         </div>
       )}
+      {attached.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" data-attached-files>
+          {attached.map((f) => (
+            <FileAttachment key={f} path={f} onRemove={() => setAttached((a) => a.filter((x) => x !== f))} />
+          ))}
+        </div>
+      )}
       {images.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {images.map((img, i) => (
@@ -524,6 +557,13 @@ export function Composer({ chat }: { chat: ChatState }) {
         onEscape={() => working && post({ type: 'interrupt' })}
         onSubmit={({ ctrl }) => send(ctrl ? 'now' : priority)}
         onKey={(e) => {
+          // Backspace in an empty box takes back the last attachment (a file first, then an image)
+          if (e.key === 'Backspace' && !e.ctrlKey && !e.metaKey && input.current?.isEmpty() && (attached.length || images.length)) {
+            e.preventDefault();
+            if (attached.length) setAttached((a) => a.slice(0, -1));
+            else setImages((im) => im.slice(0, -1));
+            return true;
+          }
           if (tabOn && showSuggestion && e.key === 'Tab' && !e.shiftKey) {
             e.preventDefault();
             useSuggestion();

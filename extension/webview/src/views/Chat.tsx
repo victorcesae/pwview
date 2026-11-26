@@ -1,4 +1,4 @@
-import { Ban, Bot, MessageCircleQuestion, History, MessageSquare, Command, Globe, ChevronUp, Copy, SquareTerminal, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
+import { Ban, Bot, Hammer, MessageCircleQuestion, History, MessageSquare, Command, Globe, ChevronUp, Copy, SquareTerminal, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
@@ -27,6 +27,7 @@ import { composerApi } from './Composer';
 import { ThinkingRow, toggleAllThinking } from '@/components/Thinking';
 import { Fold, JumpRail, usePromptKeys, type Prompt } from '@/components/MessageNav';
 import { foldTurns, type WorkRow } from '@/lib/turnWork';
+import { FileAttachment } from '@/components/FileAttachment';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Timeline } from '@/components/Timeline';
 import { VerifyBadge } from '@/components/VerifyBadge';
@@ -281,7 +282,8 @@ function ToolGroup({ items, sessionId }: { items: ToolItem[]; sessionId?: string
     <div ref={box}>
       <button onClick={() => setOpen(!open)} className={cn('text-muted-foreground hover:text-foreground flex min-w-0 cursor-pointer items-center gap-2 text-left text-[13.5px]', open && 'bg-background sticky top-0 z-20 w-full py-1')}>
         {running && <Loader2 className="text-working size-4 shrink-0 animate-spin" aria-label={t('Working…')} />}
-        {failed && !running && <X className="text-removed size-3.5" />}
+        {failed && !running && <X className="text-removed size-4 shrink-0" />}
+        {!running && !failed && (items.every((i) => /browser|playwright|pwview/i.test(i.name)) ? <Globe className="size-4 shrink-0 opacity-80" /> : <Hammer className="size-4 shrink-0 opacity-80" />)}
         {/* while a call runs, the group says what is running now and for how long (like t3code's live row) */}
         {live ? (
           <span className="flex min-w-0 items-baseline gap-1.5" data-live-tool>
@@ -508,6 +510,13 @@ function UserMessage({ it }: { it: Extract<ChatItem, { kind: 'user' }> }) {
         <span className="text-muted-foreground inline-flex items-center gap-1 rounded-md border border-dashed px-1.5 py-0.5 text-[10.5px]" title={t('Sent automatically by Steerhouse after verify failed')} data-auto-message>
           <RotateCcw className="size-3" /> {t('Automatic')}
         </span>
+      )}
+      {!!it.files?.length && (
+        <div className="flex max-w-[85%] flex-wrap justify-end gap-1.5">
+          {it.files.map((f) => (
+            <FileAttachment key={f} path={f} />
+          ))}
+        </div>
       )}
       {it.images.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1.5">

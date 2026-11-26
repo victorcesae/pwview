@@ -85,3 +85,49 @@ export function insertChip(editor: Editor, text: string) {
     .insertContent([{ type: 'pasteChip', attrs: { n: counter, lines: text.replace(/\r\n/g, '\n').split('\n').length, text } }, { type: 'text', text: ' ' }])
     .run();
 }
+
+// ---- attached files: a chip with the file's name ("[📎 report.xlsx]"); the agent gets the path,
+// a click opens the file in a new tab
+
+const baseName = (p: string) => p.split(/[\\/]/).pop() || p;
+
+export const FileChip = Node.create({
+  name: 'fileChip',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return { path: { default: '' }, mention: { default: '' } };
+  },
+
+  parseHTML() {
+    return [{ tag: 'span[data-file-chip]' }];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return ['span', mergeAttributes(HTMLAttributes, { 'data-file-chip': '', class: 'paste-chip file-chip', title: node.attrs.path }), `📎 ${baseName(node.attrs.path)}`];
+  },
+
+  renderText({ node }) {
+    return node.attrs.mention || node.attrs.path;
+  },
+
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: { write: (s: string) => void }, node: { attrs: { path: string; mention: string } }) {
+          state.write(node.attrs.mention || `\`${node.attrs.path}\``);
+        },
+        parse: {},
+      },
+    };
+  },
+});
+
+/** Insert file chips at the cursor (`mention` is what the agent reads, e.g. `@src/a.ts` or the full path). */
+export function insertFileChips(editor: Editor, files: { path: string; mention: string }[]) {
+  const content = files.flatMap((f) => [{ type: 'fileChip', attrs: f }, { type: 'text', text: ' ' }]);
+  editor.chain().focus().insertContent(content).run();
+}

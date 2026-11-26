@@ -16,7 +16,7 @@ export type Hunk = { oldStart: number; oldLines: number; newStart: number; newLi
 export type Todo = { content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string };
 
 export type ChatItem =
-  | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string; /** sent by Steerhouse (verify fix), not typed by you */ auto?: boolean }
+  | { kind: 'user'; id: string; text: string; images: string[]; /** attached files, shown as cards; the agent reads their paths */ files?: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string; /** sent by Steerhouse (verify fix), not typed by you */ auto?: boolean }
   | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string; /** set on the turn's last answer: how long the turn took */ durationMs?: number; ts?: string }
   /** the model's extended thinking (shown dimmed and collapsed) */
   | { kind: 'thinking'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string; started?: number; durationMs?: number; ts?: string }
@@ -422,7 +422,7 @@ export class ChatSession {
   }
   private input = new Channel<SDKUserMessage>();
   private q?: Query;
-  private queued: { id: string; text: string; images: Img[]; priority: 'later' | 'next'; held?: boolean }[] = [];
+  private queued: { id: string; text: string; images: Img[]; priority: 'later' | 'next'; held?: boolean; files?: string[] }[] = [];
   private pending = new Map<string, (r: PermissionResult) => void>();
   private streaming = new Map<string, string>(); // `${parent}:${msgId}:${index}` → item id
   private currentMsg = new Map<string, string>(); // parent → message id being streamed
@@ -558,17 +558,17 @@ export class ChatSession {
    * be edited, cancelled or switched. Steer is handed over when the agent starts its next step,
    * Queue when the turn ends. Send now (now) goes in immediately.
    */
-  send(text: string, images: Img[], priority: Priority) {
-    if (!text.trim() && !images.length) return;
+  send(text: string, images: Img[], priority: Priority, files: string[] = []) {
+    if (!text.trim() && !images.length && !files.length) return;
     const working = this.state.status === 'working' || this.state.status === 'waiting';
     if (working && priority !== 'now') {
       const id = uid();
-      this.queued.push({ id, text, images, priority });
+      this.queued.push({ id, text, images, priority, files });
       if (priority === 'next') this.armSteer(id);
       this.changed();
       return;
     }
-    this.push(text, images, working ? priority : 'later');
+    this.push(text, images, working ? priority : 'later', undefined, files);
   }
 
   /** Edit a message that hasn't been handed over yet. */
@@ -589,7 +589,7 @@ export class ChatSession {
     // the turn ended while it was being edited: it goes now, with the edited text
     else if (this.state.status === 'idle') {
       this.queued = this.queued.filter((x) => x !== m);
-      this.push(m.text, m.images, 'later');
+      this.push(m.text, m.images, 'later', undefined, m.files);
     }
   }
 
@@ -604,7 +604,7 @@ export class ChatSession {
     const next = this.queued.find((q) => !q.held);
     if (next) {
       this.queued = this.queued.filter((q) => q !== next);
-      this.push(next.text, next.images, 'later');
+      this.push(next.text, next.images, 'later', undefined, next.files);
     }
     this.changed();
   }
@@ -625,7 +625,7 @@ export class ChatSession {
         const i = this.queued.findIndex((m) => m.id === id && m.priority === 'next' && !m.held);
         if (i < 0) return;
         const [m] = this.queued.splice(i, 1);
-        this.push(m.text, m.images, 'next');
+        this.push(m.text, m.images, 'next', undefined, m.files);
       }, this.steerGraceMs),
     );
   }
@@ -639,7 +639,7 @@ export class ChatSession {
     const steers = this.queued.filter((m) => m.priority === 'next');
     if (!steers.length) return;
     this.queued = this.queued.filter((m) => m.priority !== 'next');
-    for (const m of steers) this.push(m.text, m.images, 'next');
+    for (const m of steers) this.push(m.text, m.images, 'next', undefined, m.files);
   }
 
   /** background commands seen in this run (merged into state.tasks) */
@@ -765,7 +765,7 @@ export class ChatSession {
     }
     this.disarm(id);
     const [m] = this.queued.splice(i, 1);
-    this.push(m.text, m.images, 'now');
+    this.push(m.text, m.images, 'now', undefined, m.files);
   }
 
   cancelQueued(id: string) {
@@ -780,18 +780,19 @@ export class ChatSession {
     this.push(shown, [], 'later', { auto: true, forAgent });
   }
 
-  private push(text: string, images: Img[], priority: Priority, auto?: { auto: true; forAgent: string }) {
+  private push(text: string, images: Img[], priority: Priority, auto?: { auto: true; forAgent: string }, files: string[] = []) {
     if (priority === 'next' && this.state.status !== 'idle') this.lateSteers++;
     const content: any[] = images.map((img) => ({
       type: 'image',
       source: { type: 'base64', media_type: img.mime, data: img.data.replace(/^data:[^;]+;base64,/, '') },
     }));
     // commands the user ran since their last message: the agent reads them now, the bubble stays as written
-    const forAgent = [auto?.forAgent ?? text, ...this.shellNotes.splice(0)].filter((t) => t.trim()).join('\n\n');
+    const attachedNote = files.length ? `Attached files (read them as needed):\n${files.map((f) => `- ${f}`).join('\n')}` : '';
+    const forAgent = [auto?.forAgent ?? text, attachedNote, ...this.shellNotes.splice(0)].filter((t) => t.trim()).join('\n\n');
     if (forAgent) content.push({ type: 'text', text: forAgent });
     // the message's own uuid (so files can be rewound to it) and the entry before it (to fork there)
     const uuid = randomUUID();
-    this.state.items.push({ kind: 'user', id: uuid, text, images: images.map((i) => i.data), priority, ts: new Date().toISOString(), forkAt: this.lastUuid, auto: auto ? true : undefined });
+    this.state.items.push({ kind: 'user', id: uuid, text, images: images.map((i) => i.data), files: files.length ? files : undefined, priority, ts: new Date().toISOString(), forkAt: this.lastUuid, auto: auto ? true : undefined });
     this.state.suggestion = undefined;
     if (this.state.title === 'New chat' && text.trim()) this.state.title = clip(text.trim().split('\n')[0], 60);
     this.state.status = 'working';
@@ -946,7 +947,7 @@ ${question}`;
   handOverQueue() {
     for (const m of this.queued.splice(0)) {
       this.disarm(m.id);
-      this.push(m.text, m.images, m.priority);
+      this.push(m.text, m.images, m.priority, undefined, m.files);
     }
   }
 
@@ -1397,7 +1398,7 @@ ${question}`;
         const steers = ready.filter((q) => q.priority === 'next');
         const handover = followUp ? steers : steers.length ? steers : ready.slice(0, 1);
         this.queued = this.queued.filter((q) => !handover.includes(q));
-        for (const q of handover) this.push(q.text, q.images, 'later');
+        for (const q of handover) this.push(q.text, q.images, 'later', undefined, q.files);
         if (!handover.length) queueMicrotask(() => this.onTurnEnd?.());
         break;
       }

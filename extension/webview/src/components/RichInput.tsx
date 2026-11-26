@@ -9,13 +9,16 @@ import StarterKit from '@tiptap/starter-kit';
 import { Bold, Code, Italic, List, ListOrdered, SquareCode } from 'lucide-react';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Markdown } from 'tiptap-markdown';
-import { expandChip, findChip, insertChip, isLongPaste, PasteChip } from './pasteChip';
+import { expandChip, FileChip, findChip, insertChip, insertFileChips, isLongPaste, PasteChip } from './pasteChip';
+import { post } from '@/bridge';
 import { cn } from '@/lib/utils';
 
 export interface RichInputHandle {
   getMarkdown(): string;
   /** adds text at the cursor, as text */
   insertText(text: string): void;
+  /** adds files as chips with their names (the agent reads `mention`) */
+  insertFiles(files: { path: string; mention: string }[]): void;
   /** adds text as an attachment chip (like a long paste) */
   insertChip(text: string): void;
   /** the text exactly as typed, without Markdown escapes */
@@ -74,6 +77,7 @@ export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput({
       Placeholder.configure({ placeholder }),
       Markdown.configure({ html: false, transformPastedText: false, breaks: true }),
       PasteChip,
+      FileChip,
     ],
     editorProps: {
       attributes: { class: 'rich-input outline-none min-h-20 max-h-[45vh] overflow-y-auto px-1 py-0.5 text-[13px] leading-relaxed' },
@@ -118,6 +122,10 @@ export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput({
       },
       handleClickOn: (_view, _pos, node, nodePos) => {
         const ed = editorRef.current;
+        if (node.type.name === 'fileChip') {
+          post({ type: 'openFile', path: node.attrs.path } as any);
+          return true;
+        }
         if (ed && node.type.name === 'pasteChip') {
           expandChip(ed, { pos: nodePos, size: node.nodeSize }, node.attrs.text);
           return true;
@@ -139,6 +147,7 @@ export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput({
 
   useImperativeHandle(ref, () => ({
     getMarkdown: () => (editor ? md(editor).trim() : ''),
+    insertFiles: (files) => editor && insertFileChips(editor, files),
     insertText: (text: string) => editor?.chain().focus().insertContent({ type: 'text', text }).run(),
     insertChip: (text: string) => {
       if (editor) insertChip(editor, text);

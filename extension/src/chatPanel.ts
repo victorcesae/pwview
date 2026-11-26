@@ -27,7 +27,7 @@ const tabCompletion = () => vscode.workspace.getConfiguration('steerhouse').get<
 
 export type FromChat =
   | { type: 'ready' }
-  | { type: 'send'; text: string; images: { data: string; mime: string }[]; priority: Priority }
+  | { type: 'send'; text: string; images: { data: string; mime: string }[]; priority: Priority; files?: string[] }
   | { type: 'promote'; id: string; priority?: Priority }
   | { type: 'cancelQueued'; id: string }
   | { type: 'editQueued'; id: string; text: string }
@@ -651,7 +651,7 @@ export class Chats {
         // @problems, @diff, @chat:, @url:, path#L5-10: the agent reads what they stand for, the bubble keeps the names
         for (const note of await resolveMentions(m.text, { cwd: c.state.cwd, problems: () => problemsIn(c.state.cwd), chat: (t) => this.chatSummary(o, t) })) c.addNote(note);
         o.verifier?.cancel(); // never verify under you: what you say now goes first
-        return c.send(m.text, m.images, m.priority);
+        return c.send(m.text, m.images, m.priority, m.files ?? []);
       }
       case 'setVerify':
         return o.verifier?.setEnabled(m.on);

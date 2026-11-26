@@ -69,7 +69,7 @@ export type Priority = 'later' | 'next' | 'now';
 export type Todo = { content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string };
 export type Question = { question: string; header: string; multiSelect: boolean; options: { label: string; description: string }[] };
 export type ChatItem =
-  | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string; /** sent by Steerhouse (verify fix) */ auto?: boolean }
+  | { kind: 'user'; id: string; text: string; images: string[]; files?: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string; /** sent by Steerhouse (verify fix) */ auto?: boolean }
   | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; durationMs?: number; ts?: string }
   | { kind: 'thinking'; id: string; text: string; streaming?: boolean; parent?: string; durationMs?: number; ts?: string }
   | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; images?: string[]; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number; ts?: string }
@@ -98,7 +98,7 @@ export type LinkedSession = { id: string; title: string; state: State; activity?
 export type ChatData = { view: 'chat'; chat: ChatState; linked: LinkedSession[] };
 export type ToChat =
   | { type: 'ready' }
-  | { type: 'send'; text: string; images: { data: string; mime: string }[]; priority: Priority }
+  | { type: 'send'; text: string; images: { data: string; mime: string }[]; priority: Priority; files?: string[] }
   | { type: 'localCommand'; name: string }
   | { type: 'allowRule'; id: string; rule: string }
   | { type: 'promote'; id: string; priority?: Priority }
