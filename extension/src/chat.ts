@@ -1169,6 +1169,11 @@ ${question}`;
   /** uuid of the last transcript entry (answer or tool result) of the main conversation */
   private lastUuid?: string;
 
+  private endThinking(it: Extract<ChatItem, { kind: 'thinking' }>) {
+    it.streaming = false;
+    if (it.started && it.durationMs === undefined) it.durationMs = Date.now() - it.started;
+  }
+
   private handle(m: SDKMessage) {
     const parent = ('parent_tool_use_id' in m ? (m.parent_tool_use_id as string | null) : null) ?? undefined;
     if ((m.type === 'assistant' || m.type === 'user') && !parent && (m as any).uuid) this.lastUuid = (m as any).uuid;
@@ -1210,6 +1215,8 @@ ${question}`;
         const e: any = m.event;
         const key = parent ?? '';
         if (e.type === 'message_start') {
+          // a new step began: any thinking still open for this agent is over
+          for (const x of this.state.items) if (x.kind === 'thinking' && x.streaming && (x.parent ?? '') === key) this.endThinking(x);
           if (!parent) (this.lateSteers = 0, clearTimeout(this.followUpTimer)); // the model is reading everything handed over so far
           this.currentMsg.set(key, e.message?.id ?? uid());
           if (!parent) this.state.activity = 'Thinking…';
@@ -1222,6 +1229,11 @@ ${question}`;
           const id = uid();
           this.streaming.set(`${key}:${this.currentMsg.get(key)}:${e.index}`, id);
           this.state.items.push({ kind: 'thinking', id, text: '', streaming: true, parent, msg: this.currentMsg.get(key), started: Date.now(), ts: new Date().toISOString() });
+        } else if (e.type === 'content_block_stop') {
+          // a thinking block is done when its stream ends (the final message doesn't always match it)
+          const id = this.streaming.get(`${key}:${this.currentMsg.get(key)}:${e.index}`);
+          const it = id ? this.state.items.find((x) => x.id === id) : undefined;
+          if (it?.kind === 'thinking' && it.streaming) this.endThinking(it);
         } else if (e.type === 'content_block_delta') {
           if (e.delta?.type === 'text_delta') {
             const id = this.streaming.get(`${key}:${this.currentMsg.get(key)}:${e.index}`);

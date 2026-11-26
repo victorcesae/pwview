@@ -478,3 +478,20 @@ test('chat: a waiting message being edited when the turn ends keeps the edit', (
   c.holdQueued(id, false);
   assert.deepEqual(queued(c).map((m) => m.content.at(-1).text), ['edited']);
 });
+
+test('chat: a thinking block is done when its stream ends or the next step starts', () => {
+  const c = newChat();
+  const ev = (event) => h(c, { type: 'stream_event', parent_tool_use_id: null, event });
+  ev({ type: 'message_start', message: { id: 'm1' } });
+  ev({ type: 'content_block_start', index: 0, content_block: { type: 'thinking' } });
+  ev({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'hmm' } });
+  const th = () => c.state.items.filter((i) => i.kind === 'thinking');
+  assert.equal(th()[0].streaming, true);
+  ev({ type: 'content_block_stop', index: 0 });
+  assert.equal(th()[0].streaming, false, 'stream ended');
+  assert.ok(typeof th()[0].durationMs === 'number');
+  ev({ type: 'message_start', message: { id: 'm2' } });
+  ev({ type: 'content_block_start', index: 0, content_block: { type: 'thinking' } });
+  ev({ type: 'message_start', message: { id: 'm3' } });
+  assert.equal(th()[1].streaming, false, 'next step started');
+});

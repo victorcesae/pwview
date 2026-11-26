@@ -4,6 +4,7 @@
 - Bigger message box: the chat and the box use up to 72rem of width (was 46rem), and the box starts about 4 lines tall and grows to almost half the window.
 - Slimmer chat header: one row, the title shortens with … instead of pushing the buttons to a second line; the account chip hides on narrow windows.
 - Thinking stays on one line while it streams ("Thinking… · the line being written"), like a finished one; click to see all of it.
+- Fixed: thinking blocks could stay "Thinking…" after the agent had moved on; they now close when their stream ends or the next step starts.
 
 ## 1.0.26
 - Side questions: `/btw <question>` asks about the chat while it keeps working. A copy of the conversation answers with what is running right now; the agent doing the work never sees it.
