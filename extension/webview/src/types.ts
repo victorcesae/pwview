@@ -129,7 +129,14 @@ export type ToChat =
   | { type: 'openChange'; changeId: string }
   | { type: 'link' }
   | { type: 'unlink'; id: string }
-  | { type: 'openSession'; id: string };
+  | { type: 'openSession'; id: string }
+  // Changes panel (src/gitActions.ts)
+  | { type: 'changesTree' }
+  | { type: 'changesOpenDiff'; path: string }
+  | { type: 'changesRevert'; path: string }
+  | { type: 'gitCommit'; message: string }
+  | { type: 'gitPush' }
+  | { type: 'gitCreatePr' };
 
 // ---- graph (mirrors src/graph.ts)
 export type GNode =

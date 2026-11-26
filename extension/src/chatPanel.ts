@@ -6,6 +6,7 @@ import { ChatSession, historyFromTranscript, Priority, type ChatItem, type ChatP
 import { hostIcon } from './hostIcon';
 import { blockedByPolicy, findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMethod } from './prs';
 import { openUrl } from './browser';
+import { handleChanges, isChangesMsg, type ChangesMsg } from './gitActions';
 import { findUrls } from './bgtasks';
 import { completeFiles } from './folders';
 import { saveUpload } from './uploads';
@@ -66,7 +67,8 @@ export type FromChat =
   | { type: 'openChange'; changeId: string }
   | { type: 'link' }
   | { type: 'unlink'; id: string }
-  | { type: 'openSession'; id: string };
+  | { type: 'openSession'; id: string }
+  | ChangesMsg;
 
 interface Open {
   chat: ChatSession;
@@ -421,6 +423,12 @@ export class Chats {
 
   private async onMessage(o: Open, m: FromChat) {
     const c = o.chat;
+    if (isChangesMsg(m)) {
+      // Changes panel: working-tree diff, revert, commit / push / create PR (src/gitActions.ts)
+      const note = (text: string) => (c.state.items.push({ kind: 'system', id: `git-${Date.now()}`, text }), this.schedule(o));
+      const prompts = () => c.state.items.flatMap((x) => (x.kind === 'user' ? [x.text.split('\n')[0].slice(0, 72)] : [])).slice(-1).join('');
+      return handleChanges(m, c.state.cwd, (r) => this.send(o, r), note, prompts);
+    }
     switch (m.type) {
       case 'ready':
         o.sent = undefined; // (re)load: send everything

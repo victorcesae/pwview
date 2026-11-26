@@ -1,14 +1,14 @@
-// Slim rail on the right of the chat: the context window as a vertical gauge, the files the agent
-// changed grouped by project (one chat can touch several repos), and the PRs it opened.
+// Slim rail on the right of the chat: the context window as a vertical gauge, the Changes
+// panel (per-turn diffs, git actions), background commands, and the PRs it opened.
 import { useMemo } from 'react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
-import { FileDiff } from 'lucide-react';
 import { PrList, PrRailIcon } from '@/components/PrList';
 import { TaskList, TaskRailIcon } from '@/components/TaskList';
 import { post } from '@/bridge';
 import { t } from '@/i18n';
 import { ContextPanel } from '@/components/ContextPanel';
-import { changesByProject, findPRs } from '@/views/toolSummary';
+import { ChangesPanel } from '@/components/ChangesPanel';
+import { findPRs } from '@/views/toolSummary';
 import type { ChatState } from '@/types';
 
 const fmt = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n));
@@ -34,8 +34,6 @@ function Pop({ label, icon, count, children }: { label: string; icon: React.Reac
 
 export function SideRail({ chat }: { chat: ChatState }) {
   const prs = useMemo(() => findPRs(chat.items as never), [chat.items]);
-  const projects = useMemo(() => changesByProject(chat.items as never, chat.cwd), [chat.items, chat.cwd]);
-  const files = projects.reduce((n, p) => n + p.files.length, 0);
   const c = chat.context;
   const pct = c ? Math.min(100, Math.max(0, c.percentage)) : 0;
   const color = pct >= 85 ? 'var(--removed)' : pct >= 65 ? 'var(--warn)' : 'var(--working)';
@@ -52,33 +50,7 @@ export function SideRail({ chat }: { chat: ChatState }) {
         </span>
       </ContextPanel>
 
-      {files > 0 && (
-        <Pop label={projects.length > 1 ? t('Changes in {0} projects', projects.length) : t('Changes')} icon={<FileDiff className="size-4" />} count={files}>
-          <div className="flex flex-col gap-3">
-            {projects.map((p) => (
-              <div key={p.root}>
-                <div className="flex items-baseline gap-2 text-[12px]">
-                  <span className="font-medium">{p.name}</span>
-                  <span className="text-muted-foreground min-w-0 flex-1 truncate text-[10.5px]" title={p.root}>
-                    {p.root}
-                  </span>
-                </div>
-                <ul className="mt-1 flex flex-col">
-                  {p.files.map((f) => (
-                    <li key={f.path}>
-                      <button className="hover:bg-accent flex w-full cursor-pointer items-baseline gap-2 rounded px-1.5 py-0.5 text-left font-mono text-[11.5px]" onClick={() => post({ type: 'openFile', path: f.path })} title={f.path}>
-                        <span className="min-w-0 flex-1 truncate">{f.rel}</span>
-                        {f.added > 0 && <span className="text-added tabular-nums">+{f.added}</span>}
-                        {f.removed > 0 && <span className="text-removed tabular-nums">−{f.removed}</span>}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </Pop>
-      )}
+      <ChangesPanel chat={chat} />
 
       {!!chat.tasks?.length && (
         <Pop label={t('Background commands')} icon={<TaskRailIcon running={chat.tasks.filter((x) => x.status === 'running').length} />} count={chat.tasks.filter((x) => x.status === 'running').length || chat.tasks.length}>

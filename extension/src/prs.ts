@@ -82,6 +82,8 @@ export function toPrState(x: { state?: string; isDraft?: boolean; draft?: boolea
 }
 
 const gh = () => which('gh');
+/** Path of the GitHub CLI, if installed. */
+export const ghExe = gh;
 
 function viaGh(url: string): Promise<PrStatus | undefined> {
   const exe = gh();

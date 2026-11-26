@@ -14,6 +14,7 @@ import { Composer, PRIORITY } from './Composer';
 import { LightboxProvider, Zoomable } from '@/components/Lightbox';
 import { fileOf, groupTools, inp, KIND, stat, summarizeTools, type ToolItem } from './toolSummary';
 import { SideRail } from '@/components/SideRail';
+import { TurnChip, turnEnds, turnsOf } from '@/components/ChangesPanel';
 import { WorkFolders } from '@/components/WorkFolders';
 import { HostMark, hostName, VendorMark, vendorName, vendorOf } from '@/components/VendorMark';
 import { t } from '@/i18n';
@@ -796,6 +797,7 @@ export function ChatView({ data }: { data: ChatData }) {
 
   // Long chats: only rows near the viewport are in the DOM; heights are measured as they render.
   const rows = useMemo(() => groupTools(top), [top]);
+  const turnChips = useMemo(() => turnEnds(rows, turnsOf(chat.items, chat.cwd), working), [rows, chat.items, chat.cwd, working]);
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scroller.current,
@@ -1003,6 +1005,7 @@ export function ChatView({ data }: { data: ChatData }) {
                       {g.kind === 'tool' && byParent.get(g.id)?.map((c) => <Item key={c.id} it={c} sessionId={chat.sessionId} />)}
                     </Item>
                   )}
+                  {turnChips.has(v.index) && <TurnChip turn={turnChips.get(v.index)!} />}
                 </div>
               );
             })}
