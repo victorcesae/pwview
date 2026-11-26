@@ -147,6 +147,9 @@ export type ToChat =
   | { type: 'setUltracode'; on: boolean }
   | { type: 'setMode'; mode: PermissionMode }
   | { type: 'openFile'; path: string }
+  | { type: 'fileInfo'; paths: string[] }
+  | { type: 'mediaAction'; path: string; action: 'open' | 'reveal' | 'external' }
+  | { type: 'openMedia'; path?: string; data?: string }
   | { type: 'openChange'; changeId: string }
   | { type: 'link' }
   | { type: 'unlink'; id: string }

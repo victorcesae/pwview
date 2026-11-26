@@ -11,7 +11,9 @@ import { base, cn } from '@/lib/utils';
 import type { ChatData, ChatItem, ChatState, Effort, PermissionMode, Priority, Question, ToChat, Todo } from '@/types';
 import { HunkView } from './Session';
 import { Composer, PRIORITY } from './Composer';
-import { LightboxProvider, Zoomable } from '@/components/Lightbox';
+import { GalleryRow, LightboxProvider, Zoomable } from '@/components/Lightbox';
+import { MediaCards } from '@/components/MediaCards';
+import { toolText } from '@/lib/mediaPaths';
 import { fileOf, groupTools, inp, KIND, stat, summarizeTools, type ToolItem } from './toolSummary';
 import { SideRail } from '@/components/SideRail';
 import { TurnChip, turnEnds, turnsOf } from '@/components/ChangesPanel';
@@ -270,6 +272,8 @@ function ToolGroup({ items, sessionId }: { items: ToolItem[]; sessionId?: string
   const running = items.some((i) => i.status === 'running');
   const failed = items.some((i) => i.status === 'error');
   const pics = items.flatMap((i) => i.images ?? []);
+  // files the calls wrote, read or printed: only once every call is done
+  const mediaText = useMemo(() => (running ? undefined : items.map((i) => (i.status === 'done' ? toolText(i.input, i.result) : '')).join('\n')), [items, running]);
   const total = items.reduce((a, i) => ({ add: a.add + stat(i).add, del: a.del + stat(i).del }), { add: 0, del: 0 });
   return (
     <div ref={box}>
@@ -299,6 +303,7 @@ function ToolGroup({ items, sessionId }: { items: ToolItem[]; sessionId?: string
           ))}
         </div>
       )}
+      <MediaCards text={mediaText} />
     </div>
   );
 }
@@ -663,6 +668,7 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
             <Fold live={it.streaming}>
               <Markdown text={it.text} />
             </Fold>
+            {!it.streaming && <MediaCards text={it.text} />}
             {it.streaming && <span className="bg-foreground/70 ml-0.5 inline-block h-3.5 w-1.5 animate-pulse align-middle" />}
             {!it.streaming && (
               <div className="mt-0.5 flex gap-1 opacity-0 transition-opacity group-hover/answer:opacity-100 focus-within:opacity-100">
@@ -849,6 +855,11 @@ export function ChatView({ data }: { data: ChatData }) {
   // Long chats: only rows near the viewport are in the DOM; heights are measured as they render.
   const rows = useMemo(() => groupTools(top), [top]);
   const turnChips = useMemo(() => turnEnds(rows, turnsOf(chat.items, chat.cwd), working), [rows, chat.items, chat.cwd, working]);
+  // the gallery's order: a row's place in the chat (-1 once it's gone)
+  const rank = useMemo(() => {
+    const at = new Map(rows.map((g, i) => [Array.isArray(g) ? 'g:' + g[0].id : g.id, i]));
+    return (row: string) => at.get(row) ?? -1;
+  }, [rows]);
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scroller.current,
@@ -973,7 +984,7 @@ export function ChatView({ data }: { data: ChatData }) {
   }, [rows.length, lastText, chat.activity, chat.queue.length]);
 
   return (
-    <LightboxProvider>
+    <LightboxProvider rank={rank}>
     <AgentCtx.Provider value={{ model: shownModel, host: chat.host, hostIcon: chat.hostIcon }}>
     <div className="flex h-screen flex-col">
       <header className="flex items-center gap-2 border-b px-3 py-1 [&>*]:shrink-0">
@@ -1121,7 +1132,8 @@ export function ChatView({ data }: { data: ChatData }) {
             {virtualizer.getVirtualItems().map((v) => {
               const g = rows[v.index];
               return (
-                <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className={cn('absolute left-0 w-full pb-3', matchSet.has(v.index) && 'search-hit', v.index === current && 'search-current', v.index === playRow && 'timeline-current')} style={{ top: v.start }}>
+                <GalleryRow.Provider key={v.key} value={String(v.key)}>
+                <div data-index={v.index} ref={virtualizer.measureElement} className={cn('absolute left-0 w-full pb-3', matchSet.has(v.index) && 'search-hit', v.index === current && 'search-current', v.index === playRow && 'timeline-current')} style={{ top: v.start }}>
                   {Array.isArray(g) ? (
                     <ToolGroup items={g} sessionId={chat.sessionId} />
                   ) : (
@@ -1136,6 +1148,7 @@ export function ChatView({ data }: { data: ChatData }) {
                     </div>
                   )}
                 </div>
+                </GalleryRow.Provider>
               );
             })}
           </div>

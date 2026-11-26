@@ -111,10 +111,11 @@ const isFileRef = (s: string) => FILE_REF.test(s) && (s.includes('/') || /:\d+/.
 const openRef = (path: string) => post({ type: 'openFile', path });
 
 import { cn } from '@/lib/utils';
+import { Zoomable } from '@/components/Lightbox';
 
 function inline(text: string, key: string): ReactNode[] {
   const out: ReactNode[] = [];
-  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\[[^\]]+\]\([^)\s]+\))|(\*[^*\s][^*]*\*)/g;
+  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(!?\[[^\]]*\]\([^)\s]+\))|(\*[^*\s][^*]*\*)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -144,7 +145,12 @@ function inline(text: string, key: string): ReactNode[] {
       );
     }
     else if (m[2]) out.push(<strong key={k}>{t.slice(2, -2)}</strong>);
-    else if (m[3]) {
+    else if (m[3] && t.startsWith('![')) {
+      // an inline picture joins the gallery; a local file path shows as a preview card under the answer
+      const [, alt, src] = /!\[([^\]]*)\]\(([^)\s]+)\)/.exec(t)!;
+      if (src.startsWith('data:image/')) out.push(<Zoomable key={k} src={src} className="max-h-64 max-w-full rounded-md border object-contain" />);
+      else out.push(<span key={k} className="text-muted-foreground">{alt || src}</span>);
+    } else if (m[3]) {
       const [, label, href] = /\[([^\]]+)\]\(([^)\s]+)\)/.exec(t)!;
       out.push(<a key={k} href={href} className="text-[var(--vscode-textLink-foreground,#60a5fa)] underline-offset-2 hover:underline">{label}</a>);
     } else if (m[4]) out.push(<em key={k}>{t.slice(1, -1)}</em>);
