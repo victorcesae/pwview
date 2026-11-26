@@ -16,17 +16,17 @@ export type Hunk = { oldStart: number; oldLines: number; newStart: number; newLi
 export type Todo = { content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string };
 
 export type ChatItem =
-  | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string }
-  | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string; /** set on the turn's last answer: how long the turn took */ durationMs?: number }
+  | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string; /** sent by Steerhouse (verify fix), not typed by you */ auto?: boolean }
+  | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string; /** set on the turn's last answer: how long the turn took */ durationMs?: number; ts?: string }
   /** the model's extended thinking (shown dimmed and collapsed) */
-  | { kind: 'thinking'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string; started?: number; durationMs?: number }
-  | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; images?: string[]; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
+  | { kind: 'thinking'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string; started?: number; durationMs?: number; ts?: string }
+  | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; images?: string[]; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number; ts?: string }
   | { kind: 'shell'; id: string; command: string; output: string; status: 'running' | 'done' | 'error'; exitCode?: number | null; error?: string }
   | { kind: 'permission'; id: string; tool: string; summary: string; input: unknown; canAlways: boolean; status: 'pending' | 'allowed' | 'denied'; reason?: string }
   | { kind: 'plan'; id: string; plan: string; status: 'pending' | 'approved' | 'rejected' }
   | { kind: 'question'; id: string; questions: Question[]; status: 'pending' | 'answered'; answers?: Record<string, string> }
-  | { kind: 'result'; id: string; text: string; isError: boolean; costUsd?: number; durationMs?: number }
-  | { kind: 'system'; id: string; text: string }
+  | { kind: 'result'; id: string; text: string; isError: boolean; costUsd?: number; durationMs?: number; ts?: string }
+  | { kind: 'system'; id: string; text: string; ts?: string }
   /** a subagent's final report, or a background task ending (Claude Code injects these as user turns) */
   /** auto mode's classifier refused a tool call: it never asks, so this is where the user can allow it */
   | { kind: 'blocked'; id: string; tool: string; command: string; reason: string; rule?: string; status?: 'allowed' }
@@ -60,6 +60,8 @@ export interface ChatState {
   earlier: number;
   /** Claude Code's guess at what you will ask next (after a turn) */
   suggestion?: string;
+  /** verify after each turn (src/verify.ts) */
+  verify?: import('./verify').VerifyState;
   /** prompts you put aside (shared by all chats) */
   stash?: string[];
   /** commands the agent left running in the background (dev servers, watchers…) */
@@ -360,12 +362,12 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
       if (texts.join('').trim() || images.length) items.push({ kind: 'user', id: rec.uuid ?? uid(), text: texts.join('\n').trim(), images, ts: rec.timestamp ?? '', forkAt: rec.parentUuid ?? undefined });
     } else if (rec.type === 'assistant') {
       for (const c of content ?? []) {
-        if (c.type === 'text' && c.text?.trim()) items.push({ kind: 'assistant', id: uid(), text: c.text });
-        else if (c.type === 'thinking' && String(c.thinking ?? '').trim()) items.push({ kind: 'thinking', id: uid(), text: String(c.thinking) });
+        if (c.type === 'text' && c.text?.trim()) items.push({ kind: 'assistant', id: uid(), text: c.text, ts: rec.timestamp });
+        else if (c.type === 'thinking' && String(c.thinking ?? '').trim()) items.push({ kind: 'thinking', id: uid(), text: String(c.thinking), ts: rec.timestamp });
         else if (c.type === 'tool_use' && !tools.has(c.id)) {
           bg.toolUse(c.id, c.name, c.input, rec.timestamp);
           if (c.name === 'TodoWrite' && Array.isArray(c.input?.todos)) todos = c.input.todos;
-          const t: Extract<ChatItem, { kind: 'tool' }> = { kind: 'tool', id: c.id, name: c.name, summary: summary(c.name, c.input), input: c.input, status: 'done', file: str(c.input?.file_path) || undefined };
+          const t: Extract<ChatItem, { kind: 'tool' }> = { kind: 'tool', id: c.id, name: c.name, summary: summary(c.name, c.input), input: c.input, status: 'done', file: str(c.input?.file_path) || undefined, ts: rec.timestamp };
           tools.set(c.id, t);
           items.push(t);
         }
@@ -427,6 +429,8 @@ export class ChatSession {
   private claimed = new Map<string, number>();
   /** Completed turns (one per result message). */
   turns = 0;
+  /** after a turn ends with nothing queued to go next (verify runs here) */
+  onTurnEnd?: () => void;
 
   constructor(
     private opts: ChatOptions,
@@ -746,17 +750,23 @@ export class ChatSession {
     this.changed();
   }
 
-  private push(text: string, images: Img[], priority: Priority) {
+  /** Steerhouse speaking for you (a verify fix): shown as an automatic message, `forAgent` is what the agent reads. */
+  sendAuto(shown: string, forAgent: string) {
+    if (this.state.status === 'working' || this.state.status === 'waiting') return;
+    this.push(shown, [], 'later', { auto: true, forAgent });
+  }
+
+  private push(text: string, images: Img[], priority: Priority, auto?: { auto: true; forAgent: string }) {
     const content: any[] = images.map((img) => ({
       type: 'image',
       source: { type: 'base64', media_type: img.mime, data: img.data.replace(/^data:[^;]+;base64,/, '') },
     }));
     // commands the user ran since their last message: the agent reads them now, the bubble stays as written
-    const forAgent = [text, ...this.shellNotes.splice(0)].filter((t) => t.trim()).join('\n\n');
+    const forAgent = [auto?.forAgent ?? text, ...this.shellNotes.splice(0)].filter((t) => t.trim()).join('\n\n');
     if (forAgent) content.push({ type: 'text', text: forAgent });
     // the message's own uuid (so files can be rewound to it) and the entry before it (to fork there)
     const uuid = randomUUID();
-    this.state.items.push({ kind: 'user', id: uuid, text, images: images.map((i) => i.data), priority, ts: new Date().toISOString(), forkAt: this.lastUuid });
+    this.state.items.push({ kind: 'user', id: uuid, text, images: images.map((i) => i.data), priority, ts: new Date().toISOString(), forkAt: this.lastUuid, auto: auto ? true : undefined });
     this.state.suggestion = undefined;
     if (this.state.title === 'New chat' && text.trim()) this.state.title = clip(text.trim().split('\n')[0], 60);
     this.state.status = 'working';
@@ -813,7 +823,7 @@ export class ChatSession {
 
   /** Give the agent context (e.g. a linked session): shown as a system note, delivered between steps. */
   attachContext(text: string, label: string) {
-    this.state.items.push({ kind: 'system', id: uid(), text: label });
+    this.state.items.push({ kind: 'system', id: uid(), text: label, ts: new Date().toISOString() });
     const working = this.state.status === 'working' || this.state.status === 'waiting';
     this.input.push({ type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, priority: working ? 'next' : 'later' } as SDKUserMessage);
     if (!working) {
@@ -1076,12 +1086,12 @@ export class ChatSession {
         } else if (e.type === 'content_block_start' && e.content_block?.type === 'text') {
           const id = uid();
           this.streaming.set(`${key}:${this.currentMsg.get(key)}:${e.index}`, id);
-          this.state.items.push({ kind: 'assistant', id, text: '', streaming: true, parent, msg: this.currentMsg.get(key) });
+          this.state.items.push({ kind: 'assistant', id, text: '', streaming: true, parent, msg: this.currentMsg.get(key), ts: new Date().toISOString() });
           if (!parent) this.state.activity = 'Writing…';
         } else if (e.type === 'content_block_start' && e.content_block?.type === 'thinking') {
           const id = uid();
           this.streaming.set(`${key}:${this.currentMsg.get(key)}:${e.index}`, id);
-          this.state.items.push({ kind: 'thinking', id, text: '', streaming: true, parent, msg: this.currentMsg.get(key), started: Date.now() });
+          this.state.items.push({ kind: 'thinking', id, text: '', streaming: true, parent, msg: this.currentMsg.get(key), started: Date.now(), ts: new Date().toISOString() });
         } else if (e.type === 'content_block_delta') {
           if (e.delta?.type === 'text_delta') {
             const id = this.streaming.get(`${key}:${this.currentMsg.get(key)}:${e.index}`);
@@ -1115,7 +1125,7 @@ export class ChatSession {
             } else if (c.text.trim()) {
               const last = [...this.state.items].reverse().find((x) => x.kind === 'assistant' && x.parent === parent);
               if (!(last && last.kind === 'assistant' && last.text.trim() === c.text.trim()))
-                this.state.items.push({ kind: 'assistant', id: uid(), text: c.text, parent, msg: msgId });
+                this.state.items.push({ kind: 'assistant', id: uid(), text: c.text, parent, msg: msgId, ts: new Date().toISOString() });
             }
           } else if (c.type === 'thinking') {
             const byIndex = this.streaming.get(`${key}:${msgId}:${index}`);
@@ -1125,12 +1135,12 @@ export class ChatSession {
               if (text.trim()) it.text = text;
               it.streaming = false;
               if (it.started) it.durationMs = Date.now() - it.started;
-            } else if (text.trim()) this.state.items.push({ kind: 'thinking', id: uid(), text, parent, msg: msgId });
+            } else if (text.trim()) this.state.items.push({ kind: 'thinking', id: uid(), text, parent, msg: msgId, ts: new Date().toISOString() });
           } else if (c.type === 'tool_use') {
             this.bg.toolUse(c.id, c.name, c.input, new Date().toISOString(), parent);
             if (c.name === 'TodoWrite' && Array.isArray(c.input?.todos)) this.state.todos = c.input.todos;
             if (!this.tool(c.id))
-              this.state.items.push({ kind: 'tool', id: c.id, name: c.name, summary: summary(c.name, c.input), input: c.input, status: 'running', parent, file: str(c.input?.file_path) || undefined });
+              this.state.items.push({ kind: 'tool', id: c.id, name: c.name, summary: summary(c.name, c.input), input: c.input, status: 'running', parent, file: str(c.input?.file_path) || undefined, ts: new Date().toISOString() });
             if (!parent || c.name === 'Agent') this.state.activity = describe(c.name, c.input);
           }
         });
@@ -1177,7 +1187,7 @@ export class ChatSession {
         const u = r.usage ?? {};
         this.state.tokens = (this.state.tokens ?? 0) + (u.input_tokens ?? 0) + (u.output_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
         if (r.subtype !== 'success' || r.is_error)
-          this.state.items.push({ kind: 'result', id: uid(), text: str(r.result) || r.subtype, isError: true, durationMs: r.duration_ms });
+          this.state.items.push({ kind: 'result', id: uid(), text: str(r.result) || r.subtype, isError: true, durationMs: r.duration_ms, ts: new Date().toISOString() });
         for (const it of this.state.items) if (it.kind === 'assistant' || it.kind === 'thinking') it.streaming = false;
         const items = this.state.items;
         const lastUser = items.map((x) => x.kind).lastIndexOf('user');
@@ -1204,6 +1214,7 @@ export class ChatSession {
         const handover = steers.length ? steers : this.queued.slice(0, 1);
         this.queued = this.queued.filter((q) => !handover.includes(q));
         for (const q of handover) this.push(q.text, q.images, 'later');
+        if (!handover.length) queueMicrotask(() => this.onTurnEnd?.());
         break;
       }
     }

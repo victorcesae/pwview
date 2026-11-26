@@ -293,6 +293,12 @@ pre,
   outline: 1.5px solid var(--ring);
 }
 
+/* timeline playback: the row being shown */
+.timeline-current > * {
+  box-shadow: -3px 0 0 var(--primary);
+  border-radius: 6px;
+}
+
 /* chat search hits */
 .search-hit > * {
   box-shadow: -3px 0 0 color-mix(in srgb, var(--warn) 45%, transparent);

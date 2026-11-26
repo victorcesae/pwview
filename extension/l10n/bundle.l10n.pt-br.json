@@ -326,5 +326,12 @@
   "The file changed since, so the change no longer applies.": "O arquivo mudou desde então, e a alteração não se aplica mais.",
   "Could not stage the hunk: {0}": "Não foi possível preparar o trecho: {0}",
   "Could not revert the hunk: {0}": "Não foi possível reverter o trecho: {0}",
-  "Could not undo the edit to {0}: {1}": "Não foi possível desfazer a edição em {0}: {1}"
+  "Could not undo the edit to {0}: {1}": "Não foi possível desfazer a edição em {0}: {1}",
+  "Use it": "Usar",
+  "Edit…": "Editar…",
+  "No": "Não",
+  "Steerhouse: verify each turn that changes files by running `{0}` in {1}?": "Steerhouse: verificar cada turno que altera arquivos rodando `{0}` em {1}?",
+  "Verify command (runs in {0})": "Comando de verificação (roda em {0})",
+  "Timed out after {0}s.": "Tempo esgotado após {0}s.",
+  "Verify still fails after {0} automatic fix attempts; stopping. Check the output on the turn.": "A verificação ainda falha após {0} tentativas automáticas de correção; parando. Veja a saída no turno."
 }

@@ -129,6 +129,9 @@ export function ContextRing({ chat }: { chat: ChatState }) {
   );
 }
 
+/** Verify after each turn: the chat's toggle, else on once a command is known. */
+export const verifyOn = (chat: ChatState) => chat.verify?.enabled ?? !!chat.verify?.command;
+
 function PlusMenu({ chat, onFiles, onSlash }: { chat: ChatState; onFiles: () => void; onSlash: (c: string) => void }) {
   const dot = (s: string) => (s === 'connected' ? 'bg-recent' : s === 'failed' || s === 'needs-auth' ? 'bg-removed' : s === 'pending' ? 'bg-warn' : 'bg-muted-foreground/40');
   return (
@@ -144,6 +147,9 @@ function PlusMenu({ chat, onFiles, onSlash }: { chat: ChatState; onFiles: () => 
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => post({ type: 'setTabCompletion', on: chat.tabCompletion === false })} title={t('Tab completes @files, /commands and the suggested prompt')}>
           <CornerDownRight /> {chat.tabCompletion === false ? t('Turn Tab completion on') : t('Turn Tab completion off')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => post({ type: 'setVerify', on: !verifyOn(chat) })} title={chat.verify?.command ? t('Runs {0} after each turn that changes files', chat.verify.command) : t('Runs the project checks after each turn that changes files (asks first)')} data-verify-toggle>
+          <ShieldCheck /> {verifyOn(chat) ? t('Stop verifying after each turn') : t('Verify after each turn')}
         </DropdownMenuItem>
         {allCommands(chat.slashCommands).length > 0 && (
           <DropdownMenuSub>

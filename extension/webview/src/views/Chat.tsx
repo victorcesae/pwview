@@ -25,6 +25,9 @@ import { composerApi } from './Composer';
 import { ThinkingRow, toggleAllThinking } from '@/components/Thinking';
 import { Fold, JumpRail, usePromptKeys, type Prompt } from '@/components/MessageNav';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Timeline } from '@/components/Timeline';
+import { VerifyBadge } from '@/components/VerifyBadge';
+import { Clock } from 'lucide-react';
 
 const post = (m: ToChat) => postAny(m as never);
 
@@ -481,6 +484,11 @@ function UserMessage({ it }: { it: Extract<ChatItem, { kind: 'user' }> }) {
   };
   return (
     <div className="group/msg flex flex-col items-end gap-1">
+      {it.auto && (
+        <span className="text-muted-foreground inline-flex items-center gap-1 rounded-md border border-dashed px-1.5 py-0.5 text-[10.5px]" title={t('Sent automatically by Steerhouse after verify failed')} data-auto-message>
+          <RotateCcw className="size-3" /> {t('Automatic')}
+        </span>
+      )}
       {it.images.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1.5">
           {it.images.map((src, i) => (
@@ -915,6 +923,9 @@ export function ChatView({ data }: { data: ChatData }) {
     setTopRow(row);
   };
   usePromptKeys(prompts, rowAtTop, jumpTo);
+  // ---- session timeline (scrubber above the transcript)
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [playRow, setPlayRow] = useState<number | undefined>();
   const release = () => {
     if (!stick.current) return;
     stick.current = false;
@@ -962,6 +973,9 @@ export function ChatView({ data }: { data: ChatData }) {
         </Button>
         <Button size="xs" variant="ghost" onClick={() => (setSearchOpen((o) => !o), requestAnimationFrame(() => searchInput.current?.focus()))} title={t('Search (Ctrl+F)')} aria-label={t('Search')}>
           <Search />
+        </Button>
+        <Button size="xs" variant={timelineOpen ? 'secondary' : 'ghost'} onClick={() => setTimelineOpen((o) => !o)} title={t('Show the session timeline')} aria-label={t('Timeline')} aria-pressed={timelineOpen} data-timeline-toggle>
+          <Clock />
         </Button>
         <Button size="xs" variant="ghost" onClick={() => post({ type: 'openBrowser' })} title={t('Watch the browser this agent drives')} aria-label={t('Open live browser')}>
           <Globe />
@@ -1012,6 +1026,7 @@ export function ChatView({ data }: { data: ChatData }) {
           </Button>
         </div>
       )}
+      {timelineOpen && <Timeline rows={rows} current={topRow} onJump={jumpTo} onPlayRow={setPlayRow} onClose={() => setTimelineOpen(false)} />}
       {linked.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-b px-4 py-1.5">
           <span className="text-muted-foreground text-[11px]">{t('Linked:')}</span>
@@ -1076,7 +1091,7 @@ export function ChatView({ data }: { data: ChatData }) {
             {virtualizer.getVirtualItems().map((v) => {
               const g = rows[v.index];
               return (
-                <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className={cn('absolute left-0 w-full pb-3', matchSet.has(v.index) && 'search-hit', v.index === current && 'search-current')} style={{ top: v.start }}>
+                <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className={cn('absolute left-0 w-full pb-3', matchSet.has(v.index) && 'search-hit', v.index === current && 'search-current', v.index === playRow && 'timeline-current')} style={{ top: v.start }}>
                   {Array.isArray(g) ? (
                     <ToolGroup items={g} sessionId={chat.sessionId} />
                   ) : (
@@ -1084,7 +1099,12 @@ export function ChatView({ data }: { data: ChatData }) {
                       {g.kind === 'tool' && byParent.get(g.id)?.map((c) => <Item key={c.id} it={c} sessionId={chat.sessionId} />)}
                     </Item>
                   )}
-                  {turnChips.has(v.index) && <TurnChip turn={turnChips.get(v.index)!} />}
+                  {turnChips.has(v.index) && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <TurnChip turn={turnChips.get(v.index)!} />
+                      <VerifyBadge chat={chat} turn={turnChips.get(v.index)!.id} />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1131,6 +1151,13 @@ export function ChatView({ data }: { data: ChatData }) {
               </span>
             )}
             <span className="ml-auto shrink-0 text-[11px] opacity-70">{t('Esc to stop')}</span>
+          </div>
+        )}
+        {!working && chat.verify?.running && (
+          <div className="text-muted-foreground flex items-center gap-2 px-1 text-[12px]" role="status" data-verifying>
+            <Loader2 className="size-3.5 animate-spin" />
+            <span className="truncate">{t('Verifying with {0}…', chat.verify.command ?? '')}</span>
+            <button className="hover:text-foreground ml-auto shrink-0 cursor-pointer text-[11px] opacity-70" onClick={() => post({ type: 'interrupt' })}>{t('Stop')}</button>
           </div>
         )}
         {chat.queue.length > 0 && (
