@@ -80,6 +80,9 @@ export interface ChatState {
   /** Subscription limits (Claude plan windows, or a provider key's credit), for the ring by the input. */
   limits?: Limits;
   error?: string;
+  /** the agent behind this chat when it isn't Claude Code (e.g. 'codex'), and what it supports */
+  runtime?: string;
+  caps?: import('./runtimes/types').RuntimeCaps;
 }
 
 export interface LimitWindow {

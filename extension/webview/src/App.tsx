@@ -25,9 +25,9 @@ export function App() {
     return () => window.removeEventListener('message', onToast);
   }, []);
 
-  const restoreKey = data?.view === 'chat' ? `${data.chat.sessionId}|${data.chat.cwd}|${data.chat.title}|${data.chat.account.name}` : '';
+  const restoreKey = data?.view === 'chat' ? `${data.chat.sessionId}|${data.chat.cwd}|${data.chat.title}|${data.chat.account.name}|${data.chat.runtime ?? ''}` : '';
   useEffect(() => {
-    if (data?.view === 'chat' && data.chat.cwd) saveState({ sessionId: data.chat.sessionId, cwd: data.chat.cwd, title: data.chat.title, account: data.chat.account.name });
+    if (data?.view === 'chat' && data.chat.cwd) saveState({ sessionId: data.chat.sessionId, cwd: data.chat.cwd, title: data.chat.title, account: data.chat.account.name, runtime: data.chat.runtime });
   }, [restoreKey]);
 
   useEffect(() => {

@@ -388,5 +388,7 @@
   "runs Cursor Agent in a terminal": "roda o Cursor Agent em um terminal",
   "Ollama, OpenRouter or any Anthropic-compatible endpoint": "Ollama, OpenRouter ou qualquer endpoint compatível com a Anthropic",
   "Working": "Trabalhando",
-  "Stopped": "Parado"
+  "Stopped": "Parado",
+  "Steerhouse: unknown agent {0}.": "Steerhouse: agente desconhecido {0}.",
+  "Codex was not found. Install it (npm i -g @openai/codex) and log in with `codex login`.": "O Codex não foi encontrado. Instale-o (npm i -g @openai/codex) e entre com `codex login`."
 }
