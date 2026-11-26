@@ -26,7 +26,7 @@ test('hunks: reverse-apply fails when the file no longer has the change', () => 
 test('hunks: a one-hunk patch reverts and stages with git apply', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sh-hunk-'));
   const sh = (c, input) => execSync(c, { cwd: dir, input, stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-  sh('git init -q && git config user.email a@b && git config user.name t');
+  sh('git init -q && git config user.email a@b && git config user.name t && git config core.autocrlf false');
   fs.writeFileSync(path.join(dir, 'f.txt'), 'a\nb\nc\nd\ne\n');
   sh('git add . && git commit -qm init');
   fs.writeFileSync(path.join(dir, 'f.txt'), 'a\nb\nC\nd\ne\n');
