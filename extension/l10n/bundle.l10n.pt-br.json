@@ -316,5 +316,11 @@
   "$(arrow-swap) Change provider…": "$(arrow-swap) Trocar provedor…",
   "$(close) Turn off": "$(close) Desligar",
   "{0} earlier runs": "{0} execuções anteriores",
-  "earlier run": "execução anterior"
+  "earlier run": "execução anterior",
+  "Restore": "Restaurar",
+  "Restore the files to how they were before this message?": "Restaurar os arquivos ao estado de antes desta mensagem?",
+  "Restore the files and the conversation to before this message?": "Restaurar os arquivos e a conversa ao estado de antes desta mensagem?",
+  "Changes the agent made to files since then are undone.": "As alterações que o agente fez nos arquivos desde então são desfeitas.",
+  "Files restored to before this message.": "Arquivos restaurados ao estado de antes desta mensagem.",
+  "Conversation exported to {0}": "Conversa exportada para {0}"
 }

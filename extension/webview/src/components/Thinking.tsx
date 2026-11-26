@@ -1,0 +1,55 @@
+// The model's extended thinking: dimmed and collapsed to one line; Ctrl/Cmd+O expands or collapses all.
+import { Brain, ChevronDown, ChevronRight } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { t } from '@/i18n';
+import { cn } from '@/lib/utils';
+import type { ChatItem } from '@/types';
+
+// kept outside React so rows keep their state when the virtualized list remounts them
+const opened = new Map<string, boolean>();
+let allOpen = false;
+const EVENT = 'steerhouse:thinking';
+
+/** Ctrl/Cmd+O: expand every thinking block, or collapse them all. */
+export function toggleAllThinking() {
+  allOpen = !allOpen;
+  opened.clear();
+  window.dispatchEvent(new CustomEvent(EVENT));
+}
+
+export function ThinkingRow({ it }: { it: Extract<ChatItem, { kind: 'thinking' }> }) {
+  const [open, setOpen] = useState(opened.get(it.id) ?? allOpen);
+  const live = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const on = () => setOpen(allOpen);
+    window.addEventListener(EVENT, on);
+    return () => window.removeEventListener(EVENT, on);
+  }, []);
+  useLayoutEffect(() => {
+    if (it.streaming && live.current) live.current.scrollTop = live.current.scrollHeight;
+  }, [it.text, it.streaming]);
+  const text = it.text.trim();
+  if (!text && !it.streaming) return null;
+  const first = text.split('\n').find((l) => l.trim())?.replace(/^[#*\s]+|\*+$/g, '') ?? '';
+  const secs = it.durationMs !== undefined ? Math.max(1, Math.round(it.durationMs / 1000)) : undefined;
+  const label = it.streaming ? t('Thinking…') : secs !== undefined ? t('Thought for {0}s', secs) : t('Thought');
+  const toggle = () => {
+    opened.set(it.id, !open);
+    setOpen(!open);
+  };
+  return (
+    <div className="text-muted-foreground/80 flex flex-col gap-1 pl-7 text-[12px]" data-thinking>
+      <button className="hover:text-foreground flex min-w-0 cursor-pointer items-center gap-1.5 text-left" onClick={toggle} aria-expanded={open} title={t('Show or hide the thinking ({0})', 'Ctrl/Cmd+O')}>
+        {open ? <ChevronDown className="size-3 shrink-0" /> : <ChevronRight className="size-3 shrink-0" />}
+        <Brain className={cn('size-3 shrink-0', it.streaming && 'animate-pulse')} />
+        <span className="shrink-0 italic">{label}</span>
+        {!open && !it.streaming && first && <span className="min-w-0 truncate opacity-70">· {first}</span>}
+      </button>
+      {(open || it.streaming) && (
+        <div ref={live} className={cn('border-border/60 ml-1.5 border-l pl-3 whitespace-pre-wrap opacity-80', !open && 'max-h-[4.8em] overflow-hidden', open && 'max-h-[60vh] overflow-y-auto')}>
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}

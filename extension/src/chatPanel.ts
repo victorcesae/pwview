@@ -49,6 +49,8 @@ export type FromChat =
   | { type: 'followTask'; id: string }
   | { type: 'openTaskFile'; id: string }
   | { type: 'editPrompt'; id: string; text: string }
+  | { type: 'restore'; id: string; what: 'code' | 'conversation' | 'both' }
+  | { type: 'exportChat'; markdown: string }
   | { type: 'stash'; text: string }
   | { type: 'unstash'; index: number }
   | { type: 'prFiles'; url: string }
@@ -247,12 +249,20 @@ export class Chats {
         if (!go) return;
       }
     }
+    this.forkAt(o, idx).send(text, [], 'later');
+    this.post(o);
+  }
+
+  /** Switches the tab to a fork of the session at the entry before user message `idx` (files untouched). */
+  private forkAt(o: Open, idx: number): ChatSession {
+    const c = o.chat;
+    const item = c.state.items[idx] as Extract<ChatItem, { kind: 'user' }>;
     const history = { items: c.state.items.slice(0, idx).filter((it) => it.kind !== 'permission'), todos: [] };
     const fork = new ChatSession(
       {
         ...c.options,
         resume: c.state.sessionId,
-        fork: { at: item.forkAt },
+        fork: { at: item.forkAt! },
         history,
         prefs: { model: c.state.model, effort: c.state.effort, permissionMode: c.state.permissionMode, fastMode: c.state.fastMode, ultracode: c.state.ultracode },
       },
@@ -263,8 +273,47 @@ export class Chats {
     o.sent = undefined;
     o.prUrls = undefined;
     fork.start();
-    fork.send(text, [], 'later');
-    this.post(o);
+    return fork;
+  }
+
+  /** "Restore code / conversation / both to here" on a user message. */
+  private async restore(o: Open, itemId: string, what: 'code' | 'conversation' | 'both') {
+    const c = o.chat;
+    const idx = c.state.items.findIndex((it) => it.id === itemId);
+    const item = c.state.items[idx];
+    if (!item || item.kind !== 'user' || !c.state.sessionId) return;
+    if (what !== 'code' && !item.forkAt) return void vscode.window.showWarningMessage(vscode.l10n.t('This message cannot be run again (it is the first one of a session started outside Steerhouse).'));
+    if (what !== 'conversation') {
+      const go = vscode.l10n.t('Restore');
+      const pick = await vscode.window.showWarningMessage(
+        what === 'code' ? vscode.l10n.t('Restore the files to how they were before this message?') : vscode.l10n.t('Restore the files and the conversation to before this message?'),
+        { modal: true, detail: vscode.l10n.t('Changes the agent made to files since then are undone.') },
+        go,
+      );
+      if (pick !== go) return;
+    }
+    if (c.state.status === 'working' || c.state.status === 'waiting') await c.interrupt();
+    if (what !== 'conversation') {
+      const r = await c.rewindFilesTo(item.id);
+      if (!r.ok) {
+        vscode.window.showWarningMessage(vscode.l10n.t('The files could not be restored: {0}', r.error ?? ''));
+        if (what === 'code') return;
+      } else if (what === 'code') vscode.window.showInformationMessage(vscode.l10n.t('Files restored to before this message.'));
+    }
+    if (what !== 'code') {
+      this.forkAt(o, idx);
+      this.post(o);
+      this.send(o, { type: 'composerText', text: item.text });
+    }
+  }
+
+  /** Writes the conversation (rendered as Markdown by the webview) to a file the user picks. */
+  private async exportChat(o: Open, markdown: string) {
+    const name = (o.chat.state.title || 'conversation').replace(/[\\/:*?"<>|]+/g, '-').trim().slice(0, 60) || 'conversation';
+    const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(path.join(o.chat.state.cwd, `${name}.md`)), filters: { Markdown: ['md'] } });
+    if (!uri) return;
+    await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(markdown));
+    vscode.window.showInformationMessage(vscode.l10n.t('Conversation exported to {0}', uri.fsPath));
   }
 
   /**
@@ -428,7 +477,8 @@ export class Chats {
     const s = o.chat.state;
     this.savePrefs(o);
     this.notify(o);
-    o.panel.title = s.title.slice(0, 40);
+    const mark = s.status === 'waiting' ? '⚠ ' : s.status === 'working' ? '● ' : '';
+    o.panel.title = mark + s.title.slice(0, 40);
     // tab icon: the model's vendor mark (Claude, GPT, Llama…)
     const vendor = s.model ? vendorOf(s.model) : s.account.gateway ? 'other' : 'anthropic';
     if (o.vendor !== vendor) {
@@ -606,6 +656,10 @@ export class Chats {
       }
       case 'editPrompt':
         return this.editAndRerun(o, m.id, m.text);
+      case 'restore':
+        return this.restore(o, m.id, m.what);
+      case 'exportChat':
+        return this.exportChat(o, m.markdown);
       case 'taskOutput': {
         const r = c.taskOutput(m.id);
         return this.send(o, { type: 'taskOutputResult', id: m.id, text: r.text, size: r.size, missing: r.missing, hasFile: !!r.file, urls: findUrls(r.text) });

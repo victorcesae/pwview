@@ -72,6 +72,25 @@ const readImage = (f: File) =>
 
 const fmt = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n));
 
+/** Tokens this chat used and what it would cost at API prices; details in the tooltip. */
+export function TokenChip({ chat }: { chat: ChatState }) {
+  if (!chat.tokens && !(chat.costUsd > 0)) return null;
+  const c = chat.context;
+  const title = [
+    t('Tokens and API-equivalent cost of this chat'),
+    chat.tokens ? `${t('Tokens used')}: ${chat.tokens.toLocaleString()}` : '',
+    `${t('Cost')}: $${chat.costUsd.toFixed(4)}`,
+    c ? `${t('Context')}: ${fmt(c.used)} / ${fmt(c.max)} (${Math.round(c.percentage)}%)` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return (
+    <span className="text-muted-foreground/80 cursor-default px-1 text-[10.5px] whitespace-nowrap tabular-nums" title={title} aria-label={title} data-token-chip>
+      {chat.tokens ? `${fmt(chat.tokens)} · ` : ''}${chat.costUsd < 0.01 && chat.costUsd > 0 ? '<0.01' : chat.costUsd.toFixed(2)}
+    </span>
+  );
+}
+
 /** Context window usage as a ring; spins while the agent works. */
 export function ContextRing({ chat }: { chat: ChatState }) {
   const c = chat.context;
@@ -302,6 +321,13 @@ export function Composer({ chat }: { chat: ChatState }) {
     composerApi.focus = () => input.current?.focus();
     composerApi.slash = (c) => pickSlashRef.current(c);
     const on = (e: MessageEvent) => {
+      if (e.data?.type === 'composerText' && typeof e.data.text === 'string') {
+        // "Restore conversation to here": the message comes back for editing
+        input.current?.setMarkdown(e.data.text);
+        setText(e.data.text);
+        input.current?.focus();
+        return;
+      }
       if (e.data?.type !== 'insertPaste' || typeof e.data.text !== 'string') return;
       input.current?.insertChip(e.data.text);
       setText(input.current?.getMarkdown() ?? '');
@@ -610,6 +636,7 @@ export function Composer({ chat }: { chat: ChatState }) {
         <BranchPicker />
 
         <div className="ml-auto flex items-center gap-1.5">
+          <TokenChip chat={chat} />
           <UsagePanel chat={chat} />
           {working && (
             <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>

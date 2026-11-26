@@ -18,6 +18,8 @@ export type Todo = { content: string; status: 'pending' | 'in_progress' | 'compl
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string }
   | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string; /** set on the turn's last answer: how long the turn took */ durationMs?: number }
+  /** the model's extended thinking (shown dimmed and collapsed) */
+  | { kind: 'thinking'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string; started?: number; durationMs?: number }
   | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; images?: string[]; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
   | { kind: 'shell'; id: string; command: string; output: string; status: 'running' | 'done' | 'error'; exitCode?: number | null; error?: string }
   | { kind: 'permission'; id: string; tool: string; summary: string; input: unknown; canAlways: boolean; status: 'pending' | 'allowed' | 'denied'; reason?: string }
@@ -359,6 +361,7 @@ export function historyFromTranscript(file: string): { items: ChatItem[]; todos:
     } else if (rec.type === 'assistant') {
       for (const c of content ?? []) {
         if (c.type === 'text' && c.text?.trim()) items.push({ kind: 'assistant', id: uid(), text: c.text });
+        else if (c.type === 'thinking' && String(c.thinking ?? '').trim()) items.push({ kind: 'thinking', id: uid(), text: String(c.thinking) });
         else if (c.type === 'tool_use' && !tools.has(c.id)) {
           bg.toolUse(c.id, c.name, c.input, rec.timestamp);
           if (c.name === 'TodoWrite' && Array.isArray(c.input?.todos)) todos = c.input.todos;
@@ -1075,12 +1078,21 @@ export class ChatSession {
           this.streaming.set(`${key}:${this.currentMsg.get(key)}:${e.index}`, id);
           this.state.items.push({ kind: 'assistant', id, text: '', streaming: true, parent, msg: this.currentMsg.get(key) });
           if (!parent) this.state.activity = 'Writing…';
+        } else if (e.type === 'content_block_start' && e.content_block?.type === 'thinking') {
+          const id = uid();
+          this.streaming.set(`${key}:${this.currentMsg.get(key)}:${e.index}`, id);
+          this.state.items.push({ kind: 'thinking', id, text: '', streaming: true, parent, msg: this.currentMsg.get(key), started: Date.now() });
         } else if (e.type === 'content_block_delta') {
           if (e.delta?.type === 'text_delta') {
             const id = this.streaming.get(`${key}:${this.currentMsg.get(key)}:${e.index}`);
             const it = this.state.items.find((x) => x.id === id);
             if (it?.kind === 'assistant') it.text += e.delta.text;
-          } else if (e.delta?.type === 'thinking_delta' && !parent) this.state.activity = 'Thinking…';
+          } else if (e.delta?.type === 'thinking_delta') {
+            const id = this.streaming.get(`${key}:${this.currentMsg.get(key)}:${e.index}`);
+            const it = this.state.items.find((x) => x.id === id);
+            if (it?.kind === 'thinking') it.text += e.delta.thinking ?? '';
+            if (!parent) this.state.activity = 'Thinking…';
+          }
         }
         break;
       }
@@ -1105,6 +1117,15 @@ export class ChatSession {
               if (!(last && last.kind === 'assistant' && last.text.trim() === c.text.trim()))
                 this.state.items.push({ kind: 'assistant', id: uid(), text: c.text, parent, msg: msgId });
             }
+          } else if (c.type === 'thinking') {
+            const byIndex = this.streaming.get(`${key}:${msgId}:${index}`);
+            const it = (byIndex && this.state.items.find((x) => x.id === byIndex && x.kind === 'thinking')) || this.state.items.find((x) => x.kind === 'thinking' && x.msg === msgId && x.parent === parent && x.streaming);
+            const text = String(c.thinking ?? '');
+            if (it && it.kind === 'thinking') {
+              if (text.trim()) it.text = text;
+              it.streaming = false;
+              if (it.started) it.durationMs = Date.now() - it.started;
+            } else if (text.trim()) this.state.items.push({ kind: 'thinking', id: uid(), text, parent, msg: msgId });
           } else if (c.type === 'tool_use') {
             this.bg.toolUse(c.id, c.name, c.input, new Date().toISOString(), parent);
             if (c.name === 'TodoWrite' && Array.isArray(c.input?.todos)) this.state.todos = c.input.todos;
@@ -1157,7 +1178,7 @@ export class ChatSession {
         this.state.tokens = (this.state.tokens ?? 0) + (u.input_tokens ?? 0) + (u.output_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
         if (r.subtype !== 'success' || r.is_error)
           this.state.items.push({ kind: 'result', id: uid(), text: str(r.result) || r.subtype, isError: true, durationMs: r.duration_ms });
-        for (const it of this.state.items) if (it.kind === 'assistant') it.streaming = false;
+        for (const it of this.state.items) if (it.kind === 'assistant' || it.kind === 'thinking') it.streaming = false;
         const items = this.state.items;
         const lastUser = items.map((x) => x.kind).lastIndexOf('user');
         const last = items.slice(lastUser + 1).reverse().find((x) => x.kind === 'assistant' && !x.parent);
