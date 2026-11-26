@@ -1173,9 +1173,22 @@ ${question}`;
   /** uuid of the last transcript entry (answer or tool result) of the main conversation */
   private lastUuid?: string;
 
+  /** thinking blocks the final assistant message already matched (so a second copy is never added) */
+  private matchedThinking = new Set<string>();
+
   private endThinking(it: Extract<ChatItem, { kind: 'thinking' }>) {
     it.streaming = false;
     if (it.started && it.durationMs === undefined) it.durationMs = Date.now() - it.started;
+    // a retried request streams the same thinking again: keep the first copy only (in this turn)
+    const text = it.text.trim();
+    if (!text) return;
+    const items = this.state.items;
+    const from = items.map((x) => x.kind).lastIndexOf('user') + 1;
+    const twin = items.slice(from).find((x) => x !== it && x.kind === 'thinking' && (x.parent ?? '') === (it.parent ?? '') && x.text.trim() === text);
+    if (twin) {
+      this.state.items = items.filter((x) => x !== it);
+      this.matchedThinking.add(it.id);
+    }
   }
 
   private handle(m: SDKMessage) {
@@ -1275,8 +1288,14 @@ ${question}`;
             }
           } else if (c.type === 'thinking') {
             const byIndex = this.streaming.get(`${key}:${msgId}:${index}`);
-            const it = (byIndex && this.state.items.find((x) => x.id === byIndex && x.kind === 'thinking')) || this.state.items.find((x) => x.kind === 'thinking' && x.msg === msgId && x.parent === parent && x.streaming);
             const text = String(c.thinking ?? '');
+            // the streamed block, even when its stream already ended (then it is closed, not open):
+            // by index, else the first block of this message not matched yet, else one with the same text
+            const it =
+              (byIndex && this.state.items.find((x) => x.id === byIndex && x.kind === 'thinking')) ||
+              this.state.items.find((x) => x.kind === 'thinking' && x.msg === msgId && x.parent === parent && !this.matchedThinking.has(x.id)) ||
+              this.state.items.find((x) => x.kind === 'thinking' && x.parent === parent && !!text.trim() && x.text.trim() === text.trim());
+            if (it) this.matchedThinking.add(it.id);
             if (it && it.kind === 'thinking') {
               if (text.trim()) it.text = text;
               it.streaming = false;

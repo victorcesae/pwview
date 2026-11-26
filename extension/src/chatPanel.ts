@@ -569,13 +569,18 @@ export class Chats {
     if (!badge) return base;
     try {
       const dir = path.join(this.ctx.globalStorageUri.fsPath, 'tab-icons');
-      const file = path.join(dir, `${vendor}-${badge}.svg`);
+      const file = path.join(dir, `${vendor}-${badge}-v2.svg`);
       if (!fs.existsSync(file)) {
+        // the mark shrinks a little inside a ring: spinning while it works, pulsing amber while it waits
         const svg = fs.readFileSync(base.fsPath, 'utf8');
-        const color = badge === 'working' ? '#3794ff' : '#e5a50a';
-        const dot = `<circle cx="13" cy="13" r="3.2" fill="${color}" stroke="#1e1e1e" stroke-width="1.2"/>`;
+        const inner = svg.replace(/^[\s\S]*?<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
+        const ring =
+          badge === 'working'
+            ? `<circle cx="8" cy="8" r="7.1" fill="none" stroke="#3794ff" stroke-opacity=".25" stroke-width="1.6"/><path d="M8 .9a7.1 7.1 0 0 1 7.1 7.1" fill="none" stroke="#3794ff" stroke-width="1.6" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="1s" repeatCount="indefinite"/></path>`
+            : `<circle cx="8" cy="8" r="7.1" fill="none" stroke="#e5a50a" stroke-width="1.6"><animate attributeName="stroke-opacity" values="1;.25;1" dur="1.4s" repeatCount="indefinite"/></circle>`;
+        const out = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">${ring}<g transform="translate(3 3) scale(.625)">${inner}</g></svg>`;
         fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(file, svg.replace(/<\/svg>\s*$/, `${dot}</svg>`));
+        fs.writeFileSync(file, out);
       }
       return vscode.Uri.file(file);
     } catch {

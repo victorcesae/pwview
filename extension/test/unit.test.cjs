@@ -495,3 +495,28 @@ test('chat: a thinking block is done when its stream ends or the next step start
   ev({ type: 'message_start', message: { id: 'm3' } });
   assert.equal(th()[1].streaming, false, 'next step started');
 });
+
+test('chat: a thinking block whose stream ended is not added again by the final message', () => {
+  const c = newChat();
+  const ev = (event) => h(c, { type: 'stream_event', parent_tool_use_id: null, event });
+  ev({ type: 'message_start', message: { id: 'm1' } });
+  ev({ type: 'content_block_start', index: 0, content_block: { type: 'thinking' } });
+  ev({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'plan it' } });
+  ev({ type: 'content_block_stop', index: 0 });
+  // the CLI sends the block again in its own assistant message, at another index
+  h(c, { type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', content: [{ type: 'text', text: 'x' }, { type: 'thinking', thinking: 'plan it' }] } });
+  h(c, { type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', content: [{ type: 'thinking', thinking: 'plan it' }] } });
+  assert.equal(c.state.items.filter((i) => i.kind === 'thinking').length, 1);
+});
+
+test('chat: a retried request streaming the same thinking again shows it once', () => {
+  const c = newChat();
+  const ev = (event) => h(c, { type: 'stream_event', parent_tool_use_id: null, event });
+  for (const id of ['m1', 'm1-retry']) {
+    ev({ type: 'message_start', message: { id } });
+    ev({ type: 'content_block_start', index: 0, content_block: { type: 'thinking' } });
+    ev({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'same plan' } });
+    ev({ type: 'content_block_stop', index: 0 });
+  }
+  assert.equal(c.state.items.filter((i) => i.kind === 'thinking').length, 1);
+});

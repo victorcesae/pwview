@@ -26,6 +26,7 @@ import { duration, Elapsed } from '@/components/Elapsed';
 import { composerApi } from './Composer';
 import { ThinkingRow, toggleAllThinking } from '@/components/Thinking';
 import { Fold, JumpRail, usePromptKeys, type Prompt } from '@/components/MessageNav';
+import { foldTurns, type WorkRow } from '@/lib/turnWork';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Timeline } from '@/components/Timeline';
 import { VerifyBadge } from '@/components/VerifyBadge';
@@ -274,13 +275,27 @@ function ToolGroup({ items, sessionId }: { items: ToolItem[]; sessionId?: string
   const pics = items.flatMap((i) => i.images ?? []);
   // files the calls wrote, read or printed: only once every call is done
   const mediaText = useMemo(() => (running ? undefined : items.map((i) => (i.status === 'done' ? toolText(i.input, i.result) : '')).join('\n')), [items, running]);
+  const live = running && !open ? [...items].reverse().find((i) => i.status === 'running') : undefined;
   const total = items.reduce((a, i) => ({ add: a.add + stat(i).add, del: a.del + stat(i).del }), { add: 0, del: 0 });
   return (
     <div ref={box}>
-      <button onClick={() => setOpen(!open)} className={cn('text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 text-left text-[13px]', open && 'bg-background sticky top-0 z-20 w-full py-1')}>
-        {running && <span className="bg-working size-1.5 shrink-0 animate-pulse rounded-full" aria-label={t('Working…')} />}
+      <button onClick={() => setOpen(!open)} className={cn('text-muted-foreground hover:text-foreground flex min-w-0 cursor-pointer items-center gap-2 text-left text-[13.5px]', open && 'bg-background sticky top-0 z-20 w-full py-1')}>
+        {running && <Loader2 className="text-working size-4 shrink-0 animate-spin" aria-label={t('Working…')} />}
         {failed && !running && <X className="text-removed size-3.5" />}
-        <span>{summarizeTools(items)}</span>
+        {/* while a call runs, the group says what is running now and for how long (like t3code's live row) */}
+        {live ? (
+          <span className="flex min-w-0 items-baseline gap-1.5" data-live-tool>
+            <span className="text-foreground/85 min-w-0 truncate font-mono text-[12.5px]">{live.summary || live.name}</span>
+            {live.ts && (
+              <span className="shrink-0 text-[11.5px] opacity-70">
+                · <Elapsed since={Date.parse(live.ts)} />
+              </span>
+            )}
+            {items.length > 1 && <span className="shrink-0 text-[11.5px] opacity-60">· {summarizeTools(items.filter((i) => i !== live))}</span>}
+          </span>
+        ) : (
+          <span>{summarizeTools(items)}</span>
+        )}
         {(total.add > 0 || total.del > 0) && (
           <span className="font-mono text-[12px]">
             <span className="text-added">+{total.add}</span> <span className="text-removed">−{total.del}</span>
@@ -574,6 +589,25 @@ function UserMessage({ it }: { it: Extract<ChatItem, { kind: 'user' }> }) {
   );
 }
 
+/** "Working for 9s" over the running turn's steps; "Worked for 19s ›" (folded) once it is done. */
+function WorkHeading({ w, onToggle }: { w: WorkRow; onToggle: () => void }) {
+  if (w.live)
+    return (
+      <div className="text-muted-foreground flex items-center gap-2 border-b pb-1.5 text-[12.5px]" data-work-heading>
+        <span>
+          {t('Working for')} {w.since ? <Elapsed since={w.since} /> : '…'}
+        </span>
+      </div>
+    );
+  return (
+    <button onClick={onToggle} className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1 text-[12.5px]" aria-expanded={w.open} data-work-heading>
+      <span>{w.durationMs !== undefined ? t('Worked for {0}', duration(w.durationMs)) : t('Worked')}</span>
+      <span className="opacity-60">· {w.steps === 1 ? t('1 step') : t('{0} steps', w.steps)}</span>
+      {w.open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+    </button>
+  );
+}
+
 /** A side question and its answer: off to the side, the agent doing the work never sees it. */
 function AsideCard({ it }: { it: Extract<ChatItem, { kind: 'aside' }> }) {
   return (
@@ -812,6 +846,7 @@ function rowText(g: ChatItem | ToolItem[]): string {
     case 'question':
       return g.questions.map((q) => q.question).join(' ');
   }
+  return '';
 }
 
 /** Which model and editor this chat runs on, for the answer avatars. */
@@ -853,8 +888,13 @@ export function ChatView({ data }: { data: ChatData }) {
   }, [chat.items]);
 
   // Long chats: only rows near the viewport are in the DOM; heights are measured as they render.
-  const rows = useMemo(() => groupTools(top), [top]);
-  const turnChips = useMemo(() => turnEnds(rows, turnsOf(chat.items, chat.cwd), working), [rows, chat.items, chat.cwd, working]);
+  // each turn's steps under "Working for… / Worked for…", folded once the turn is done (like t3code)
+  const [openWork, setOpenWork] = useState<ReadonlySet<string>>(new Set());
+  const toggleWork = (id: string) => setOpenWork((s) => (s.has(id) ? new Set([...s].filter((x) => x !== id)) : new Set([...s, id])));
+  const rows = useMemo(() => foldTurns(groupTools(top), openWork, working), [top, openWork, working]);
+  // the same rows for helpers that only look at messages and tools (a heading row is just skipped by them)
+  const plainRows = rows as unknown as (ChatItem | ToolItem[])[];
+  const turnChips = useMemo(() => turnEnds(plainRows, turnsOf(chat.items, chat.cwd), working), [rows, chat.items, chat.cwd, working]);
   // the gallery's order: a row's place in the chat (-1 once it's gone)
   const rank = useMemo(() => {
     const at = new Map(rows.map((g, i) => [Array.isArray(g) ? 'g:' + g[0].id : g.id, i]));
@@ -879,7 +919,7 @@ export function ChatView({ data }: { data: ChatData }) {
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [] as number[];
-    return rows.flatMap((g, i) => (rowText(g).toLowerCase().includes(q) ? [i] : []));
+    return plainRows.flatMap((g, i) => (rowText(g).toLowerCase().includes(q) ? [i] : []));
   }, [rows, query]);
   const matchSet = useMemo(() => new Set(matches), [matches]);
   const current = matches.length ? matches[Math.min(cursor, matches.length - 1)] : -1;
@@ -968,6 +1008,7 @@ export function ChatView({ data }: { data: ChatData }) {
   // ---- session timeline (scrubber above the transcript)
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [playRow, setPlayRow] = useState<number | undefined>();
+  const toolRunning = useMemo(() => chat.items.some((i) => i.kind === 'tool' && i.status === 'running' && !i.parent), [chat.items]);
   const release = () => {
     if (!stick.current) return;
     stick.current = false;
@@ -988,12 +1029,6 @@ export function ChatView({ data }: { data: ChatData }) {
     <AgentCtx.Provider value={{ model: shownModel, host: chat.host, hostIcon: chat.hostIcon }}>
     <div className="flex h-screen flex-col">
       <header className="flex items-center gap-2 border-b px-3 py-1 [&>*]:shrink-0">
-        <StateDot state={working ? 'working' : chat.status === 'idle' ? 'recent' : 'idle'} />
-        <span className="inline-flex items-center gap-0.5" title={`${hostName(chat.host)}${chat.host ? ' + ' : ''}${vendorName(vendorOf(shownModel))}${chat.model ? ' · ' + chat.model : ''}`}>
-          <HostMark host={chat.host} icon={chat.hostIcon} />
-          {chat.host && <span className="text-muted-foreground text-[10px]">+</span>}
-          <VendorMark vendor={vendorOf(shownModel)} />
-        </span>
         <h1 className="min-w-0 flex-1 !shrink truncate text-[13px] font-semibold" title={chat.title}>{chat.title}</h1>
         <WorkFolders chat={chat} />
         {chat.status === 'starting' && (
@@ -1067,7 +1102,7 @@ export function ChatView({ data }: { data: ChatData }) {
           </Button>
         </div>
       )}
-      {timelineOpen && <Timeline rows={rows} current={topRow} onJump={jumpTo} onPlayRow={setPlayRow} onClose={() => setTimelineOpen(false)} />}
+      {timelineOpen && <Timeline rows={plainRows} current={topRow} onJump={jumpTo} onPlayRow={setPlayRow} onClose={() => setTimelineOpen(false)} />}
       {linked.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-b px-4 py-1.5">
           <span className="text-muted-foreground text-[11px]">{t('Linked:')}</span>
@@ -1105,7 +1140,7 @@ export function ChatView({ data }: { data: ChatData }) {
           setTopRow(rowAtTop());
         }}
       >
-        <div className="mx-auto flex w-full max-w-[min(72rem,100%)] flex-col gap-1.5 px-5 py-5">
+        <div className="mx-auto flex w-full max-w-[min(72rem,100%)] flex-col gap-1.5 px-5 pt-5 pb-2">
           {!top.length && (
             <div className="text-muted-foreground py-16 text-center">
               <Bot className="mx-auto mb-3 size-8 opacity-60" />
@@ -1136,6 +1171,8 @@ export function ChatView({ data }: { data: ChatData }) {
                 <div data-index={v.index} ref={virtualizer.measureElement} className={cn('absolute left-0 w-full pb-3', matchSet.has(v.index) && 'search-hit', v.index === current && 'search-current', v.index === playRow && 'timeline-current')} style={{ top: v.start }}>
                   {Array.isArray(g) ? (
                     <ToolGroup items={g} sessionId={chat.sessionId} />
+                  ) : g.kind === 'work' ? (
+                    <WorkHeading w={g} onToggle={() => toggleWork(g.id)} />
                   ) : (
                     <Item it={g} sessionId={chat.sessionId}>
                       {g.kind === 'tool' && byParent.get(g.id)?.map((c) => <Item key={c.id} it={c} sessionId={chat.sessionId} />)}
@@ -1168,7 +1205,7 @@ export function ChatView({ data }: { data: ChatData }) {
       <SideRail chat={chat} />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-[min(72rem,100%)] flex-col gap-2 px-5 pt-1 pb-4">
+      <div className="relative mx-auto flex w-full max-w-[min(72rem,100%)] flex-col gap-1.5 px-5 pt-0.5 pb-3">
         {!atBottom && (
           <button
             onClick={() => {
@@ -1183,17 +1220,38 @@ export function ChatView({ data }: { data: ChatData }) {
             <ChevronDown className="size-3.5" /> {t('Jump to latest')}
           </button>
         )}
+        {/* commands the agent left running (dev servers, watchers): one line each, like t3code */}
+        {(chat.tasks ?? []).filter((x) => x.status === 'running').slice(-3).map((x) => (
+          <div key={x.id} className="text-muted-foreground flex min-w-0 items-center gap-2 px-1 text-[12.5px]" data-bg-row>
+            <SquareTerminal className="size-3.5 shrink-0" />
+            <span className="shrink-0">{t('Running')}</span>
+            <span className="text-foreground/80 min-w-0 truncate">· {x.description || x.command}</span>
+            {x.started && (
+              <span className="shrink-0 tabular-nums opacity-70">
+                <Elapsed since={Date.parse(x.started)} />
+              </span>
+            )}
+            <button className="hover:text-foreground shrink-0 cursor-pointer font-medium" onClick={() => post({ type: 'followTask', id: x.id })} title={t('Watch the output in a terminal as it is written')}>
+              {t('Details')}
+            </button>
+            {chat.status !== 'closed' && (
+              <button className="hover:text-removed shrink-0 cursor-pointer font-medium" onClick={() => post({ type: 'stopTask', id: x.id })}>
+                {t('Stop')}
+              </button>
+            )}
+          </div>
+        ))}
         <TodoCard todos={chat.todos} />
         {working && chat.activity && (
-          <div className="text-muted-foreground flex items-center gap-2 px-1 text-[12px]" role="status">
-            <Loader2 className="text-working size-3.5 animate-spin" />
-            <span className="truncate">{t(chat.activity)}</span>
+          // one compact line, like t3code's status line: the running command itself is shown in the timeline
+          <div className="text-muted-foreground flex items-center gap-1.5 px-1 text-[11.5px]" role="status" title={t('Esc to stop')}>
+            <Loader2 className="text-working size-3 animate-spin" />
+            <span className="min-w-0 truncate">{toolRunning ? t('Working…') : t(chat.activity)}</span>
             {chat.turnStarted && (
-              <span className="shrink-0 opacity-80" data-elapsed>
+              <span className="shrink-0 tabular-nums opacity-80" data-elapsed>
                 · <Elapsed since={chat.turnStarted} />
               </span>
             )}
-            <span className="ml-auto shrink-0 text-[11px] opacity-70">{t('Esc to stop')}</span>
           </div>
         )}
         {!working && chat.verify?.running && (
