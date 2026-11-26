@@ -128,5 +128,7 @@
   "cmd.unarchive.chat": "Desarquivar chat",
   "setting.sidebarGrouping": "Como a visão Sessões é organizada.",
   "setting.sidebarGrouping.chats": "Por chat: chats fixados, ativos e recentes de todas as pastas, com os projetos no final.",
-  "setting.sidebarGrouping.projects": "Por pasta de projeto, com os chats de cada projeto dentro (o layout antigo)."
+  "setting.sidebarGrouping.projects": "Por pasta de projeto, com os chats de cada projeto dentro (o layout antigo).",
+  "cmd.send.terminal.selection": "Enviar seleção do terminal para o chat",
+  "cmd.chat.palette": "Paleta de comandos do chat"
 }

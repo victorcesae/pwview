@@ -128,5 +128,7 @@
   "cmd.unarchive.chat": "Unarchive Chat",
   "setting.sidebarGrouping": "How the Sessions view is organized.",
   "setting.sidebarGrouping.chats": "By chat: Pinned, Active and Recent chats from all folders, with projects at the bottom.",
-  "setting.sidebarGrouping.projects": "By project folder, with each project's chats inside (the old layout)."
+  "setting.sidebarGrouping.projects": "By project folder, with each project's chats inside (the old layout).",
+  "cmd.send.terminal.selection": "Send Terminal Selection to Chat",
+  "cmd.chat.palette": "Command Palette of the Chat"
 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.24
+- Sessions sidebar organized by chat: Pinned, Active and Recent across all folders, with pin, hide for a day/week and archive; projects (source control, rules, files) move to a Projects section. Set steerhouse.sidebarGrouping to "projects" for the old layout.
+- Changes panel: what each turn changed with +/- counts and inline diffs, the whole working tree from git, native diff, revert a file, and Commit / Push / Create PR. A "+N −M" chip at the end of each turn opens it.
+- Code in answers: syntax highlighting, Mermaid diagrams, bordered tables, clickable file paths like src/foo.ts:12.
+- Plan card with Implement / Refine, a live "Working · 1m 12s" timer and the time each turn took.
+- Command palette (Ctrl/Cmd+K) and shortcuts: Esc twice or Ctrl+C on an empty box stops, Ctrl/Cmd+L focuses the box, Ctrl/Cmd+Shift+N new chat, Ctrl/Cmd+Alt+[ / ] previous/next chat.
+- Branch picker in the message box, and Send Terminal Selection to Chat (Ctrl/Cmd+Alt+L).
+- Centered chat column, theme-matched success/warning/error colours, tighter tool rows.
+
 ## 1.0.23
 - /clear clears the context in the same tab: the conversation stays on screen above a divider (and in your history) instead of being replaced by a new chat.
 - Editing a waiting Steer message pauses it, so it is no longer sent half-edited; Esc restores the original text.

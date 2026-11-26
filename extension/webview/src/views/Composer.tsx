@@ -12,6 +12,7 @@ import { RichInput, type RichInputHandle } from '@/components/RichInput';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { t } from '@/i18n';
+import { BranchPicker } from '@/components/BranchPicker';
 import { cn } from '@/lib/utils';
 import type { ChatState, Effort, PermissionMode, Priority, ToChat } from '@/types';
 
@@ -40,7 +41,7 @@ export function localCommandOf(text: string, sdkCommands: string[]): string | un
 }
 
 /** The built-in commands first, then the session's own. */
-const allCommands = (sdk: string[]) => [...LOCAL_COMMANDS.map((c) => c.name).filter((n) => !sdk.includes(n)), ...sdk];
+export const allCommands = (sdk: string[]) => [...LOCAL_COMMANDS.map((c) => c.name).filter((n) => !sdk.includes(n)), ...sdk];
 /** What a built-in command does; undefined for the session's own commands. */
 const localHint = (c: string, sdk: string[]) => (sdk.includes(c) ? undefined : LOCAL_COMMANDS.find((x) => x.name === c)?.hint);
 
@@ -50,15 +51,15 @@ export const PRIORITY: Record<Priority, { label: string; icon: React.ComponentTy
   now: { label: 'Send now', icon: Zap, hint: 'Sent immediately' },
 };
 
-const MODES: { value: PermissionMode; label: string; hint: string }[] = [
+export const MODES: { value: PermissionMode; label: string; hint: string }[] = [
   { value: 'default', label: 'Ask before acting', hint: 'Asks before edits and commands' },
   { value: 'acceptEdits', label: 'Accept edits', hint: 'Edits files freely, asks for commands' },
   { value: 'plan', label: 'Plan mode', hint: 'Plans first, changes nothing until you approve' },
   { value: 'auto', label: 'Auto', hint: 'A classifier approves safe actions' },
   { value: 'bypassPermissions', label: 'Bypass permissions', hint: 'Never asks. Use with care' },
 ];
-const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-const EFFORT_LABEL: Record<Effort, string> = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' };
+export const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+export const EFFORT_LABEL: Record<Effort, string> = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' };
 
 type Img = { data: string; mime: string };
 const readImage = (f: File) =>
@@ -175,6 +176,9 @@ function PlusMenu({ chat, onFiles, onSlash }: { chat: ChatState; onFiles: () => 
   );
 }
 
+/** For window-wide shortcuts (Chat.tsx): the box's state without reaching into the editor. */
+export const composerApi = { isEmpty: () => true, focus: () => {}, slash: (_c: string) => {} };
+
 export function Composer({ chat }: { chat: ChatState }) {
   const working = chat.status === 'working' || chat.status === 'waiting';
   const input = useRef<RichInputHandle>(null);
@@ -278,6 +282,22 @@ export function Composer({ chat }: { chat: ChatState }) {
 
   useEffect(() => {
     input.current?.focus();
+  }, []);
+
+  // ---- for shortcuts and the command palette; text from a terminal selection comes in as a chip
+  const pickSlashRef = useRef(pickSlash);
+  pickSlashRef.current = pickSlash;
+  useEffect(() => {
+    composerApi.isEmpty = () => input.current?.isEmpty() ?? true;
+    composerApi.focus = () => input.current?.focus();
+    composerApi.slash = (c) => pickSlashRef.current(c);
+    const on = (e: MessageEvent) => {
+      if (e.data?.type !== 'insertPaste' || typeof e.data.text !== 'string') return;
+      input.current?.insertChip(e.data.text);
+      setText(input.current?.getMarkdown() ?? '');
+    };
+    window.addEventListener('message', on);
+    return () => window.removeEventListener('message', on);
   }, []);
 
   // ---- Up / Down: walk through the prompts you sent in this chat (when the box is empty or showing one)
@@ -575,6 +595,8 @@ export function Composer({ chat }: { chat: ChatState }) {
         >
           <Bot className="size-4" />
         </button>
+
+        <BranchPicker />
 
         <div className="ml-auto flex items-center gap-1.5">
           <UsagePanel chat={chat} />

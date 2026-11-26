@@ -1,4 +1,4 @@
-import { Ban, Bot, Globe, ChevronUp, Copy, SquareTerminal, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
+import { Ban, Bot, Command, Globe, ChevronUp, Copy, SquareTerminal, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
@@ -18,6 +18,10 @@ import { TurnChip, turnEnds, turnsOf } from '@/components/ChangesPanel';
 import { WorkFolders } from '@/components/WorkFolders';
 import { HostMark, hostName, VendorMark, vendorName, vendorOf } from '@/components/VendorMark';
 import { t } from '@/i18n';
+import { PlanCard } from '@/components/PlanCard';
+import { CommandPalette, keys } from '@/components/CommandPalette';
+import { duration, Elapsed } from '@/components/Elapsed';
+import { composerApi } from './Composer';
 
 const post = (m: ToChat) => postAny(m as never);
 
@@ -225,7 +229,7 @@ function ToolStep({ it, sessionId }: { it: ToolItem; sessionId?: string }) {
   const { add, del } = stat(it);
   return (
     <div className="border-b last:border-b-0">
-      <button onClick={() => setOpen(!open)} className={cn('hover:bg-accent/50 text-muted-foreground flex w-full cursor-pointer items-center gap-1.5 px-3 py-2 text-left text-[12.5px]', open && 'bg-card sticky top-0 z-10 border-b')}>
+      <button onClick={() => setOpen(!open)} className={cn('hover:bg-accent/50 text-muted-foreground flex w-full cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-left text-[12.5px]', open && 'bg-card sticky top-0 z-10 border-b')}>
         {it.status === 'running' && <Loader2 className="text-working size-3 shrink-0 animate-spin" />}
         {it.status === 'error' && <X className="text-removed size-3 shrink-0" />}
         <span className="flex min-w-0 items-center gap-1.5 truncate">
@@ -283,7 +287,7 @@ function ToolGroup({ items, sessionId }: { items: ToolItem[]; sessionId?: string
         </div>
       )}
       {open && (
-        <div className="bg-card mt-1.5 overflow-hidden rounded-lg border">
+        <div className="bg-muted/20 mt-1.5 overflow-hidden rounded-md border">
           {items.map((it) => (
             <ToolStep key={it.id} it={it} sessionId={sessionId} />
           ))}
@@ -365,39 +369,6 @@ function PermissionCard({ it }: { it: Extract<ChatItem, { kind: 'permission' }> 
             />
             <Button size="sm" variant="outline" onClick={() => post({ type: 'respond', id: it.id, decision: 'deny', message: reason || undefined })}>
               <Ban /> {t('Deny')}
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function PlanCard({ it }: { it: Extract<ChatItem, { kind: 'plan' }> }) {
-  const [feedback, setFeedback] = useState('');
-  const pending = it.status === 'pending';
-  return (
-    <Card className={cn('gap-0', pending && 'border-working/50')}>
-      <CardContent className="flex flex-col gap-2 py-3">
-        <div className="flex items-center gap-2">
-          <ClipboardList className="text-working size-4" />
-          <span className="font-medium">{t('Proposed plan')}</span>
-          {!pending && <Badge variant={it.status === 'approved' ? 'recent' : 'outline'}>{it.status}</Badge>}
-        </div>
-        <Markdown text={it.plan} className="bg-muted/40 rounded-md border px-3 py-1" />
-        {pending && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={() => post({ type: 'respond', id: it.id, decision: 'allow' })}>
-              <Check /> {t('Approve and start')}
-            </Button>
-            <input
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              placeholder={t('What should change in the plan?')}
-              className="bg-input min-w-48 flex-1 rounded-md border px-2.5 py-1 text-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-            />
-            <Button size="sm" variant="outline" onClick={() => post({ type: 'respond', id: it.id, decision: 'deny', message: feedback || 'Keep planning.' })}>
-              {t('Keep planning')}
             </Button>
           </div>
         )}
@@ -630,9 +601,14 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
                 <Button size="xs" variant="ghost" onClick={() => window.dispatchEvent(new CustomEvent('steerhouse:quote', { detail: it.text }))} title={t('Quote this answer in your next message')} data-quote>
                   <Quote /> {t('Quote')}
                 </Button>
-                <Button size="xs" variant="ghost" onClick={() => navigator.clipboard?.writeText(it.text)} title={t('Copy')} aria-label={t('Copy')}>
+                <Button size="xs" variant="ghost" onClick={() => navigator.clipboard?.writeText(it.text)} title={t('Copy')} aria-label={t('Copy')} data-copy-answer>
                   <Copy />
                 </Button>
+              </div>
+            )}
+            {!it.streaming && it.durationMs !== undefined && (
+              <div className="text-muted-foreground/70 -mt-5 flex justify-end text-[10.5px] tabular-nums" title={t('How long this turn took')} data-turn-duration>
+                {t('Worked for {0}', duration(it.durationMs))}
               </div>
             )}
           </div>
@@ -653,7 +629,7 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
     case 'question':
       return <QuestionCard it={it} />;
     case 'result':
-      return <div className="border-removed/40 bg-removed/10 text-removed rounded-lg border px-3 py-2 text-[12px]">{it.text}</div>;
+      return <div className="border-error/40 bg-error/10 text-error rounded-lg border px-3 py-2 text-[12px]">{it.text}</div>;
     case 'agentReport':
       return <AgentReport it={it} />;
     case 'blocked':
@@ -832,6 +808,41 @@ export function ChatView({ data }: { data: ChatData }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // ---- command palette (Ctrl/Cmd+K) and keyboard shortcuts
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const workingRef = useRef(working);
+  workingRef.current = working;
+  useEffect(() => {
+    let lastEsc = 0;
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      const k = e.key.toLowerCase();
+      if (mod && !e.shiftKey && !e.altKey && k === 'k') {
+        e.preventDefault();
+        setPaletteOpen(true);
+      } else if (mod && !e.shiftKey && !e.altKey && k === 'l') {
+        e.preventDefault();
+        composerApi.focus();
+      } else if (e.key === 'Escape' && !e.defaultPrevented) {
+        // twice in a row stops the agent (once is enough inside the message box)
+        const now = Date.now();
+        if (now - lastEsc < 600 && workingRef.current) post({ type: 'interrupt' });
+        lastEsc = now;
+      } else if (e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && k === 'c' && workingRef.current && composerApi.isEmpty() && !window.getSelection()?.toString()) {
+        // Ctrl+C with nothing to copy and an empty box: stop, like in a terminal
+        e.preventDefault();
+        post({ type: 'interrupt' });
+      }
+    };
+    const onMsg = (e: MessageEvent) => e.data?.type === 'openPalette' && setPaletteOpen(true);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('message', onMsg);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('message', onMsg);
+    };
+  }, []);
   useEffect(() => {
     if (current < 0) return;
     stick.current = false;
@@ -891,6 +902,9 @@ export function ChatView({ data }: { data: ChatData }) {
             {chat.tokens ? `${chat.tokens >= 1e6 ? (chat.tokens / 1e6).toFixed(1) + 'M' : (chat.tokens / 1e3).toFixed(1) + 'k'} ${t('tokens')} · ` : ''}${chat.costUsd.toFixed(2)}
           </span>
         )}
+        <Button size="xs" variant="ghost" onClick={() => setPaletteOpen(true)} title={t('Command palette ({0})', keys('Mod+K'))} aria-label={t('Command palette')} data-open-palette>
+          <Command />
+        </Button>
         <Button size="xs" variant="ghost" onClick={() => (setSearchOpen((o) => !o), requestAnimationFrame(() => searchInput.current?.focus()))} title={t('Search (Ctrl+F)')} aria-label={t('Search')}>
           <Search />
         </Button>
@@ -970,7 +984,7 @@ export function ChatView({ data }: { data: ChatData }) {
           setAtBottom(stick.current);
         }}
       >
-        <div className="mx-auto flex max-w-[860px] flex-col gap-1 px-4 py-4">
+        <div className="mx-auto flex w-full max-w-[46rem] flex-col gap-1.5 px-5 py-5">
           {!top.length && (
             <div className="text-muted-foreground py-16 text-center">
               <Bot className="mx-auto mb-3 size-8 opacity-60" />
@@ -1017,14 +1031,14 @@ export function ChatView({ data }: { data: ChatData }) {
               </Button>
             </div>
           )}
-          {chat.error && <div className="border-removed/40 bg-removed/10 text-removed rounded-lg border px-3 py-2 text-[12px]">{chat.error}</div>}
+          {chat.error && <div className="border-error/40 bg-error/10 text-error rounded-lg border px-3 py-2 text-[12px]">{chat.error}</div>}
           <div ref={end} />
         </div>
       </div>
       <SideRail chat={chat} />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-[860px] flex-col gap-2 px-4 pt-1 pb-3">
+      <div className="relative mx-auto flex w-full max-w-[46rem] flex-col gap-2 px-5 pt-1 pb-4">
         {!atBottom && (
           <button
             onClick={() => {
@@ -1044,7 +1058,12 @@ export function ChatView({ data }: { data: ChatData }) {
           <div className="text-muted-foreground flex items-center gap-2 px-1 text-[12px]" role="status">
             <Loader2 className="text-working size-3.5 animate-spin" />
             <span className="truncate">{chat.activity}</span>
-            <span className="ml-auto text-[11px] opacity-70">{t('Esc to stop')}</span>
+            {chat.turnStarted && (
+              <span className="shrink-0 opacity-80" data-elapsed>
+                · <Elapsed since={chat.turnStarted} />
+              </span>
+            )}
+            <span className="ml-auto shrink-0 text-[11px] opacity-70">{t('Esc to stop')}</span>
           </div>
         )}
         {chat.queue.length > 0 && (
@@ -1056,6 +1075,7 @@ export function ChatView({ data }: { data: ChatData }) {
         )}
         <Composer chat={chat} />
       </div>
+      {paletteOpen && <CommandPalette chat={chat} onClose={() => setPaletteOpen(false)} />}
     </div>
     </AgentCtx.Provider>
     </LightboxProvider>

@@ -2,7 +2,7 @@
   "name": "steerhouse",
   "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "1.0.23",
+  "version": "1.0.24",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -554,6 +554,17 @@
         "title": "%cmd.scm-openChange%",
         "category": "Steerhouse",
         "icon": "$(diff)"
+      },
+      {
+        "command": "steerhouse.sendTerminalSelection",
+        "title": "%cmd.send.terminal.selection%",
+        "category": "Steerhouse",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "steerhouse.chatPalette",
+        "title": "%cmd.chat.palette%",
+        "category": "Steerhouse"
       }
     ],
     "menus": {
@@ -1187,6 +1198,10 @@
         {
           "command": "steerhouse.scm.openChange",
           "when": "false"
+        },
+        {
+          "command": "steerhouse.chatPalette",
+          "when": "activeWebviewPanelId == 'steerhouse.chat'"
         }
       ],
       "terminal/title/context": [
@@ -1209,6 +1224,13 @@
           "command": "steerhouse.newChatInWorktree",
           "when": "explorerResourceIsFolder",
           "group": "steerhouse@2"
+        }
+      ],
+      "terminal/context": [
+        {
+          "command": "steerhouse.sendTerminalSelection",
+          "when": "terminalTextSelected",
+          "group": "9_steerhouse@0"
         }
       ]
     },
@@ -1360,6 +1382,36 @@
         "command": "steerhouse.fs.rename",
         "key": "f2",
         "when": "focusedView == steerhouse.sessions && viewItem =~ /^fs(file|folder)$/"
+      },
+      {
+        "command": "steerhouse.newChat",
+        "key": "ctrl+shift+n",
+        "mac": "cmd+shift+n",
+        "when": "activeWebviewPanelId == 'steerhouse.chat'"
+      },
+      {
+        "command": "steerhouse.chatPalette",
+        "key": "ctrl+k",
+        "mac": "cmd+k",
+        "when": "activeWebviewPanelId == 'steerhouse.chat'"
+      },
+      {
+        "command": "workbench.action.nextEditorInGroup",
+        "key": "ctrl+alt+]",
+        "mac": "cmd+alt+]",
+        "when": "activeWebviewPanelId == 'steerhouse.chat'"
+      },
+      {
+        "command": "workbench.action.previousEditorInGroup",
+        "key": "ctrl+alt+[",
+        "mac": "cmd+alt+[",
+        "when": "activeWebviewPanelId == 'steerhouse.chat'"
+      },
+      {
+        "command": "steerhouse.sendTerminalSelection",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l",
+        "when": "terminalFocus && terminalTextSelected"
       }
     ],
     "walkthroughs": [

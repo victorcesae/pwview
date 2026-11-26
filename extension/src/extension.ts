@@ -756,6 +756,19 @@ export function activate(ctx: vscode.ExtensionContext) {
       const open = vscode.l10n.t('New Chat');
       if ((await vscode.window.showInformationMessage(vscode.l10n.t('Open a chat first, then add the file to it.'), open)) === open) vscode.commands.executeCommand('steerhouse.newChat');
     }),
+    // the active terminal's selection, as an attachment in the chat in front
+    vscode.commands.registerCommand('steerhouse.sendTerminalSelection', async () => {
+      const before = await vscode.env.clipboard.readText();
+      await vscode.env.clipboard.writeText('');
+      await vscode.commands.executeCommand('workbench.action.terminal.copySelection');
+      const text = await vscode.env.clipboard.readText();
+      await vscode.env.clipboard.writeText(before); // the clipboard was only borrowed
+      if (!text.trim()) return vscode.window.showInformationMessage(vscode.l10n.t('Select some text in the terminal first.'));
+      if (chats.insertPaste(text)) return;
+      const open = vscode.l10n.t('New Chat');
+      if ((await vscode.window.showInformationMessage(vscode.l10n.t('Open a chat first, then send the selection to it.'), open)) === open) vscode.commands.executeCommand('steerhouse.newChat');
+    }),
+    vscode.commands.registerCommand('steerhouse.chatPalette', () => chats.openPalette()),
     vscode.commands.registerCommand('steerhouse.followTask', (x?: FollowTarget | { task?: FollowTarget }) => {
       const t = x && 'task' in x ? x.task : (x as FollowTarget | undefined);
       if (!t?.outputFile) return vscode.window.showWarningMessage(vscode.l10n.t('This command has no output file.'));

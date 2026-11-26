@@ -18,6 +18,7 @@ import { addLink, briefing, loadLinks, removeLink, sameConnection } from './link
 import { agentExecutable } from './util';
 import { LOCAL_COMMANDS, runLocalCommand, type LocalCommand } from './localCommands';
 import { accountEnv, type Account } from './accounts';
+import { git, repoRoot } from './worktree';
 
 const tabCompletion = () => vscode.workspace.getConfiguration('steerhouse').get<boolean>('tabCompletion', true);
 
@@ -69,7 +70,26 @@ export type FromChat =
   | { type: 'link' }
   | { type: 'unlink'; id: string }
   | { type: 'openSession'; id: string }
-  | ChangesMsg;
+  | ChangesMsg
+  | { type: 'recentChats' }
+  | { type: 'newChat' }
+  | { type: 'gitInfo' }
+  | { type: 'switchBranch'; branch: string }
+  | { type: 'newWorktree' };
+
+/** The chat folder's git state, for the branch picker. */
+async function gitInfo(cwd: string) {
+  const root = await repoRoot(cwd);
+  if (!root) return { type: 'gitInfo', isRepo: false, branches: [] as string[], dirty: false };
+  const [head, list, status] = await Promise.all([git(['branch', '--show-current'], cwd), git(['branch', '--format=%(refname:short)', '--sort=-committerdate'], cwd), git(['status', '--porcelain'], cwd)]);
+  return {
+    type: 'gitInfo',
+    isRepo: true,
+    branch: head.ok ? head.out.split('\n')[0] || undefined : undefined,
+    branches: list.ok ? list.out.split('\n').filter(Boolean).slice(0, 50) : [],
+    dirty: status.ok && !!status.out.trim(),
+  };
+}
 
 interface Open {
   chat: ChatSession;
@@ -154,6 +174,21 @@ export class Chats {
     o.panel.reveal();
     this.send(o, { type: 'insertPaths', paths });
     return true;
+  }
+
+  /** Adds text as an attachment chip to the prompt of the chat in front. False if none is open. */
+  insertPaste(text: string) {
+    const o = this.front();
+    if (!o) return false;
+    o.panel.reveal();
+    this.send(o, { type: 'insertPaste', text });
+    return true;
+  }
+
+  /** Opens the command palette of the chat in front. */
+  openPalette() {
+    const o = this.front();
+    if (o) this.send(o, { type: 'openPalette' });
   }
 
   /** Called with every chat that starts. */
@@ -610,6 +645,31 @@ export class Chats {
       case 'unlink':
         if (c.state.sessionId) removeLink(c.state.sessionId, m.id);
         return this.post(o);
+      case 'recentChats': {
+        const chats = this.sessions()
+          .filter((x) => x.info.id !== c.state.sessionId)
+          .sort((a, b) => String(b.info.updated ?? '').localeCompare(String(a.info.updated ?? '')))
+          .slice(0, 20)
+          .map((x) => ({ id: x.info.id, title: x.info.title, project: x.info.project.split(/[\\/]/).pop(), state: x.info.state, updated: x.info.updated }));
+        return this.send(o, { type: 'recentChats', chats });
+      }
+      case 'newChat':
+        return vscode.commands.executeCommand('steerhouse.newChat');
+      case 'gitInfo':
+        return this.send(o, await gitInfo(c.state.cwd));
+      case 'switchBranch': {
+        const info = await gitInfo(c.state.cwd);
+        if (info.dirty) {
+          const go = vscode.l10n.t('Switch anyway');
+          const pick = await vscode.window.showWarningMessage(vscode.l10n.t('{0} has uncommitted changes. Git carries them over to {1}, or refuses if they conflict.', path.basename(c.state.cwd), m.branch), { modal: true }, go);
+          if (pick !== go) return this.send(o, info);
+        }
+        const r = await git(['switch', m.branch], c.state.cwd);
+        if (!r.ok) vscode.window.showErrorMessage(vscode.l10n.t('Could not switch to {0}: {1}', m.branch, r.out.slice(0, 300)));
+        return this.send(o, await gitInfo(c.state.cwd));
+      }
+      case 'newWorktree':
+        return vscode.commands.executeCommand('steerhouse.newChatInWorktree', { path: c.state.cwd });
       case 'link': {
         // only sessions on the same account, with the same kind of model
         const me = { account: o.accountId ?? this.sessions().find((s) => s.info.id === c.state.sessionId)?.info.account, model: c.state.model };

@@ -62,7 +62,7 @@ export type Todo = { content: string; status: 'pending' | 'in_progress' | 'compl
 export type Question = { question: string; header: string; multiSelect: boolean; options: { label: string; description: string }[] };
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string }
-  | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string }
+  | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; durationMs?: number }
   | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; images?: string[]; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
   | { kind: 'shell'; id: string; command: string; output: string; status: 'running' | 'done' | 'error'; exitCode?: number | null; error?: string }
   | { kind: 'permission'; id: string; tool: string; summary: string; input: unknown; canAlways: boolean; status: 'pending' | 'allowed' | 'denied'; reason?: string }
@@ -76,7 +76,7 @@ export type ChatItem =
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto';
 export interface ChatState {
   key: string; sessionId?: string; cwd: string; title: string; model?: string; models: { value: string; displayName: string }[];
-  permissionMode: PermissionMode; effort?: Effort; fastMode: boolean; ultracode: boolean; status: 'starting' | 'idle' | 'working' | 'waiting' | 'closed' | 'error'; activity?: string;
+  permissionMode: PermissionMode; effort?: Effort; fastMode: boolean; ultracode: boolean; status: 'starting' | 'idle' | 'working' | 'waiting' | 'closed' | 'error'; activity?: string; turnStarted?: number;
   tabCompletion?: boolean;
   todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[]; tokens?: number; context?: { used: number; max: number; percentage: number; detailed?: boolean; categories?: { id?: string; name: string; tokens: number; kind: 'used' | 'free' | 'buffer' | 'deferred' }[] }; earlier: number; slashCommands: string[]; mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string }; host?: string; hostIcon?: string; limits?: Limits; suggestion?: string; stash?: string[]; tasks?: BgTaskView[]; prs?: Record<string, { state: 'open' | 'draft' | 'merged' | 'closed' | 'unknown'; title?: string; tasks?: { done: number; total: number }; checks?: PrCheckView[]; review?: 'approved' | 'changes_requested' | 'required' }>; error?: string;
 }
@@ -136,7 +136,14 @@ export type ToChat =
   | { type: 'changesRevert'; path: string }
   | { type: 'gitCommit'; message: string }
   | { type: 'gitPush' }
-  | { type: 'gitCreatePr' };
+  | { type: 'gitCreatePr' }
+  | { type: 'recentChats' }
+  | { type: 'newChat' }
+  | { type: 'gitInfo' }
+  | { type: 'switchBranch'; branch: string }
+  | { type: 'newWorktree' };
+export type RecentChat = { id: string; title: string; project?: string; state: State; updated?: string };
+export type GitInfo = { isRepo: boolean; branch?: string; branches: string[]; dirty: boolean };
 
 // ---- graph (mirrors src/graph.ts)
 export type GNode =

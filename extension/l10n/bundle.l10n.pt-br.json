@@ -299,5 +299,10 @@
   "git add failed: {0}": "git add falhou: {0}",
   "Committed: {0}": "Commit feito: {0}",
   "Could not revert {0}: {1}": "Não foi possível reverter {0}: {1}",
-  "Could not create the pull request: {0}": "Não foi possível criar o pull request: {0}"
+  "Could not create the pull request: {0}": "Não foi possível criar o pull request: {0}",
+  "Select some text in the terminal first.": "Selecione algum texto no terminal primeiro.",
+  "Open a chat first, then send the selection to it.": "Abra um chat primeiro e depois envie a seleção para ele.",
+  "Switch anyway": "Trocar mesmo assim",
+  "{0} has uncommitted changes. Git carries them over to {1}, or refuses if they conflict.": "{0} tem alterações não commitadas. O git as leva para {1}, ou recusa se houver conflito.",
+  "Could not switch to {0}: {1}": "Não foi possível trocar para {0}: {1}"
 }
