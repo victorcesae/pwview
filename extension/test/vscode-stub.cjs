@@ -34,7 +34,7 @@ class MarkdownString {
     return this;
   }
 }
-const config = { agentCommand: 'claude', agentArgs: [], days: 3, pollSeconds: 3, defaultSurface: 'chat' };
+const config = { agentCommand: 'claude', agentArgs: [], days: 3, pollSeconds: 3, defaultSurface: 'chat', get sidebarGrouping() { return process.env.TEST_GROUPING ?? 'chats'; } };
 module.exports = {
   Range: class { constructor(start, end) { this.start = start; this.end = end; } },
   InlineCompletionItem: class { constructor(insertText, range) { this.insertText = insertText; this.range = range; } },

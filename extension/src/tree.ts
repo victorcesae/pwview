@@ -16,9 +16,11 @@ export type Node =
   | { kind: 'hint'; text: string; command: string; icon: string }
   | { kind: 'hot'; files: HotFile[] }
   | { kind: 'hotfile'; hot: HotFile }
-  | { kind: 'project'; path: string; sessions: Session[]; current: boolean; pinned?: boolean; archived?: boolean }
   | { kind: 'archived'; projects: Extract<Node, { kind: 'project' }>[] }
-  | { kind: 'session'; s: Session; via?: string }
+  | { kind: 'project'; path: string; sessions: Session[]; current: boolean; pinned?: boolean; archived?: boolean; noSessions?: boolean }
+  | { kind: 'section'; which: 'pinned' | 'active' | 'recent' | 'projects'; items: Node[] }
+  | { kind: 'hiddenChats'; sessions: Session[] }
+  | { kind: 'session'; s: Session; via?: string; flat?: boolean }
   | { kind: 'agent'; s: Session; a: AgentInfo; via?: string }
   | { kind: 'changes'; s: Session; agentId?: string; list: Change[]; via?: string }
   | { kind: 'change'; s: Session; c: Change; via?: string }
@@ -97,6 +99,9 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
     private marks: () => { pinned: string[]; archived: string[] } = () => ({ pinned: [], archived: [] }),
   ) {}
 
+  /** Per-chat pin / archive / snooze, kept in globalState (set by registerChatMarks). */
+  chatMarks?: ChatMarks;
+
   private needsSetup = false;
   setNeedsSetup(on: boolean) {
     this.needsSetup = on;
@@ -147,11 +152,16 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
       const hidden = all.filter((p) => p.archived);
       if (!sessions.length)
         out.push({ kind: 'hint', text: vscode.l10n.t('No agent sessions yet. Start one'), command: 'steerhouse.newSession', icon: 'add' });
+      if (vscode.workspace.getConfiguration('steerhouse').get<string>('sidebarGrouping', 'chats') !== 'projects') return [...out, ...this.chatSections(sessions, all)];
       return [...out, ...projects, ...(hidden.length ? [{ kind: 'archived' as const, projects: hidden }] : [])];
     }
     switch (node.kind) {
       case 'archived':
         return node.projects;
+      case 'section':
+        return node.items;
+      case 'hiddenChats':
+        return node.sessions.map((s): Node => ({ kind: 'session', s, flat: true }));
       case 'scm': {
         const r = this.scm?.peek(node.root);
         return r ? scmFiles(r.state).map((file): Node => ({ kind: 'scmfile', root: node.root, file })) : [];
@@ -171,7 +181,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         const rules: Node[] = fs.existsSync(node.path) ? [{ kind: 'rules', scope: 'project', root: node.path }] : [];
         // shown once VS Code's Git has the repository (opened in the background the first time)
         const scm: Node[] = fs.existsSync(node.path) && this.scm?.peek(node.path) ? [{ kind: 'scm', root: node.path }] : [];
-        return [...scm, ...rules, ...files, ...node.sessions.map((s): Node => ({ kind: 'session', s }))];
+        return [...scm, ...rules, ...files, ...(node.noSessions ? [] : node.sessions.map((s): Node => ({ kind: 'session', s })))];
       }
       case 'accounts':
         return [
@@ -207,6 +217,25 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
       default:
         return [];
     }
+  }
+
+  /** The chat-first layout: Pinned, Active, Recent (all folders mixed), then the projects, collapsed. */
+  private chatSections(sessions: Session[], projects: Extract<Node, { kind: 'project' }>[]): Node[] {
+    const cm = this.chatMarks;
+    const newest = [...sessions].sort((a, b) => (b.info.updated ?? '').localeCompare(a.info.updated ?? ''));
+    const hidden = newest.filter((s) => cm && (cm.isArchived(s.info.id) || cm.snoozedUntil(s.info.id)));
+    const shown = newest.filter((s) => !hidden.includes(s));
+    const row = (s: Session): Node => ({ kind: 'session', s, flat: true });
+    const pinned = shown.filter((s) => cm?.isPinned(s.info.id));
+    const rest = shown.filter((s) => !pinned.includes(s));
+    const active = rest.filter((s) => s.info.state !== 'idle');
+    const recent = rest.filter((s) => s.info.state === 'idle');
+    const out: Node[] = [];
+    if (pinned.length) out.push({ kind: 'section', which: 'pinned', items: pinned.map(row) });
+    if (active.length) out.push({ kind: 'section', which: 'active', items: active.map(row) });
+    if (recent.length || hidden.length) out.push({ kind: 'section', which: 'recent', items: [...recent.map(row), ...(hidden.length ? [{ kind: 'hiddenChats' as const, sessions: hidden }] : [])] });
+    if (projects.length) out.push({ kind: 'section', which: 'projects', items: projects.map((p) => ({ ...p, noSessions: true })) });
+    return out;
   }
 
   getTreeItem(node: Node): vscode.TreeItem {
@@ -288,9 +317,26 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         it.description = vscode.l10n.t('{0} projects', node.projects.length);
         return it;
       }
+      case 'section': {
+        const labels = { pinned: vscode.l10n.t('Pinned'), active: vscode.l10n.t('Active'), recent: vscode.l10n.t('Recent'), projects: vscode.l10n.t('Projects') };
+        const icons = { pinned: 'pinned', active: 'pulse', recent: 'history', projects: 'folder-library' };
+        const it = new vscode.TreeItem(labels[node.which], node.which === 'projects' ? C.Collapsed : C.Expanded);
+        it.id = `section:${node.which}`;
+        it.iconPath = new vscode.ThemeIcon(icons[node.which]);
+        it.description = String(node.items.filter((n) => n.kind !== 'hiddenChats').length);
+        it.contextValue = `section-${node.which}`;
+        return it;
+      }
+      case 'hiddenChats': {
+        const it = new vscode.TreeItem(vscode.l10n.t('Archived ({0})', node.sessions.length), C.Collapsed);
+        it.id = 'hiddenChats';
+        it.iconPath = new vscode.ThemeIcon('archive');
+        it.tooltip = vscode.l10n.t('Archived and snoozed chats');
+        return it;
+      }
       case 'project': {
         const wt = worktreeInfo(node.path);
-        const it = new vscode.TreeItem(path.basename(node.path) || node.path, node.current && !node.archived ? C.Expanded : C.Collapsed);
+        const it = new vscode.TreeItem(path.basename(node.path) || node.path, node.current && !node.archived && !node.noSessions ? C.Expanded : C.Collapsed);
         it.id = `project:${node.path}`;
         it.iconPath = new vscode.ThemeIcon(wt ? 'git-branch' : node.pinned ? 'pinned' : node.current ? 'root-folder-opened' : 'folder');
         const working = node.sessions.filter((s) => s.info.state === 'working').length;
@@ -314,7 +360,11 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         // the agent's own mark (Claude, GPT, Llama…); a spinner while it works
         it.iconPath = i.state === 'working' ? stateIcon('working') : vendorIcon(i.model);
         const bits = [listAccounts().length > 1 ? `👤 ${listAccounts().find((a) => a.id === i.account)?.name ?? i.account}` : '', this.attached().has(i.id) ? '⌨ terminal' : '', i.model ? modelLabel(i.model) : '', i.branch, `${i.edits} edits`, i.agents.length ? `${i.agents.length} agents` : '', i.pendingComments ? `${i.pendingComments} comments queued` : '', ago(i.updated)];
-        it.description = bits.filter(Boolean).join(' · ');
+        it.description = node.flat ? [path.basename(i.project) || i.project, i.branch, ago(i.updated)].filter(Boolean).join(' · ') : bits.filter(Boolean).join(' · ');
+        const cm = this.chatMarks;
+        const snoozed = cm?.snoozedUntil(i.id);
+        if (node.flat && cm?.isArchived(i.id)) it.description += ' · ' + vscode.l10n.t('archived');
+        else if (node.flat && snoozed) it.description += ' · ' + vscode.l10n.t('hidden until {0}', new Date(snoozed).toLocaleString());
         const md = new vscode.MarkdownString(undefined, true);
         md.appendMarkdown(`**${i.title}**\n\n`);
         md.appendMarkdown(`$(folder) \`${i.project}\`  \n`);
@@ -324,7 +374,8 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         if (i.lastPrompt) md.appendMarkdown(`---\n**Last prompt:** ${clip(i.lastPrompt, 400)}\n\n`);
         if (i.linked.length) md.appendMarkdown(`$(link) Shares files with ${i.linked.length} other session(s)\n`);
         it.tooltip = md;
-        it.contextValue = 'session';
+        // "session pinned hidden": menus match the words they need (\bsession\b keeps the old menus)
+        it.contextValue = ['session', cm?.isPinned(i.id) ? 'pinned' : 'unpinned', cm && (cm.isArchived(i.id) || snoozed) ? 'hidden' : 'shown'].join(' ');
         if (this.attached().has(i.id)) md.appendMarkdown(`
 $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
         it.command = { command: 'steerhouse.openSession', title: 'Open', arguments: [i.id] };
@@ -445,4 +496,55 @@ $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
       }
     }
   }
+}
+
+/** Per-chat marks in globalState: pinned ids, archived ids, and snoozed ids with the time they come back. */
+export class ChatMarks {
+  constructor(private state: vscode.Memento) {}
+  private list = (k: string) => this.state.get<string[]>(k, []);
+  isPinned = (id: string) => this.list('steerhouse.chatPinned').includes(id);
+  isArchived = (id: string) => this.list('steerhouse.chatArchived').includes(id);
+  /** when a snoozed chat comes back (ms), or undefined if it is not snoozed now */
+  snoozedUntil(id: string): number | undefined {
+    const t = this.state.get<Record<string, number>>('steerhouse.chatSnoozed', {})[id];
+    return t && t > Date.now() ? t : undefined;
+  }
+  async set(list: 'chatPinned' | 'chatArchived', ids: string[], on: boolean) {
+    const k = `steerhouse.${list}`;
+    const cur = this.list(k).filter((x) => !ids.includes(x));
+    await this.state.update(k, on ? [...cur, ...ids] : cur);
+  }
+  async snooze(ids: string[], ms: number | undefined) {
+    const now = Date.now();
+    const cur = Object.fromEntries(Object.entries(this.state.get<Record<string, number>>('steerhouse.chatSnoozed', {})).filter(([id, t]) => t > now && !ids.includes(id)));
+    if (ms) for (const id of ids) cur[id] = now + ms;
+    await this.state.update('steerhouse.chatSnoozed', cur);
+  }
+}
+
+/** Pin / unpin / snooze / archive commands for chats in the tree. Menus pass the clicked node and the selection. */
+export function registerChatMarks(ctx: vscode.ExtensionContext, tree: SessionsTree): vscode.Disposable[] {
+  const cm = (tree.chatMarks = new ChatMarks(ctx.globalState));
+  const ids = (n: unknown, sel?: unknown[]) =>
+    [...new Set(((sel?.length ? sel : [n]) as (Node | undefined)[]).filter((x): x is Extract<Node, { kind: 'session' }> => x?.kind === 'session').map((x) => x.s.info.id))];
+  const cmd = (name: string, run: (list: string[]) => Promise<unknown>) =>
+    vscode.commands.registerCommand(name, async (n?: unknown, sel?: unknown[]) => {
+      const list = ids(n, sel);
+      if (!list.length) return;
+      await run(list);
+      tree.refresh();
+    });
+  const DAY = 86_400_000;
+  // re-show chats whose snooze ran out
+  const timer = setInterval(() => tree.refresh(), 10 * 60_000);
+  return [
+    { dispose: () => clearInterval(timer) },
+    vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('steerhouse.sidebarGrouping') && tree.refresh()),
+    cmd('steerhouse.pinChat', (l) => cm.set('chatPinned', l, true)),
+    cmd('steerhouse.unpinChat', (l) => cm.set('chatPinned', l, false)),
+    cmd('steerhouse.snoozeChatDay', (l) => cm.snooze(l, DAY)),
+    cmd('steerhouse.snoozeChatWeek', (l) => cm.snooze(l, 7 * DAY)),
+    cmd('steerhouse.archiveChat', async (l) => (await cm.set('chatPinned', l, false), cm.set('chatArchived', l, true))),
+    cmd('steerhouse.unarchiveChat', async (l) => (await cm.set('chatArchived', l, false), cm.snooze(l, undefined))),
+  ];
 }

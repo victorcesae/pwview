@@ -31,7 +31,7 @@ import { usageReport } from './usage';
 import { addLink, briefing, sameConnection } from './links';
 import { PRESETS, listModels, secretKey, vendorOf } from './providers';
 import { addAccount, addProvider, listAccounts, preferredAccount, removeAccount, setPreferred, accountEnv, type Account, addCursorAccount, cursorAccountEnv, listCursorAccounts, removeCursorAccount, renameAccount, type CursorAccount } from './accounts';
-import { Node, SessionsTree, setMediaRoot } from './tree';
+import { Node, SessionsTree, registerChatMarks, setMediaRoot } from './tree';
 import { agentExecutable, ago, clip, runAgent } from './util';
 
 const SCHEME = 'steerhouse';
@@ -634,6 +634,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     // tabs saved by AgentLens (the old name): without this VS Code waits for them forever
     vscode.window.registerWebviewPanelSerializer('agentlens.chat', chatSerializer),
     vscode.window.registerWebviewPanelSerializer('agentlens.dashboard', { deserializeWebviewPanel: async (panel) => panel.dispose() }),
+    ...registerChatMarks(ctx, tree),
     vscode.commands.registerCommand('steerhouse.pinProject', (n?: { path?: string }) => mark('pinned', n?.path, true)),
     vscode.commands.registerCommand('steerhouse.unpinProject', (n?: { path?: string }) => mark('pinned', n?.path, false)),
     vscode.commands.registerCommand('steerhouse.archiveProject', async (n?: { path?: string }) => (await mark('pinned', n?.path, false), mark('archived', n?.path, true))),

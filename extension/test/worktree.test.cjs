@@ -57,6 +57,7 @@ test('tree: pinned projects first, archived ones under "Archived"', async () => 
   const out2 = path.join(os.tmpdir(), 'steerhouse-tree-build');
   execSync(`npx esbuild src/tree.ts --bundle --platform=node --format=cjs --outdir="${out2}" --alias:vscode="${path.join(__dirname, 'vscode-stub.cjs')}" --log-level=error`, { cwd: root });
   const { SessionsTree } = require(path.join(out2, 'tree.js'));
+  process.env.TEST_GROUPING = 'projects'; // the old, by-project layout
   const s = (id, project, updated) => ({ info: { id, project, title: id, state: 'idle', updated, agents: [], edits: 0, linked: [] }, t: { events: [], changes: [] }, agents: [] });
   const sessions = [s('a', '/p/alpha', '2026-11-08'), s('b', '/p/beta', '2026-11-07'), s('c', '/p/gamma', '2026-11-06')];
   const tree = new SessionsTree(() => sessions, () => 'all', () => new Set(), () => ({ pinned: ['/p/gamma'], archived: ['/p/beta'] }));
@@ -84,6 +85,7 @@ test('tree: a project that is a worktree says so (main repo and branch)', async 
   const item = tree.getTreeItem(tree.getChildren().find((n) => n.kind === 'project'));
   assert.match(item.description, /worktree of shop · steerhouse\/try-it/);
   assert.match(item.contextValue, /\bworktree\b/);
+  delete process.env.TEST_GROUPING;
   assert.strictEqual(item.iconPath.id, 'git-branch');
 });
 
@@ -119,4 +121,35 @@ test('delete: trash on this machine, never on a remote (its file system refuses 
     { path: '/a', recursive: true, useTrash: true },
     { path: '/b', recursive: true, useTrash: false },
   ]);
+});
+
+test('tree: by chat — Pinned, Active, Recent across folders, Archived at the end, projects at the bottom', () => {
+  const { SessionsTree, ChatMarks } = require(path.join(os.tmpdir(), 'steerhouse-tree-build', 'tree.js'));
+  delete process.env.TEST_GROUPING;
+  const s = (id, project, updated, state = 'idle') => ({ info: { id, project, title: id, state, updated, branch: 'main', agents: [], edits: 0, linked: [] }, t: { events: [], changes: [] }, agents: [] });
+  const sessions = [s('a', '/p/alpha', '2026-11-01'), s('b', '/p/beta', '2026-11-05'), s('c', '/p/alpha', '2026-11-03', 'working'), s('d', '/p/beta', '2026-11-04'), s('e', '/p/beta', '2026-11-02')];
+  const store = new Map();
+  const memento = { get: (k, d) => (store.has(k) ? store.get(k) : d), update: async (k, v) => void store.set(k, v) };
+  const tree = new SessionsTree(() => sessions, () => 'all', () => new Set());
+  const cm = (tree.chatMarks = new ChatMarks(memento));
+  return (async () => {
+    await cm.set('chatPinned', ['a'], true);
+    await cm.set('chatArchived', ['d'], true);
+    await cm.snooze(['e'], 86400000);
+    const top = tree.getChildren().filter((n) => n.kind === 'section');
+    assert.deepStrictEqual(top.map((n) => n.which), ['pinned', 'active', 'recent', 'projects']);
+    const ids = (n) => tree.getChildren(n).filter((x) => x.kind === 'session').map((x) => x.s.info.id);
+    assert.deepStrictEqual(ids(top[0]), ['a']);
+    assert.deepStrictEqual(ids(top[1]), ['c']);
+    assert.deepStrictEqual(ids(top[2]), ['b']);
+    const hidden = tree.getChildren(top[2]).find((x) => x.kind === 'hiddenChats');
+    assert.deepStrictEqual(ids(hidden), ['d', 'e']);
+    const row = tree.getTreeItem(tree.getChildren(top[0])[0]);
+    assert.match(row.description, /^alpha · main · /);
+    assert.match(row.contextValue, /^session pinned shown/);
+    assert.match(tree.getTreeItem(tree.getChildren(hidden)[0]).contextValue, /^session unpinned hidden/);
+    const projects = tree.getChildren(top[3]);
+    assert.ok(projects.every((p) => p.kind === 'project' && p.noSessions));
+    assert.ok(projects.every((p) => tree.getChildren(p).every((x) => x.kind !== 'session')));
+  })();
 });

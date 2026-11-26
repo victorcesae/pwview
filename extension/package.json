@@ -373,6 +373,39 @@
         "icon": "$(trash)"
       },
       {
+        "command": "steerhouse.pinChat",
+        "title": "%cmd.pin.chat%",
+        "category": "Steerhouse",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "steerhouse.unpinChat",
+        "title": "%cmd.unpin.chat%",
+        "category": "Steerhouse",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "steerhouse.snoozeChatDay",
+        "title": "%cmd.snooze.chat.day%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.snoozeChatWeek",
+        "title": "%cmd.snooze.chat.week%",
+        "category": "Steerhouse"
+      },
+      {
+        "command": "steerhouse.archiveChat",
+        "title": "%cmd.archive.chat%",
+        "category": "Steerhouse",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "steerhouse.unarchiveChat",
+        "title": "%cmd.unarchive.chat%",
+        "category": "Steerhouse"
+      },
+      {
         "command": "steerhouse.pinProject",
         "title": "%cmd.pin.project%",
         "category": "Steerhouse",
@@ -619,27 +652,27 @@
       "view/item/context": [
         {
           "command": "steerhouse.messageSession",
-          "when": "view == steerhouse.sessions && viewItem == session",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session\\b/",
           "group": "inline@1"
         },
         {
           "command": "steerhouse.steer",
-          "when": "view == steerhouse.sessions && viewItem == session",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session\\b/",
           "group": "1_send@1"
         },
         {
           "command": "steerhouse.queue",
-          "when": "view == steerhouse.sessions && viewItem == session",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session\\b/",
           "group": "1_send@2"
         },
         {
           "command": "steerhouse.sendNow",
-          "when": "view == steerhouse.sessions && viewItem == session",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session\\b/",
           "group": "1_send@3"
         },
         {
           "command": "steerhouse.resumeSession",
-          "when": "view == steerhouse.sessions && viewItem == session",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session\\b/",
           "group": "inline@2"
         },
         {
@@ -659,12 +692,12 @@
         },
         {
           "command": "steerhouse.linkSession",
-          "when": "view == steerhouse.sessions && viewItem == session",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session\\b/",
           "group": "2_more@1"
         },
         {
           "command": "steerhouse.resumeInTerminal",
-          "when": "view == steerhouse.sessions && viewItem == session",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session\\b/",
           "group": "2_more@2"
         },
         {
@@ -689,13 +722,53 @@
         },
         {
           "command": "steerhouse.deleteSession",
-          "when": "view == steerhouse.sessions && viewItem == session",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session\\b/",
           "group": "9_delete@1"
         },
         {
           "command": "steerhouse.newChatInWorktree",
           "when": "view == steerhouse.sessions && viewItem =~ /^project\\b/",
           "group": "inline@1"
+        },
+        {
+          "command": "steerhouse.pinChat",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session unpinned shown/",
+          "group": "inline@2"
+        },
+        {
+          "command": "steerhouse.unpinChat",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session pinned/",
+          "group": "inline@2"
+        },
+        {
+          "command": "steerhouse.pinChat",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session unpinned shown/",
+          "group": "2_organize@1"
+        },
+        {
+          "command": "steerhouse.unpinChat",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session pinned/",
+          "group": "2_organize@1"
+        },
+        {
+          "command": "steerhouse.snoozeChatDay",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session .* shown/",
+          "group": "2_organize@2"
+        },
+        {
+          "command": "steerhouse.snoozeChatWeek",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session .* shown/",
+          "group": "2_organize@3"
+        },
+        {
+          "command": "steerhouse.archiveChat",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session .* shown/",
+          "group": "2_organize@4"
+        },
+        {
+          "command": "steerhouse.unarchiveChat",
+          "when": "view == steerhouse.sessions && viewItem =~ /^session .* hidden/",
+          "group": "2_organize@4"
         },
         {
           "command": "steerhouse.pinProject",
@@ -992,6 +1065,30 @@
           "when": "false"
         },
         {
+          "command": "steerhouse.pinChat",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.unpinChat",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.snoozeChatDay",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.snoozeChatWeek",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.archiveChat",
+          "when": "false"
+        },
+        {
+          "command": "steerhouse.unarchiveChat",
+          "when": "false"
+        },
+        {
           "command": "steerhouse.pinProject",
           "when": "false"
         },
@@ -1118,6 +1215,13 @@
     "configuration": {
       "title": "Steerhouse",
       "properties": {
+        "steerhouse.sidebarGrouping": {
+          "type": "string",
+          "enum": ["chats", "projects"],
+          "enumDescriptions": ["%setting.sidebarGrouping.chats%", "%setting.sidebarGrouping.projects%"],
+          "default": "chats",
+          "description": "%setting.sidebarGrouping%"
+        },
         "steerhouse.days": {
           "type": "number",
           "default": 3,

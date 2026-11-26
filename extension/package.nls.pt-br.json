@@ -119,5 +119,14 @@
   "cmd.scm-pull": "Pull",
   "cmd.scm-openView": "Abrir Controle do Código-Fonte",
   "cmd.scm-openFile": "Abrir Arquivo",
-  "cmd.scm-openChange": "Abrir Alterações"
+  "cmd.scm-openChange": "Abrir Alterações",
+  "cmd.pin.chat": "Fixar chat",
+  "cmd.unpin.chat": "Desafixar chat",
+  "cmd.snooze.chat.day": "Ocultar por 1 dia",
+  "cmd.snooze.chat.week": "Ocultar por 1 semana",
+  "cmd.archive.chat": "Arquivar chat",
+  "cmd.unarchive.chat": "Desarquivar chat",
+  "setting.sidebarGrouping": "Como a visão Sessões é organizada.",
+  "setting.sidebarGrouping.chats": "Por chat: chats fixados, ativos e recentes de todas as pastas, com os projetos no final.",
+  "setting.sidebarGrouping.projects": "Por pasta de projeto, com os chats de cada projeto dentro (o layout antigo)."
 }
