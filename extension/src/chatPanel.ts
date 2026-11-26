@@ -9,6 +9,7 @@ import { openUrl } from './browser';
 import { handleChanges, isChangesMsg, type ChangesMsg } from './gitActions';
 import { findUrls } from './bgtasks';
 import { completeFiles } from './folders';
+import { defaultBranch, mentionCompletions, resolveMentions, transcriptSummary, CAP } from './mentions';
 import { saveUpload } from './uploads';
 import { openFileAt } from './fileActions';
 import { isShuttingDown } from './relayClient';
@@ -183,6 +184,12 @@ export class Chats {
     o.panel.reveal();
     this.send(o, { type: 'insertPaste', text });
     return true;
+  }
+
+  /** Another open chat in short, for @chat:<title>. */
+  private chatSummary(self: Open, title: string) {
+    const x = this.open.find((y) => y !== self && y.chat.state.title === title) ?? this.open.find((y) => y !== self && y.chat.state.title.startsWith(title));
+    return x && transcriptSummary(x.chat.state.title, x.chat.state.items);
   }
 
   /** Opens the command palette of the chat in front. */
@@ -469,8 +476,11 @@ export class Chats {
       case 'ready':
         o.sent = undefined; // (re)load: send everything
         return this.post(o);
-      case 'send':
+      case 'send': {
+        // @problems, @diff, @chat:, @url:, path#L5-10: the agent reads what they stand for, the bubble keeps the names
+        for (const note of await resolveMentions(m.text, { cwd: c.state.cwd, problems: () => problemsIn(c.state.cwd), chat: (t) => this.chatSummary(o, t) })) c.addNote(note);
         return c.send(m.text, m.images, m.priority);
+      }
       case 'allowRule':
         try {
           const file = c.allowRule(m.id, m.rule);
@@ -621,7 +631,9 @@ export class Chats {
           return vscode.window.showErrorMessage(vscode.l10n.t('Could not add {0}: {1}', m.name, String((e as Error)?.message ?? e)));
         }
       case 'completeFiles': {
-        const files = await completeFiles(c.state.cwd, m.query).catch(() => []);
+        const others = this.open.filter((x) => x !== o).map((x) => x.chat.state.title);
+        const branch = /^d(i(ff?)?)?$|^diff:/.test(m.query) ? await defaultBranch(c.state.cwd).catch(() => undefined) : undefined;
+        const files = [...(await completeFiles(c.state.cwd, m.query).catch(() => [])), ...mentionCompletions(m.query, others, branch)];
         return this.send(o, { type: 'fileCompletions', query: m.query, files });
       }
       case 'setTabCompletion':
@@ -705,4 +717,21 @@ function html(webview: vscode.Webview, root: vscode.Uri) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="${css}"></head>
 <body><div id="root"></div><script type="module" nonce="${nonce}" src="${js}"></script></body></html>`;
+}
+
+/** VS Code's errors and warnings for files in the chat's folder, for @problems. */
+function problemsIn(cwd: string) {
+  const root = path.resolve(cwd) + path.sep;
+  const rows: string[] = [];
+  let total = 0;
+  for (const [uri, list] of vscode.languages.getDiagnostics()) {
+    if (!(uri.fsPath + path.sep).startsWith(root) && uri.fsPath !== cwd) continue;
+    for (const d of list) {
+      if (d.severity > vscode.DiagnosticSeverity.Warning) continue;
+      total++;
+      if (rows.length < CAP.problems) rows.push(`${path.relative(cwd, uri.fsPath).replace(/\\/g, '/')}:${d.range.start.line + 1}: ${d.severity === vscode.DiagnosticSeverity.Error ? 'error' : 'warning'}: ${d.message.split('\n')[0]}${d.source ? ` [${d.source}]` : ''}`);
+    }
+  }
+  if (!total) return 'No errors or warnings in this folder.';
+  return `${total} problem(s)${total > rows.length ? `, first ${rows.length}` : ''}:\n${rows.join('\n')}`;
 }
