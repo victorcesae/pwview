@@ -43,6 +43,7 @@ export type RuntimeEvent =
   | { type: 'question'; requestId: string; questions: Question[] }
   | { type: 'plan'; text: string }
   | { type: 'todos'; todos: Todo[] }
+  | { type: 'commands'; /** slash commands the agent offers */ names: string[] }
   | { type: 'notice'; text: string; /** a later notice with the same key replaces it (retries) */ key?: string }
   | { type: 'turnEnd'; usage?: { input: number; output: number; total: number; contextWindow?: number }; costUsd?: number; error?: string; interrupted?: boolean };
 
