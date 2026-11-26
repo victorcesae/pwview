@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.32
+- Other agents in the Steerhouse chat, like t3code: Codex (codex app-server: steer, approvals, plans, diffs), Gemini CLI and other ACP agents (Kiro, Copilot CLI, Grok, or your own in steerhouse.acpAgents), OpenCode (opencode serve) and Cursor (cursor-agent). Pick the agent when you start a chat, or use New Codex / Gemini / OpenCode / Cursor Chat. Controls an agent doesn't support are hidden. Each agent needs its own login (codex login, gemini, opencode auth login, cursor-agent login).
+- /steerhouse in the chat opens Steerhouse's settings (terminal position, shell, sidebar, notifications, Tab completion, verify command, where chats open), each with its value, changed right there.
+- A Steerhouse button in the editor's title bar (where Claude Code has its own) starts a chat in that file's project.
+- ! commands run in your shell: steerhouse.shell, else your default VS Code terminal profile (PowerShell on Windows, not cmd).
+- Terminals open as tabs next to the ones already on the right, not in a new column each time; following a background command shows your prompt line with the command, then its output.
+- The Thinking row has the same layout as the step rows (chevron on the right).
+
 ## 1.0.31
 - Turns read like t3code: "Working for 9s" over the running turn's steps, then "Worked for 19s ›" folded with only the answer showing. Steps have one compact row each with an icon by type (›_ commands, search, file, edit with +/−, browser), under "Ran 4 commands and searched code 1 time".
 - The running command shows in the timeline with its own timer; the line above the box is just "Working · 1m 35s", or "Waiting on 3 subagents: … · Stop". Background commands get a row: "Running · Start dev server · 25s · Details · Stop".
