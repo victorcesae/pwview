@@ -53,6 +53,7 @@
   "cmd.send.now": "Send Now",
   "cmd.new.chat": "New Chat",
   "cmd.new.codex.chat": "New Codex Chat",
+  "cmd.new.opencode.chat": "New OpenCode Chat",
   "cmd.resume.in.terminal": "Resume in Terminal",
   "cmd.link.another.session": "Link Another Session…",
   "cmd.check.setup": "Check Setup",

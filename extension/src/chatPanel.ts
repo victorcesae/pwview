@@ -20,10 +20,11 @@ import { addLink, briefing, loadLinks, removeLink, sameConnection } from './link
 import { agentExecutable, which } from './util';
 import { RuntimeChat, asRuntimeChat, isRuntimeChat } from './runtimeChat';
 import { codexRuntime } from './runtimes/codex';
+import { opencodeRuntime } from './runtimes/opencode';
 import type { AgentRuntime } from './runtimes/types';
 
 /** Agents other than Claude Code that run in the Steerhouse chat (found on PATH). */
-export const RUNTIMES: Record<string, AgentRuntime> = { codex: codexRuntime(() => which('codex')) };
+export const RUNTIMES: Record<string, AgentRuntime> = { codex: codexRuntime(() => which('codex')), opencode: opencodeRuntime(() => which('opencode')) };
 import { LOCAL_COMMANDS, runLocalCommand, type LocalCommand } from './localCommands';
 import { accountEnv, type Account } from './accounts';
 import { checkoutWorktree, git, repoRoot } from './worktree';

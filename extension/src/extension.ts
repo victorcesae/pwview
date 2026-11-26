@@ -850,6 +850,13 @@ export function activate(ctx: vscode.ExtensionContext) {
       ctx.globalState.update('steerhouse.lastAgent', 'runtime:codex');
       chats.start({ cwd, runtime: 'codex' });
     }),
+    vscode.commands.registerCommand('steerhouse.newOpenCodeChat', async (n?: { path?: string } | vscode.Uri) => {
+      const cwd = n instanceof vscode.Uri ? n.fsPath : (n?.path ?? (await pickFolder(ctx)));
+      if (!cwd) return;
+      if (!(await RUNTIMES.opencode.detect()).exe) return vscode.window.showWarningMessage(vscode.l10n.t('OpenCode was not found. Install it (npm i -g opencode-ai) and add a provider with `opencode auth login`.'));
+      ctx.globalState.update('steerhouse.lastAgent', 'runtime:opencode');
+      chats.start({ cwd, runtime: 'opencode' });
+    }),
     vscode.commands.registerCommand('steerhouse.newChat', () => {
       void (async () => {
         const cwd = await pickFolder(ctx);
