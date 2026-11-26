@@ -143,5 +143,6 @@
   "setting.terminal.location": "Where Steerhouse opens terminals (Open terminal, /terminal, following a command's output).",
   "setting.terminal.location.right": "Beside the chat, as a tab on the right",
   "setting.terminal.location.bottom": "In the bottom panel, like VS Code's own terminals",
-  "cmd.add.account.or.provider": "Add Account or Provider…"
+  "cmd.add.account.or.provider": "Add Account or Provider…",
+  "setting.shell": "Shell for commands you run from the chat box with !. \"auto\" uses your default VS Code terminal profile (PowerShell on Windows unless you chose another). Or a name (powershell, pwsh, cmd, git bash, bash, zsh) or a full path."
 }

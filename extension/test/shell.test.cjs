@@ -263,3 +263,21 @@ test('tool pictures: shown from a live result and from a transcript, too large o
   assert.deepStrictEqual(read.images, ['data:image/png;base64,iVBORw0KGgo=']);
   assert.ok(!/\[image\]/.test(read.result ?? ''), 'no placeholder text');
 });
+
+test('shell: each kind of shell gets the command line its own way', () => {
+  const { shellSpec } = S;
+  assert.deepStrictEqual(shellSpec('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe').args('ls'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', 'ls']);
+  assert.deepStrictEqual(shellSpec('pwsh').args('ls'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', 'ls']);
+  assert.deepStrictEqual(shellSpec('C:\\Windows\\system32\\cmd.exe').args('dir'), ['/d', '/s', '/c', '"dir"']);
+  assert.deepStrictEqual(shellSpec('/bin/zsh').args('ls'), ['-lc', 'ls']);
+  assert.deepStrictEqual(shellSpec('C:\\Program Files\\Git\\bin\\bash.exe').args('ls'), ['-lc', 'ls']);
+});
+
+test('shell: runs in the given shell', async () => {
+  const { ShellRun, shellSpec } = S;
+  const r = await new Promise((done) => {
+    const run = new ShellRun('echo "$0"', { cwd: process.cwd(), env: process.env, shell: shellSpec('/bin/bash') }, () => {}, (x) => done({ ...x, out: run.output }));
+  });
+  assert.equal(r.exitCode, 0);
+  assert.match(r.out, /bash/);
+});

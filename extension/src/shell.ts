@@ -17,15 +17,32 @@ export interface ShellDone {
   error?: string;
 }
 
+/** The shell a command runs in: its executable and how it is given one command line. */
+export interface ShellSpec {
+  path: string;
+  args: (command: string) => string[];
+}
+
+/** How to hand a command line to a given shell executable (PowerShell, cmd, bash-like). */
+export function shellSpec(exe: string): ShellSpec {
+  const name = exe.replace(/\\/g, '/').split('/').pop()!.toLowerCase().replace(/\.exe$/, '');
+  if (name === 'powershell' || name === 'pwsh') return { path: exe, args: (c) => ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', c] };
+  if (name === 'cmd') return { path: exe, args: (c) => ['/d', '/s', '/c', `"${c}"`] };
+  if (name === 'fish' || name === 'nu') return { path: exe, args: (c) => ['-c', c] };
+  return { path: exe, args: (c) => ['-lc', c] }; // bash, zsh, sh, Git Bash
+}
+
 /** Runs one command line. No stdin, so a command waiting for input ends instead of hanging. */
 export class ShellRun {
   private child: ChildProcess;
   private done = false;
   output = '';
 
-  constructor(command: string, opts: { cwd: string; env: NodeJS.ProcessEnv }, onOutput: () => void, onDone: (r: ShellDone) => void) {
+  constructor(command: string, opts: { cwd: string; env: NodeJS.ProcessEnv; shell?: ShellSpec }, onOutput: () => void, onDone: (r: ShellDone) => void) {
     const win = process.platform === 'win32';
-    this.child = spawn(command, { cwd: opts.cwd, env: opts.env, shell: win ? true : process.env.SHELL || true, stdio: ['ignore', 'pipe', 'pipe'], detached: !win, windowsHide: true });
+    this.child = opts.shell
+      ? spawn(opts.shell.path, opts.shell.args(command), { cwd: opts.cwd, env: opts.env, stdio: ['ignore', 'pipe', 'pipe'], detached: !win, windowsHide: true, windowsVerbatimArguments: /cmd(\.exe)?$/i.test(opts.shell.path) })
+      : spawn(command, { cwd: opts.cwd, env: opts.env, shell: win ? true : process.env.SHELL || true, stdio: ['ignore', 'pipe', 'pipe'], detached: !win, windowsHide: true });
     const add = (d: Buffer) => {
       this.output = (this.output + d.toString('utf8')).slice(-OUTPUT_LIMIT);
       onOutput();

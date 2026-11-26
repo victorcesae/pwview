@@ -209,3 +209,37 @@ export function terminalLocation(): vscode.TerminalEditorLocationOptions | vscod
   const where = vscode.workspace.getConfiguration('steerhouse').get<string>('terminalLocation', 'right');
   return where === 'bottom' ? vscode.TerminalLocation.Panel : { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false };
 }
+
+/**
+ * The shell for "!" commands: steerhouse.shell when set, else the user's default VS Code terminal
+ * profile (on Windows that is PowerShell unless they chose another), else the system shell.
+ */
+export function userShell(): string | undefined {
+  const own = vscode.workspace.getConfiguration('steerhouse').get<string>('shell', 'auto').trim();
+  const os = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'osx' : 'linux';
+  const winPath = (name: string): string | undefined => {
+    const n = name.toLowerCase();
+    if (n === 'cmd' || n === 'command prompt') return process.env.ComSpec || 'cmd.exe';
+    if (n === 'pwsh') return which('pwsh') ?? 'powershell.exe';
+    if (n === 'powershell') return which('pwsh') ?? 'powershell.exe';
+    if (n === 'git bash' || n === 'gitbash' || n === 'bash') {
+      const pf = process.env.ProgramFiles || 'C:\\Program Files';
+      const gb = `${pf}\\Git\\bin\\bash.exe`;
+      return require('fs').existsSync(gb) ? gb : which('bash');
+    }
+    return undefined;
+  };
+  if (own && own !== 'auto') return process.platform === 'win32' ? (winPath(own) ?? own) : (which(own) ?? own);
+  // the default terminal profile, as VS Code itself would open it
+  const term = vscode.workspace.getConfiguration('terminal.integrated');
+  const profileName = term.get<string>(`defaultProfile.${os}`);
+  if (profileName) {
+    const profile = term.get<Record<string, { path?: string | string[]; source?: string }>>(`profiles.${os}`)?.[profileName];
+    const p = Array.isArray(profile?.path) ? profile!.path[0] : profile?.path;
+    if (p) return p;
+    if (profile?.source) return winPath(profile.source);
+    const byName = process.platform === 'win32' ? winPath(profileName) : which(profileName);
+    if (byName) return byName;
+  }
+  return process.platform === 'win32' ? (which('pwsh') ?? 'powershell.exe') : process.env.SHELL || undefined;
+}

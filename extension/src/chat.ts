@@ -7,7 +7,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { findRelay, RelayProcess, startRelay } from './relayClient';
-import { ShellRun, shellContext, withoutShellContext } from './shell';
+import { ShellRun, shellContext, shellSpec, withoutShellContext } from './shell';
+import { userShell } from './util';
 import { query, type PermissionMode, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -857,7 +858,10 @@ export class ChatSession {
     this.changed();
     const run = new ShellRun(
       command,
-      { cwd: this.opts.cwd, env: { ...process.env, ...(this.opts.account?.env ?? {}) } },
+      { cwd: this.opts.cwd, env: { ...process.env, ...(this.opts.account?.env ?? {}) }, shell: (() => {
+        const exe = userShell();
+        return exe ? shellSpec(exe) : undefined;
+      })() },
       () => {
         item.output = run.output;
         this.changed();

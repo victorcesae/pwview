@@ -1368,6 +1368,12 @@
           "default": [],
           "description": "%setting.code.completion.disabledLanguages%"
         },
+        "steerhouse.shell": {
+          "type": "string",
+          "default": "auto",
+          "examples": ["auto", "powershell", "pwsh", "cmd", "git bash", "bash", "zsh"],
+          "description": "%setting.shell%"
+        },
         "steerhouse.terminalLocation": {
           "type": "string",
           "enum": ["right", "bottom"],
