@@ -91,7 +91,12 @@ export interface ChatState {
   tabCompletion?: boolean;
   verify?: VerifyState;
   todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[]; tokens?: number; context?: { used: number; max: number; percentage: number; detailed?: boolean; categories?: { id?: string; name: string; tokens: number; kind: 'used' | 'free' | 'buffer' | 'deferred' }[] }; earlier: number; slashCommands: string[]; mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string }; host?: string; hostIcon?: string; limits?: Limits; suggestion?: string; stash?: string[]; tasks?: BgTaskView[]; prs?: Record<string, { state: 'open' | 'draft' | 'merged' | 'closed' | 'unknown'; title?: string; tasks?: { done: number; total: number }; checks?: PrCheckView[]; review?: 'approved' | 'changes_requested' | 'required' }>; error?: string;
+  /** another agent than Claude Code ('codex'…) and what it supports: unsupported controls are hidden */
+  runtime?: string; caps?: RuntimeCaps;
 }
+export interface RuntimeCaps { steer: boolean; fork: boolean; rewind: boolean; thinking: boolean; todos: boolean; subagents: boolean; approvals: boolean; images: boolean; effort: boolean; permissionModes: boolean }
+/** a control the chat's agent supports (Claude chats have no caps: everything) */
+export const can = (chat: { caps?: RuntimeCaps }, c: keyof RuntimeCaps) => !chat.caps || chat.caps[c];
 export interface VerifyResult { ok: boolean; command: string; durationMs: number; exitCode?: number | null; timedOut?: boolean; cancelled?: boolean }
 export interface VerifyState { enabled?: boolean; command?: string; running?: string; results: Record<string, VerifyResult> }
 export type LinkedSession = { id: string; title: string; state: State; activity?: string };

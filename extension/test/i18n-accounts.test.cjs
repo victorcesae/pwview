@@ -35,7 +35,7 @@ test('i18n: every manifest string has English and pt-BR text', () => {
 });
 
 test('i18n: runtime bundle covers every vscode.l10n.t string in the code', () => {
-  const src = fs.readdirSync(path.join(root, 'src')).map((f) => fs.readFileSync(path.join(root, 'src', f), 'utf8')).join('\n');
+  const src = fs.readdirSync(path.join(root, 'src'), { recursive: true }).filter((f) => /\.ts$/.test(f)).map((f) => fs.readFileSync(path.join(root, 'src', f), 'utf8')).join('\n');
   const used = [...src.matchAll(/vscode\.l10n\.t\('((?:[^'\\]|\\.)+)'/g)].map((m) => m[1].replace(/\\'/g, "'"));
   const pt = JSON.parse(fs.readFileSync(path.join(root, 'l10n', 'bundle.l10n.pt-br.json'), 'utf8'));
   for (const s of new Set(used)) assert.ok(pt[s], `pt-BR for "${s}"`);

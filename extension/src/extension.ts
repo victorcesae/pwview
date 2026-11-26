@@ -27,7 +27,7 @@ import { norm } from './paths';
 import { registerSkills } from './skills';
 import { registerDoctor, syncSetupContext } from './doctor';
 import { attachedSessions, resolveTerminals, terminalFor, typeInto } from './terminals';
-import { Chats } from './chatPanel';
+import { Chats, RUNTIMES } from './chatPanel';
 import { usageReport } from './usage';
 import { addLink, briefing, sameConnection } from './links';
 import { PRESETS, listModels, secretKey, vendorOf } from './providers';
@@ -121,12 +121,14 @@ export function activate(ctx: vscode.ExtensionContext) {
    * chat; other agents installed here (Cursor Agent, Codex…) open in a terminal. Asked whenever
    * there is more than one choice; the last one used comes first.
    */
-  async function pickAgent(cwd: string): Promise<Account | undefined> {
+  async function pickAgent(cwd: string, then: { prompt?: string; title?: string; claudeOnly?: boolean } = {}): Promise<Account | undefined> {
     const all = listAccounts();
     const clis = installedAgents();
+    // other agents that run in the Steerhouse chat (Codex app-server…), when installed
+    const runtimes = then.claudeOnly ? [] : clis.filter((c) => RUNTIMES[c.id]);
     if (all.length === 1 && !clis.length) return all[0];
     const last = ctx.globalState.get<string>('steerhouse.lastAgent') ?? preferredAccount().id;
-    type Item = vscode.QuickPickItem & { a?: Account; cli?: (typeof clis)[number]; cursor?: CursorAccount; add?: string };
+    type Item = vscode.QuickPickItem & { a?: Account; cli?: (typeof clis)[number]; cursor?: CursorAccount; add?: string; runtime?: string };
     const media = vscode.Uri.joinPath(ctx.extensionUri, 'media', 'vendors');
     const items: Item[] = [
       ...all.map((a): Item => ({
@@ -135,6 +137,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         iconPath: vscode.Uri.joinPath(media, `${a.provider ? vendorOf(a.provider.model) : 'anthropic'}.svg`),
         a,
       })),
+      ...runtimes.map((c): Item => ({ label: c.name, description: vscode.l10n.t('Steerhouse chat'), detail: c.exe, iconPath: vscode.Uri.joinPath(media, `${c.vendor}.svg`), runtime: c.id })),
       ...clis.flatMap((c): Item[] => {
         const row = (cursor?: CursorAccount): Item => ({ label: cursor ? `${c.name} · ${cursor.name}` : c.name, description: vscode.l10n.t('opens in a terminal'), detail: c.exe, iconPath: vscode.Uri.joinPath(media, `${c.vendor}.svg`), cli: c, cursor });
         return [row(), ...(c.id === 'cursor' ? listCursorAccounts().map(row) : [])];
@@ -144,7 +147,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       { label: '$(add) ' + vscode.l10n.t('Add a Cursor account…'), add: 'steerhouse.addCursorAccount' },
       { label: '$(server) ' + vscode.l10n.t('Add a model provider (Ollama, OpenRouter…)…'), add: 'steerhouse.addProvider' },
     ];
-    const key = (i: Item) => i.a?.id ?? (i.cli ? 'cli:' + (i.cursor?.id ?? i.cli.id) : '');
+    const key = (i: Item) => i.a?.id ?? (i.runtime ? 'runtime:' + i.runtime : i.cli ? 'cli:' + (i.cursor?.id ?? i.cli.id) : '');
     items.sort((x, y) => Number(key(y) === last) - Number(key(x) === last));
     const pick = await vscode.window.showQuickPick(items, { title: vscode.l10n.t('New chat in {0}', path.basename(cwd)), placeHolder: vscode.l10n.t('Which agent should work here?'), ignoreFocusOut: true });
     if (!pick) return undefined;
@@ -153,6 +156,10 @@ export function activate(ctx: vscode.ExtensionContext) {
       return undefined;
     }
     ctx.globalState.update('steerhouse.lastAgent', key(pick));
+    if (pick.runtime) {
+      chats.start({ cwd, runtime: pick.runtime, prompt: then.prompt, title: then.title });
+      return undefined;
+    }
     if (pick.cli) {
       runCliAgent(pick.cli, cwd, vscode.Uri.joinPath(ctx.extensionUri, 'media'), pick.cursor ? { env: cursorAccountEnv(pick.cursor), label: `${pick.cli.name} · ${pick.cursor.name}` } : {});
       return undefined;
@@ -212,7 +219,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     void pwview.attach(cwd, chat);
   };
   chats.startNew = async (cwd, prompt, title) => {
-    const account = await pickAgent(cwd);
+    const account = await pickAgent(cwd, { prompt, title });
     if (account) chats.start({ cwd, account, env: await envFor(account), prompt, title });
   };
   const surface = () => cfg().get<string>('defaultSurface', 'chat');
@@ -469,7 +476,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (!cwd) return;
     const prompt = await vscode.window.showInputBox({ prompt: vscode.l10n.t('What should the agent do?'), placeHolder: vscode.l10n.t('Leave empty to just open a session') });
     if (prompt === undefined) return;
-    const account = await pickAgent(cwd);
+    const account = await pickAgent(cwd, { prompt: prompt || undefined });
     if (!account) return;
     if (surface() === 'terminal') runAgent(`${clip(prompt || 'agent', 30)}`, cwd, prompt ? [prompt] : [], await envFor(account));
     else chats.start({ cwd, prompt: prompt || undefined, account, env: await envFor(account) });
@@ -603,9 +610,11 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   // Reload Window: reopen the chats that were open, in their tabs, with their settings
   const chatSerializer: vscode.WebviewPanelSerializer = {
-    async deserializeWebviewPanel(panel, state: { sessionId?: string; cwd?: string; title?: string; account?: string } | undefined) {
+    async deserializeWebviewPanel(panel, state: { sessionId?: string; cwd?: string; title?: string; account?: string; runtime?: string } | undefined) {
       try {
         if (!state?.cwd) return panel.dispose();
+        // another agent (Codex…): its thread id reopens it (thread/resume)
+        if (state.runtime) return void chats.start({ cwd: state.cwd, runtime: state.runtime, resume: state.sessionId, title: state.title, panel });
         if (!state.sessionId) {
           // a chat that had no message yet: open it again, fresh, in the same folder
           const account = listAccounts().find((a) => a.name === state.account) ?? listAccounts()[0];
@@ -670,7 +679,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!branch) return;
       const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Creating worktree {0}…', branch) }, () => addWorktree(root, branch));
       if (!r.ok) return vscode.window.showErrorMessage(vscode.l10n.t('Could not create the worktree: {0}', r.error.slice(0, 300)));
-      const account = await pickAgent(r.dir);
+      const account = await pickAgent(r.dir, { title: task || undefined });
       if (account) chats.start({ cwd: r.dir, account, env: await envFor(account), title: task || undefined, prompt: undefined });
       refresh(true);
     }),
@@ -678,7 +687,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('steerhouse.bestOfN', async (from?: { cwd?: string; prompt?: string; model?: string; models?: { value: string; displayName: string }[] }) => {
       const front = chats.frontChat()?.state;
       const src = from?.cwd ? from : front ? { cwd: front.cwd, model: front.model, models: front.models } : {};
-      const account = await pickAgent(src.cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '');
+      const account = await pickAgent(src.cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '', { claudeOnly: true });
       if (!account) return;
       const env = await envFor(account);
       await bestOfN(ctx, {
@@ -834,6 +843,13 @@ export function activate(ctx: vscode.ExtensionContext) {
       pickAgent(cwd).then(async (account) => account && chats.start({ cwd, account, env: await envFor(account) }));
     }),
     // not awaited: the command returns while its pickers wait for an answer
+    vscode.commands.registerCommand('steerhouse.newCodexChat', async (n?: { path?: string } | vscode.Uri) => {
+      const cwd = n instanceof vscode.Uri ? n.fsPath : (n?.path ?? (await pickFolder(ctx)));
+      if (!cwd) return;
+      if (!(await RUNTIMES.codex.detect()).exe) return vscode.window.showWarningMessage(vscode.l10n.t('Codex was not found. Install it (npm i -g @openai/codex) and log in with `codex login`.'));
+      ctx.globalState.update('steerhouse.lastAgent', 'runtime:codex');
+      chats.start({ cwd, runtime: 'codex' });
+    }),
     vscode.commands.registerCommand('steerhouse.newChat', () => {
       void (async () => {
         const cwd = await pickFolder(ctx);

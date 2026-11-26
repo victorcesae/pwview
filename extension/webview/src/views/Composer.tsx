@@ -16,6 +16,7 @@ import { t } from '@/i18n';
 import { BranchPicker } from '@/components/BranchPicker';
 import { cn } from '@/lib/utils';
 import type { ChatState, Effort, PermissionMode, Priority, ToChat } from '@/types';
+import { can } from '@/types';
 
 const post = (m: ToChat) => postAny(m as never);
 const MAX_UPLOAD = 100 * 1024 * 1024;
@@ -620,6 +621,7 @@ export function Composer({ chat }: { chat: ChatState }) {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {can(chat, 'permissionModes') && (
         <Select value={chat.permissionMode} onValueChange={(v) => post({ type: 'setMode', mode: v as PermissionMode })}>
           <SelectTrigger aria-label={t('Permission mode')} title={t('Permission mode')}>
             <ShieldCheck />
@@ -634,6 +636,7 @@ export function Composer({ chat }: { chat: ChatState }) {
             ))}
           </SelectContent>
         </Select>
+        )}
 
         {chat.models.length > 0 && (
           <Select value={model ?? '__current'} onValueChange={(v) => v !== '__current' && post({ type: 'setModel', model: v })}>
@@ -653,6 +656,8 @@ export function Composer({ chat }: { chat: ChatState }) {
           </Select>
         )}
 
+        {can(chat, 'effort') && (
+        <>
         <Select value={chat.effort ?? '__default'} onValueChange={(v) => v !== '__default' && post({ type: 'setEffort', effort: v as Effort })}>
           <SelectTrigger aria-label={t('Effort')} title={t('How hard the model thinks. Higher is slower and costs more.')}>
             <Gauge />
@@ -687,6 +692,8 @@ export function Composer({ chat }: { chat: ChatState }) {
         >
           <Bot className="size-4" />
         </button>
+        </>
+        )}
 
         <BranchPicker prompt={text} />
 

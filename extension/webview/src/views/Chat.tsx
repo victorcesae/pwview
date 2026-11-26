@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { base, cn } from '@/lib/utils';
-import type { ChatData, ChatItem, ChatState, Effort, PermissionMode, Priority, Question, ToChat, Todo } from '@/types';
+import type { ChatData, ChatItem, ChatState, Effort, PermissionMode, Priority, Question, RuntimeCaps, ToChat, Todo } from '@/types';
+import { can } from '@/types';
 import { HunkView } from './Session';
 import { Composer, PRIORITY } from './Composer';
 import { GalleryRow, LightboxProvider, Zoomable } from '@/components/Lightbox';
@@ -531,6 +532,7 @@ function QuestionCard({ it }: { it: Extract<ChatItem, { kind: 'question' }> }) {
 
 /** Your message, with "Edit and run again" (forks the conversation at this point). */
 function UserMessage({ it }: { it: Extract<ChatItem, { kind: 'user' }> }) {
+  const agent = useContext(AgentCtx);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(it.text);
   const area = useRef<HTMLTextAreaElement>(null);
@@ -599,7 +601,7 @@ function UserMessage({ it }: { it: Extract<ChatItem, { kind: 'user' }> }) {
             <Pencil /> {t('Edit')}
           </Button>
         )}
-        {!editing && (
+        {!editing && can(agent, 'rewind') && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="xs" variant="ghost" className="opacity-0 transition-opacity group-hover/msg:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100" title={t('Restore the code or the conversation to this message')} data-restore>
@@ -893,12 +895,12 @@ function rowText(g: ChatItem | ToolItem[]): string {
 }
 
 /** Which model and editor this chat runs on, for the answer avatars. */
-const AgentCtx = createContext<{ model?: string; host?: string; hostIcon?: string }>({});
+const AgentCtx = createContext<{ model?: string; host?: string; hostIcon?: string; runtime?: string; caps?: RuntimeCaps }>({});
 
 /** The model's mark (Claude, GPT, Llama…) with a small editor badge (Cursor, VS Code…). */
 function AgentAvatar() {
-  const { model, host, hostIcon } = useContext(AgentCtx);
-  const vendor = vendorOf(model);
+  const { model, host, hostIcon, runtime } = useContext(AgentCtx);
+  const vendor = vendorOf(model ?? runtime);
   return (
     <span className="relative mt-0.5 inline-flex h-5 shrink-0 self-start" title={`${vendorName(vendor)}${model ? ' · ' + model : ''}${host ? ' · ' + hostName(host) : ''}`}>
       <VendorMark vendor={vendor} className="size-5 rounded-md text-[9px]" />
@@ -1071,7 +1073,7 @@ export function ChatView({ data }: { data: ChatData }) {
 
   return (
     <LightboxProvider rank={rank}>
-    <AgentCtx.Provider value={{ model: shownModel, host: chat.host, hostIcon: chat.hostIcon }}>
+    <AgentCtx.Provider value={{ model: shownModel, host: chat.host, hostIcon: chat.hostIcon, runtime: chat.runtime, caps: chat.caps }}>
     <KidsCtx.Provider value={byParent}>
     <div className="flex h-screen flex-col">
       <header className="flex items-center gap-2 border-b px-3 py-1 [&>*]:shrink-0">

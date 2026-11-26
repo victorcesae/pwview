@@ -17,7 +17,13 @@ import { isShuttingDown } from './relayClient';
 import { vendorOf } from './providers';
 import type { Session } from './engine';
 import { addLink, briefing, loadLinks, removeLink, sameConnection } from './links';
-import { agentExecutable } from './util';
+import { agentExecutable, which } from './util';
+import { RuntimeChat, asRuntimeChat, isRuntimeChat } from './runtimeChat';
+import { codexRuntime } from './runtimes/codex';
+import type { AgentRuntime } from './runtimes/types';
+
+/** Agents other than Claude Code that run in the Steerhouse chat (found on PATH). */
+export const RUNTIMES: Record<string, AgentRuntime> = { codex: codexRuntime(() => which('codex')) };
 import { LOCAL_COMMANDS, runLocalCommand, type LocalCommand } from './localCommands';
 import { accountEnv, type Account } from './accounts';
 import { checkoutWorktree, git, repoRoot } from './worktree';
@@ -303,6 +309,7 @@ export class Chats {
    */
   private async editAndRerun(o: Open, itemId: string, text: string) {
     const c = o.chat;
+    if (isRuntimeChat(c)) return;
     const idx = c.state.items.findIndex((it) => it.id === itemId);
     const item = c.state.items[idx];
     if (!item || item.kind !== 'user' || !c.state.sessionId) return;
@@ -331,6 +338,7 @@ export class Chats {
   /** Switches the tab to a fork of the session at the entry before user message `idx` (files untouched). */
   private forkAt(o: Open, idx: number): ChatSession {
     const c = o.chat;
+    if (isRuntimeChat(c)) return c as unknown as ChatSession;
     const item = c.state.items[idx] as Extract<ChatItem, { kind: 'user' }>;
     const history = { items: c.state.items.slice(0, idx).filter((it) => it.kind !== 'permission'), todos: [] };
     const fork = new ChatSession(
@@ -355,6 +363,7 @@ export class Chats {
   /** "Restore code / conversation / both to here" on a user message. */
   private async restore(o: Open, itemId: string, what: 'code' | 'conversation' | 'both') {
     const c = o.chat;
+    if (isRuntimeChat(c)) return;
     const idx = c.state.items.findIndex((it) => it.id === itemId);
     const item = c.state.items[idx];
     if (!item || item.kind !== 'user' || !c.state.sessionId) return;
@@ -400,6 +409,18 @@ export class Chats {
     const c = o.chat;
     if (c.state.status === 'working' || c.state.status === 'waiting') await c.interrupt();
     const items = [...c.state.items.filter((it) => it.kind !== 'permission'), { kind: 'system' as const, id: `clear-${Date.now()}`, text: 'Context cleared: the agent no longer sees the messages above' }];
+    const rc = asRuntimeChat(c);
+    if (rc) {
+      // another agent: a new thread, the old one stays in its history
+      const next = new RuntimeChat({ ...rc.runtimeOptions, resume: undefined, title: rc.state.title, model: rc.state.model, history: items }, () => this.schedule(o));
+      rc.close();
+      o.chat = next as unknown as ChatSession;
+      this.attachVerifier(o);
+      o.sent = undefined;
+      o.prUrls = undefined;
+      next.start();
+      return this.post(o);
+    }
     const fresh = new ChatSession(
       {
         ...c.options,
@@ -504,7 +525,7 @@ export class Chats {
     this.ctx.globalState.update(Chats.PREFS, Object.fromEntries(keep));
   }
 
-  start(opts: { cwd: string; resume?: string; title?: string; prompt?: string; model?: string; account?: Account; env?: Record<string, string>; panel?: vscode.WebviewPanel }) {
+  start(opts: { cwd: string; resume?: string; title?: string; prompt?: string; model?: string; account?: Account; env?: Record<string, string>; panel?: vscode.WebviewPanel; /** another agent than Claude Code (RUNTIMES) */ runtime?: string }) {
     if (opts.resume) {
       const existing = this.find(opts.resume);
       if (existing) {
@@ -513,8 +534,10 @@ export class Chats {
         return existing.chat;
       }
     }
-    const exe = agentExecutable();
-    if (!exe) {
+    const runtime = opts.runtime ? RUNTIMES[opts.runtime] : undefined;
+    if (opts.runtime && !runtime) return void vscode.window.showErrorMessage(vscode.l10n.t('Steerhouse: unknown agent {0}.', opts.runtime));
+    const exe = runtime ? '' : agentExecutable();
+    if (!runtime && !exe) {
       vscode.window.showErrorMessage('Steerhouse: Claude Code was not found. Install it (or set steerhouse.agentCommand) to use the chat.');
       return;
     }
@@ -530,9 +553,11 @@ export class Chats {
     // the chat folder, workspace folders and the temp folder: previews of files the agent mentions
     if (opts.panel) panel.webview.options = { enableScripts: true, localResourceRoots: [root, ...mediaRoots(opts.cwd)] };
     panel.iconPath = { light: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-light.svg'), dark: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-dark.svg') };
-    const transcript = opts.resume ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
+    const transcript = opts.resume && !runtime ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
     const history = transcript ? cachedHistory(transcript, path.join(this.ctx.globalStorageUri.fsPath, 'history-cache')) : undefined;
-    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), relayScript: this.relayScript(), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.model ?? opts.account?.provider?.model }, () => this.schedule(entry));
+    const chat = runtime
+      ? (new RuntimeChat({ runtime, cwd: opts.cwd, resume: opts.resume, title: opts.title, model: opts.model, host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName) }, () => this.schedule(entry)) as unknown as ChatSession)
+      : new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), relayScript: this.relayScript(), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.model ?? opts.account?.provider?.model }, () => this.schedule(entry));
     const entry: Open = { chat, panel, accountId: opts.account?.id };
     this.attachVerifier(entry);
     this.open.push(entry);
@@ -595,7 +620,7 @@ export class Chats {
     o.panel.title = s.title.replace(/\s+/g, ' ').trim().slice(0, 40);
     // tab icon: the model's vendor mark (Claude, GPT, Llama…), with a dot while it works or waits for you
     // (a dot in the title text sits off-center next to VS Code's own tab icons)
-    const vendor = s.model ? vendorOf(s.model) : s.account.gateway ? 'other' : 'anthropic';
+    const vendor = s.runtime ? (RUNTIMES[s.runtime]?.vendor ?? 'other') : s.model ? vendorOf(s.model) : s.account.gateway ? 'other' : 'anthropic';
     const badge = s.status === 'waiting' ? 'waiting' : s.status === 'working' ? 'working' : '';
     const key = `${vendor}:${badge}`;
     if (o.vendor !== key) {
