@@ -78,3 +78,21 @@ test('e2e: Send now switches the agent to the new message right away', { skip, t
     await removeTestSession(c.state.cwd);
   }
 });
+
+test('e2e: a Steer sent while the final answer is being written is not lost', { skip, timeout: 420_000 }, async () => {
+  const { c, said } = setup();
+  try {
+    c.send('Run `sleep 3 && echo ready` with Bash. Then, without any more tools, write a long answer: five paragraphs about honey bees.', [], 'later');
+    // the final answer has started streaming: no tool call is left for the steer to ride on
+    await until(c, () => c.state.items.some((i) => i.kind === 'tool') && c.state.items.at(-1)?.kind === 'assistant' && c.state.items.at(-1).text.length > 40);
+    c.steerGraceMs = 0;
+    c.send('ALSO: end your reply with the exact word PINEAPPLE-LATE.', [], 'next');
+    const t0 = Date.now();
+    while (Date.now() - t0 < 90_000 && !/PINEAPPLE-LATE/.test(said())) await new Promise((r) => setTimeout(r, 500));
+    console.log(`late steer: turns=${c.turns}, status=${c.state.status}, said=${/PINEAPPLE-LATE/.test(said())}, queue=${c.state.queue.length}`);
+    assert.match(said(), /PINEAPPLE-LATE/, 'the late steer was acted on');
+  } finally {
+    c.close();
+    await removeTestSession(c.state.cwd);
+  }
+});

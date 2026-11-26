@@ -418,7 +418,7 @@ export class ChatSession {
   }
   private input = new Channel<SDKUserMessage>();
   private q?: Query;
-  private queued: { id: string; text: string; images: Img[]; priority: 'later' | 'next' }[] = [];
+  private queued: { id: string; text: string; images: Img[]; priority: 'later' | 'next'; held?: boolean }[] = [];
   private pending = new Map<string, (r: PermissionResult) => void>();
   private streaming = new Map<string, string>(); // `${parent}:${msgId}:${index}` → item id
   private currentMsg = new Map<string, string>(); // parent → message id being streamed
@@ -577,9 +577,18 @@ export class ChatSession {
   holdQueued(id: string, hold: boolean) {
     const m = this.queued.find((x) => x.id === id);
     if (!m) return;
-    if (hold) this.disarm(id);
-    else if (m.priority === 'next') this.armSteer(id);
+    m.held = hold;
+    if (hold) return this.disarm(id);
+    if (m.priority === 'next') this.armSteer(id);
+    // the turn ended while it was being edited: it goes now, with the edited text
+    else if (this.state.status === 'idle') {
+      this.queued = this.queued.filter((x) => x !== m);
+      this.push(m.text, m.images, 'later');
+    }
   }
+
+  /** Steers handed to Claude Code after the model last started writing: it may still be working on them. */
+  private lateSteers = 0;
 
   /**
    * A steer waits only a short undo window (edit / cancel / switch), then goes in at once.
@@ -594,7 +603,7 @@ export class ChatSession {
       id,
       setTimeout(() => {
         this.steerTimers.delete(id);
-        const i = this.queued.findIndex((m) => m.id === id && m.priority === 'next');
+        const i = this.queued.findIndex((m) => m.id === id && m.priority === 'next' && !m.held);
         if (i < 0) return;
         const [m] = this.queued.splice(i, 1);
         this.push(m.text, m.images, 'next');
@@ -747,6 +756,7 @@ export class ChatSession {
   }
 
   private push(text: string, images: Img[], priority: Priority) {
+    if (priority === 'next' && this.state.status !== 'idle') this.lateSteers++;
     const content: any[] = images.map((img) => ({
       type: 'image',
       source: { type: 'base64', media_type: img.mime, data: img.data.replace(/^data:[^;]+;base64,/, '') },
@@ -1071,6 +1081,7 @@ export class ChatSession {
         const e: any = m.event;
         const key = parent ?? '';
         if (e.type === 'message_start') {
+          if (!parent) this.lateSteers = 0; // the model is reading everything handed over so far
           this.currentMsg.set(key, e.message?.id ?? uid());
           if (!parent) this.state.activity = 'Thinking…';
         } else if (e.type === 'content_block_start' && e.content_block?.type === 'text') {
@@ -1184,8 +1195,12 @@ export class ChatSession {
         const last = items.slice(lastUser + 1).reverse().find((x) => x.kind === 'assistant' && !x.parent);
         if (last?.kind === 'assistant' && typeof r.duration_ms === 'number') last.durationMs = r.duration_ms;
         for (const it of this.state.items) if (it.kind === 'tool' && it.status === 'running' && !it.parent) it.status = 'done';
-        this.state.status = 'idle';
-        this.state.activity = undefined;
+        // a steer that arrived after the model's last step is answered in a turn of its own, right
+        // after this one: still working, not idle (otherwise it looks ignored)
+        const followUp = this.lateSteers > 0;
+        this.lateSteers = 0;
+        this.state.status = followUp ? 'working' : 'idle';
+        this.state.activity = followUp ? 'Picking up your steer…' : undefined;
         this.refreshLimits();
         this.q
           ?.getContextUsage({ detail: 'summary' })
@@ -1200,8 +1215,10 @@ export class ChatSession {
           })
           .catch(() => {});
         // the turn ended: steers that never found a next step go first, then the next queued message
-        const steers = this.queued.filter((q) => q.priority === 'next');
-        const handover = steers.length ? steers : this.queued.slice(0, 1);
+        // (one being edited waits for its edit; it goes when the edit is saved)
+        const ready = this.queued.filter((q) => !q.held);
+        const steers = ready.filter((q) => q.priority === 'next');
+        const handover = followUp ? steers : steers.length ? steers : ready.slice(0, 1);
         this.queued = this.queued.filter((q) => !handover.includes(q));
         for (const q of handover) this.push(q.text, q.images, 'later');
         break;
