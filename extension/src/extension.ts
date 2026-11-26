@@ -200,6 +200,10 @@ export function activate(ctx: vscode.ExtensionContext) {
     void vscode.commands.executeCommand('setContext', 'steerhouse.chatStarted', true);
     void pwview.attach(cwd, chat);
   };
+  chats.startNew = async (cwd, prompt, title) => {
+    const account = await pickAgent(cwd);
+    if (account) chats.start({ cwd, account, env: await envFor(account), prompt, title });
+  };
   const surface = () => cfg().get<string>('defaultSurface', 'chat');
   registerLibrary(ctx);
   registerSkills(ctx);

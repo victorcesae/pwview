@@ -21,6 +21,9 @@ export interface PrStatus {
   /** CI: GitHub Actions jobs and other status checks on the latest commit */
   checks?: PrCheck[];
   review?: 'approved' | 'changes_requested' | 'required';
+  /** the PR's head branch and number (gh only) */
+  branch?: string;
+  number?: number;
   /** when it was last checked (ms) */
   checked: number;
 }
@@ -89,11 +92,11 @@ function viaGh(url: string): Promise<PrStatus | undefined> {
   const exe = gh();
   if (!exe) return Promise.resolve(undefined);
   return new Promise((resolve) =>
-    execFile(exe, ['pr', 'view', url, '--json', 'state,isDraft,title,body,statusCheckRollup,reviewDecision'], { timeout: 15_000, windowsHide: true }, (err, out) => {
+    execFile(exe, ['pr', 'view', url, '--json', 'state,isDraft,title,body,statusCheckRollup,reviewDecision,headRefName,number'], { timeout: 15_000, windowsHide: true }, (err, out) => {
       if (err) return resolve(undefined);
       try {
         const j = JSON.parse(out);
-        resolve({ state: toPrState(j), title: j.title, tasks: prTasks(j.body), checks: toChecks(j.statusCheckRollup), review: toReview(j.reviewDecision), checked: Date.now() });
+        resolve({ state: toPrState(j), title: j.title, tasks: prTasks(j.body), checks: toChecks(j.statusCheckRollup), review: toReview(j.reviewDecision), branch: j.headRefName || undefined, number: j.number || undefined, checked: Date.now() });
       } catch {
         resolve(undefined);
       }
@@ -128,6 +131,8 @@ export class PrTracker {
   constructor(
     private onChange: () => void,
     private fetchStatus: (url: string) => Promise<PrStatus> = prStatus,
+    /** a check that was passing or running is now failing */
+    private onFailed?: (url: string, check: PrCheck, status: PrStatus) => void,
   ) {}
 
   get(url: string) {
@@ -157,6 +162,8 @@ export class PrTracker {
       const next = await this.fetchStatus(url);
       const prev = this.status.get(url);
       this.status.set(url, next);
+      // only after a real first answer: a PR already failing when first seen is not news
+      if (prev?.checked) for (const c of newlyFailed(prev, next)) this.onFailed?.(url, c, next);
       const sig = (x?: PrStatus) => JSON.stringify(x && { ...x, checked: 0 });
       if (sig(prev) !== sig(next)) this.onChange();
     } finally {
@@ -182,7 +189,7 @@ const ghJson = (args: string[], cwd?: string): Promise<{ ok: boolean; data?: any
   const exe = gh();
   if (!exe) return Promise.resolve({ ok: false, out: 'GitHub CLI (gh) not found' });
   return new Promise((resolve) =>
-    execFile(exe, args, { timeout: 30_000, windowsHide: true, cwd }, (err, stdout, stderr) => {
+    execFile(exe, args, { timeout: 30_000, windowsHide: true, cwd, maxBuffer: 32 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) return resolve({ ok: false, out: `${stderr || stdout || err.message}`.trim() });
       try {
         resolve({ ok: true, data: stdout.trim() ? JSON.parse(stdout) : undefined, out: stdout });
@@ -231,4 +238,86 @@ export const blockedByPolicy = (out: string) => /base branch policy prohibits th
 export async function mergePr(url: string, method: MergeMethod, deleteBranch: boolean, admin = false): Promise<{ ok: boolean; out: string }> {
   const r = await ghJson(mergeArgs(url, method, deleteBranch, admin));
   return { ok: r.ok, out: r.out.trim() };
+}
+
+// ---- CI failures: the failing run's log, for an agent to fix
+
+const checkKey = (c: PrCheck) => `${c.workflow ?? ''}/${c.name}`;
+
+/** Checks failing now that were not failing before. */
+export function newlyFailed(prev: PrStatus | undefined, next: PrStatus): PrCheck[] {
+  const before = new Map((prev?.checks ?? []).map((c) => [checkKey(c), c.state]));
+  return (next.checks ?? []).filter((c) => c.state === 'fail' && before.get(checkKey(c)) !== 'fail');
+}
+
+/** GitHub Actions run (and job) id from a check's details URL: .../actions/runs/<run>/job/<job>. */
+export function runIdFromUrl(url?: string): { run: string; job?: string } | undefined {
+  const m = /\/actions\/runs\/(\d+)(?:\/jobs?\/(\d+))?/.exec(url ?? '');
+  return m ? { run: m[1], job: m[2] } : undefined;
+}
+
+const ERR_RE = /error|fail|✗|✖|panic|exception|traceback|assert|exit code [1-9]|not ok/i;
+
+/** The useful part of a CI log, at most `max` chars: lines that look like errors with a few lines of
+ *  context around them, plus the very end (where the step's exit status is). gh's job/step/timestamp
+ *  prefixes and colour codes are dropped. */
+export function trimLog(log: string, max = 15_000): string {
+  const lines = log
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((l) =>
+      l
+        .replace(/^[^\t]*\t[^\t]*\t/, '')
+        .replace(/^﻿?\d{4}-\d\d-\d\dT[\d:.]+Z ?/, '')
+        .replace(/\x1b\[[0-9;]*m/g, ''),
+    );
+  const all = lines.join('\n').trim();
+  if (all.length <= max) return all;
+  const keep = new Set<number>();
+  lines.forEach((l, i) => {
+    if (ERR_RE.test(l)) for (let k = Math.max(0, i - 3); k <= Math.min(lines.length - 1, i + 3); k++) keep.add(k);
+  });
+  for (let k = Math.max(0, lines.length - 40); k < lines.length; k++) keep.add(k);
+  const out: string[] = [];
+  let last = -1;
+  for (const i of [...keep].sort((a, b) => a - b)) {
+    if (last >= 0 && i > last + 1) out.push('…');
+    out.push(lines[i]);
+    last = i;
+  }
+  let text = out.join('\n');
+  // still too long: the tail matters most
+  if (text.length > max) text = '…\n' + text.slice(text.length - max + 2);
+  return text.trim();
+}
+
+/** The message that asks the agent to fix a failed check. */
+export function ciFixPrompt(check: string, pr: { number?: number; branch?: string; url: string }, log: string): string {
+  const which = pr.number ? `PR #${pr.number}` : pr.url;
+  return `CI check ${check} failed on ${which}${pr.branch ? ` (${pr.branch})` : ''}. Fix it. Log:\n\`\`\`\n${log.replace(/```/g, "'''")}\n\`\`\``;
+}
+
+/** The failing run's log: from the run id in the check's URL, else gh pr checks, else the newest
+ *  failed run on the branch. */
+export async function failedCheckLog(prUrl: string, check: PrCheck, branch?: string, cwd?: string): Promise<{ ok: boolean; log: string }> {
+  const repo = parseGithubPr(prUrl);
+  const R = repo ? ['-R', `${repo.owner}/${repo.repo}`] : [];
+  let id = runIdFromUrl(check.url);
+  if (!id) {
+    const c = await ghJson(['pr', 'checks', prUrl, '--json', 'name,link,state'], cwd);
+    const hit = Array.isArray(c.data) ? c.data.find((x: any) => x.name === check.name) : undefined;
+    id = runIdFromUrl(hit?.link);
+  }
+  if (!id && branch) {
+    const l = await ghJson(['run', 'list', ...R, '--branch', branch, '--status', 'failure', '--limit', '1', '--json', 'databaseId'], cwd);
+    const run = Array.isArray(l.data) ? l.data[0]?.databaseId : undefined;
+    if (run) id = { run: String(run) };
+  }
+  if (!id) return { ok: false, log: `No GitHub Actions run found for this check.${check.url ? ` Details: ${check.url}` : ''}` };
+  const run = id.run;
+  const view = (job?: string) => ghJson(['run', 'view', run, ...R, ...(job ? ['--job', job] : []), '--log-failed'], cwd);
+  let r = await view(id.job);
+  if ((!r.ok || !r.out.trim()) && id.job) r = await view();
+  if (!r.ok || !r.out.trim()) return { ok: false, log: (r.out || 'The failed run has no log.').slice(0, 500) };
+  return { ok: true, log: trimLog(r.out) };
 }

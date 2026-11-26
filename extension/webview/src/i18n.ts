@@ -280,6 +280,8 @@ const PT: Record<string, string> = {
   '{0} is too large to add (over 100 MB).': '{0} é grande demais para adicionar (mais de 100 MB).',
   "{0} could not be read. Folders can't be added this way: add the files inside.": '{0} não pôde ser lido. Pastas não podem ser adicionadas assim: adicione os arquivos de dentro.',
   'The output is no longer available.': 'A saída não está mais disponível.',
+  'Fix with agent': 'Corrigir com o agente',
+  'Send the failed log to the agent and ask it to fix the check': 'Envia o log da falha ao agente e pede que ele corrija a verificação',
   'Tab completes @files, /commands and the suggested prompt': 'Tab completa @arquivos, /comandos e o prompt sugerido',
   'Turn Tab completion on': 'Ativar conclusão com Tab',
   'Turn Tab completion off': 'Desativar conclusão com Tab',

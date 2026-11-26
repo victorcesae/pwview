@@ -41,6 +41,7 @@ export type ToExtension =
   | { type: 'prFiles'; url: string }
   | { type: 'prViewed'; url: string; prId: string; path: string; viewed: boolean }
   | { type: 'prMerge'; url: string }
+  | { type: 'prFixCheck'; url: string; name: string; workflow?: string }
   | { type: 'prOpenFile'; url: string; path: string }
   | { type: 'openChange'; sessionId: string; changeId: string }
   | { type: 'openFile'; path: string }
@@ -114,6 +115,7 @@ export type ToChat =
   | { type: 'prFiles'; url: string }
   | { type: 'prViewed'; url: string; prId: string; path: string; viewed: boolean }
   | { type: 'prMerge'; url: string }
+  | { type: 'prFixCheck'; url: string; name: string; workflow?: string }
   | { type: 'prOpenFile'; url: string; path: string }
   | { type: 'contextDetail' }
   | { type: 'restore'; id: string; what: 'code' | 'conversation' | 'both' }

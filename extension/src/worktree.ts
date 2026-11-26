@@ -71,6 +71,24 @@ export async function addWorktree(root: string, branch: string): Promise<{ ok: t
   return r.ok ? { ok: true, dir } : { ok: false, error: r.out };
 }
 
+/** A worktree with an existing branch checked out (fetched from origin when only the remote has it).
+ *  Reuses the folder when that branch already has a worktree. */
+export async function checkoutWorktree(cwd: string, branch: string): Promise<{ dir: string } | { error: string }> {
+  const root = await repoRoot(cwd);
+  if (!root) return { error: `${cwd} is not in a git repository` };
+  const list = (await git(['worktree', 'list', '--porcelain'], root)).out;
+  const existing = list.split('\n\n').find((b) => b.includes(`branch refs/heads/${branch}\n`) || b.endsWith(`branch refs/heads/${branch}`));
+  const at = existing && /^worktree (.+)$/m.exec(existing)?.[1];
+  if (at) return { dir: at };
+  const local = (await git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], root)).ok;
+  if (!local) await git(['fetch', 'origin', `${branch}:${branch}`], root);
+  const dir = worktreePath(root, branch);
+  if (fs.existsSync(dir)) return { error: `${dir} already exists` };
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  const r = await git(['worktree', 'add', dir, branch], root);
+  return r.ok ? { dir } : { error: r.out };
+}
+
 /** Removes a worktree folder (git refuses when it has uncommitted changes unless forced). The branch stays. */
 export async function removeWorktree(dir: string, force = false): Promise<{ ok: boolean; out: string }> {
   const info = worktreeInfo(dir);
