@@ -1,5 +1,5 @@
 // The chat folder's git branch, in the composer footer: switch branch, or start a chat in a new worktree.
-import { GitBranch, FolderGit2, Check, TriangleAlert } from 'lucide-react';
+import { GitBranch, FolderGit2, Check, TriangleAlert, Layers } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { post as postAny } from '@/bridge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -8,7 +8,7 @@ import type { GitInfo, ToChat } from '@/types';
 
 const post = (m: ToChat) => postAny(m as never);
 
-export function BranchPicker() {
+export function BranchPicker({ prompt }: { prompt?: string }) {
   const [info, setInfo] = useState<GitInfo | null>(null);
   useEffect(() => {
     const on = (e: MessageEvent) => e.data?.type === 'gitInfo' && setInfo(e.data as GitInfo);
@@ -52,6 +52,9 @@ export function BranchPicker() {
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => post({ type: 'newWorktree' })}>
           <FolderGit2 /> {t('New chat in a worktree…')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => post({ type: 'bestOfN', prompt })}>
+          <Layers /> {t('Best of N…')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

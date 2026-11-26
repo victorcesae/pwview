@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { bestOfN } from './bestOfN';
 import { editRules, openRules } from './rules';
 import { modelLabel } from './pricing';
 import { installedAgents, runCliAgent } from './agents';
@@ -657,6 +658,20 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!r.ok) return vscode.window.showErrorMessage(vscode.l10n.t('Could not create the worktree: {0}', r.error.slice(0, 300)));
       const account = await pickAgent(r.dir);
       if (account) chats.start({ cwd: r.dir, account, env: await envFor(account), title: task || undefined, prompt: undefined });
+      refresh(true);
+    }),
+    // Best of N: the same prompt in N worktrees at once, compared side by side
+    vscode.commands.registerCommand('steerhouse.bestOfN', async (from?: { cwd?: string; prompt?: string; model?: string; models?: { value: string; displayName: string }[] }) => {
+      const front = chats.frontChat()?.state;
+      const src = from?.cwd ? from : front ? { cwd: front.cwd, model: front.model, models: front.models } : {};
+      const account = await pickAgent(src.cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '');
+      if (!account) return;
+      const env = await envFor(account);
+      await bestOfN(ctx, {
+        startChat: async (cwd, title, prompt, model) => chats.start({ cwd, account, env, title, prompt, model }) || undefined,
+        reveal: (c) => chats.reveal(c),
+        judge: async (cwd, title, prompt) => chats.start({ cwd, account, env, title, prompt }),
+      }, src);
       refresh(true);
     }),
     vscode.commands.registerCommand('steerhouse.removeWorktree', async (n?: { path?: string }) => {

@@ -15,7 +15,12 @@ export interface HotFile { file: string; sessions: string[]; changes: number; up
 export type Data =
   | ChatData
   | { view: 'overview'; overview: { sessions: SessionInfo[]; hot: HotFile[]; hooks: boolean; graph?: GraphData; usage?: UsageReport } }
-  | { view: 'session'; focusAgent?: string; session: { info: SessionInfo; events: TimelineEvent[]; changes: Change[]; comments: Comment[]; terminal?: boolean; linkedTitles: Record<string, string> } };
+  | { view: 'session'; focusAgent?: string; session: { info: SessionInfo; events: TimelineEvent[]; changes: Change[]; comments: Comment[]; terminal?: boolean; linkedTitles: Record<string, string> } }
+  | { view: 'compare'; compare: CompareData };
+
+/** Best of N: the runs side by side. */
+export type CompareRun = { i: number; title: string; model?: string; branch: string; dir: string; status: string; elapsedMs: number; finished: boolean; costUsd: number; files: { path: string; rel: string; added: number; removed: number; hunks: Hunk[]; untracked?: boolean; binary?: boolean }[]; added: number; removed: number; error?: string };
+export type CompareData = { prompt: string; root: string; runs: CompareRun[]; applied?: number; cleaned: boolean };
 
 export type ToExtension =
   | { type: 'ready' }
@@ -147,7 +152,8 @@ export type ToChat =
   | { type: 'newChat' }
   | { type: 'gitInfo' }
   | { type: 'switchBranch'; branch: string }
-  | { type: 'newWorktree' };
+  | { type: 'newWorktree' }
+  | { type: 'bestOfN'; prompt?: string };
 export type RecentChat = { id: string; title: string; project?: string; state: State; updated?: string };
 export type GitInfo = { isRepo: boolean; branch?: string; branches: string[]; dirty: boolean };
 
