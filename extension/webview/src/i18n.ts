@@ -309,6 +309,25 @@ const PT: Record<string, string> = {
   Wrote: 'Criou',
   Searched: 'Pesquisou',
   Fetched: 'Abriu',
+  // Changes panel
+  '(image)': '(imagem)',
+  'Turn': 'Turno',
+  'Whole working tree (git)': 'Toda a árvore de trabalho (git)',
+  'Binary file': 'Arquivo binário',
+  'Show the changes of this turn': 'Mostrar as alterações deste turno',
+  'new': 'novo',
+  'Stage everything and commit': 'Adicionar tudo e fazer commit',
+  'All turns': 'Todos os turnos',
+  'No changes.': 'Sem alterações.',
+  '{0} files': '{0} arquivos',
+  'Commit': 'Commit',
+  'Push': 'Push',
+  'Create PR': 'Criar PR',
+  'Push the current branch': 'Enviar o branch atual',
+  'gh pr create --fill': 'gh pr create --fill',
+  '1 file': '1 arquivo',
+  'Revert this file': 'Reverter este arquivo',
+  'Refresh': 'Atualizar',
 };
 
 const TABLES: Record<string, Record<string, string>> = { pt: PT, 'pt-br': PT };
