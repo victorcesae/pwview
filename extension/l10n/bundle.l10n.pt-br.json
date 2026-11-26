@@ -390,5 +390,7 @@
   "Working": "Trabalhando",
   "Stopped": "Parado",
   "Steerhouse: unknown agent {0}.": "Steerhouse: agente desconhecido {0}.",
-  "Codex was not found. Install it (npm i -g @openai/codex) and log in with `codex login`.": "O Codex não foi encontrado. Instale-o (npm i -g @openai/codex) e entre com `codex login`."
+  "Codex was not found. Install it (npm i -g @openai/codex) and log in with `codex login`.": "O Codex não foi encontrado. Instale-o (npm i -g @openai/codex) e entre com `codex login`.",
+  "Gemini CLI was not found. Install it (npm i -g @google/gemini-cli) and run `gemini` once to sign in.": "O Gemini CLI não foi encontrado. Instale-o (npm i -g @google/gemini-cli) e rode `gemini` uma vez para entrar.",
+  "No ACP agent was found (Gemini CLI, Kiro, Copilot CLI, Grok). Install one, or list yours in steerhouse.acpAgents.": "Nenhum agente ACP foi encontrado (Gemini CLI, Kiro, Copilot CLI, Grok). Instale um ou liste o seu em steerhouse.acpAgents."
 }

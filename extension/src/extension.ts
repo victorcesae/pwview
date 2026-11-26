@@ -28,6 +28,7 @@ import { registerSkills } from './skills';
 import { registerDoctor, syncSetupContext } from './doctor';
 import { attachedSessions, resolveTerminals, terminalFor, typeInto } from './terminals';
 import { Chats, RUNTIMES } from './chatPanel';
+import { acpAgentsOnPath, registerAcpRuntimes } from './acpAgents';
 import { usageReport } from './usage';
 import { addLink, briefing, sameConnection } from './links';
 import { PRESETS, listModels, secretKey, vendorOf } from './providers';
@@ -125,8 +126,9 @@ export function activate(ctx: vscode.ExtensionContext) {
     const all = listAccounts();
     const clis = installedAgents();
     // other agents that run in the Steerhouse chat (Codex app-server…), when installed
-    const runtimes = then.claudeOnly ? [] : clis.filter((c) => RUNTIMES[c.id]);
-    if (all.length === 1 && !clis.length) return all[0];
+    // …and ACP agents (Kiro, Copilot CLI, steerhouse.acpAgents) that have no terminal entry
+    const runtimes = then.claudeOnly ? [] : [...clis.filter((c) => RUNTIMES[c.id]), ...acpAgentsOnPath().filter((a) => !clis.some((c) => c.id === a.id))];
+    if (all.length === 1 && !clis.length && !runtimes.length) return all[0];
     const last = ctx.globalState.get<string>('steerhouse.lastAgent') ?? preferredAccount().id;
     type Item = vscode.QuickPickItem & { a?: Account; cli?: (typeof clis)[number]; cursor?: CursorAccount; add?: string; runtime?: string };
     const media = vscode.Uri.joinPath(ctx.extensionUri, 'media', 'vendors');
@@ -207,6 +209,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   });
   const dashboard = new Dashboard(ctx, () => sessions, hooksOk, () => attachedSessions(), (m) => onWebview(m), (days) => usageReport(engine.scan(Math.max(days, cfg().get<number>('days', 3))), days));
   const chats = new Chats(ctx, () => sessions, (id) => dashboard.show(id));
+  registerAcpRuntimes();
   tree.liveStatus = (id) => chats.find(id)?.chat.state.status;
   ctx.subscriptions.push({ dispose: () => tree.dispose() });
   ctx.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('steerhouse.tabCompletion') && chats.refresh()));
@@ -850,6 +853,28 @@ export function activate(ctx: vscode.ExtensionContext) {
       ctx.globalState.update('steerhouse.lastAgent', 'runtime:codex');
       chats.start({ cwd, runtime: 'codex' });
     }),
+    // ACP agents: Gemini CLI directly, or any detected one
+    vscode.commands.registerCommand('steerhouse.newGeminiChat', async (n?: { path?: string } | vscode.Uri) => {
+      const cwd = n instanceof vscode.Uri ? n.fsPath : (n?.path ?? (await pickFolder(ctx)));
+      if (!cwd) return;
+      if (!(await RUNTIMES.gemini.detect()).exe) return vscode.window.showWarningMessage(vscode.l10n.t('Gemini CLI was not found. Install it (npm i -g @google/gemini-cli) and run `gemini` once to sign in.'));
+      ctx.globalState.update('steerhouse.lastAgent', 'runtime:gemini');
+      chats.start({ cwd, runtime: 'gemini' });
+    }),
+    vscode.commands.registerCommand('steerhouse.newAcpChat', async (n?: { path?: string } | vscode.Uri) => {
+      const found = acpAgentsOnPath();
+      if (!found.length) return vscode.window.showWarningMessage(vscode.l10n.t('No ACP agent was found (Gemini CLI, Kiro, Copilot CLI, Grok). Install one, or list yours in steerhouse.acpAgents.'));
+      const media = vscode.Uri.joinPath(ctx.extensionUri, 'media', 'vendors');
+      const pick = await vscode.window.showQuickPick(
+        found.map((a) => ({ label: a.name, detail: a.exe, iconPath: vscode.Uri.joinPath(media, `${a.vendor}.svg`), id: a.id })),
+        { placeHolder: vscode.l10n.t('Which agent should work here?'), ignoreFocusOut: true },
+      );
+      if (!pick) return;
+      const cwd = n instanceof vscode.Uri ? n.fsPath : (n?.path ?? (await pickFolder(ctx)));
+      if (!cwd) return;
+      ctx.globalState.update('steerhouse.lastAgent', 'runtime:' + pick.id);
+      chats.start({ cwd, runtime: pick.id });
+    }),
     vscode.commands.registerCommand('steerhouse.newChat', () => {
       void (async () => {
         const cwd = await pickFolder(ctx);
@@ -1110,6 +1135,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.window.onDidCloseTerminal(() => refresh(true)),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration('steerhouse')) return;
+      if (e.affectsConfiguration('steerhouse.acpAgents')) registerAcpRuntimes();
       clearInterval(timer);
       timer = setInterval(refresh, cfg().get<number>('pollSeconds', 3) * 1000);
       refresh(true);

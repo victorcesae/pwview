@@ -146,6 +146,9 @@ export class RuntimeChat implements ChatSurface {
           s.activity = e.activity ?? s.activity;
         }
         break;
+      case 'commands':
+        s.slashCommands = e.names;
+        break;
       case 'notice': {
         const same = e.key ? this.find(e.key, 'system') : undefined;
         if (same) same.text = e.text;
