@@ -15,29 +15,166 @@ import { t } from '@/i18n';
 
 type SessionData = { info: SessionInfo; events: TimelineEvent[]; changes: Change[]; comments: Comment[]; terminal?: boolean; linkedTitles: Record<string, string> };
 
-export function HunkView({ hunks }: { hunks: Hunk[] }) {
+/** Extras of a diff shown in the Changes panel: per-hunk revert / stage, more context, review notes. */
+export interface HunkReview {
+  path: string;
+  /** working-tree diff (vs HEAD): hunks can be staged */
+  tree?: boolean;
+  notes: { line: number; text: string }[];
+  findings: { line: number; text: string }[];
+  addNote: (line: number, text: string) => void;
+}
+
+let ctxSeq = 0;
+/** Lines start..end (1-based) of the current file, from the host. */
+function fetchContext(path: string, start: number, end: number): Promise<{ lines?: string[]; error?: string }> {
+  const reqId = `ctx${++ctxSeq}`;
+  return new Promise((resolve) => {
+    const on = (e: MessageEvent) => {
+      if (e.data?.type !== 'changesContextResult' || e.data.reqId !== reqId) return;
+      window.removeEventListener('message', on);
+      resolve(e.data);
+    };
+    window.addEventListener('message', on);
+    post({ type: 'changesContext', path, start, end, reqId } as never);
+  });
+}
+
+const MORE = 10;
+type Extra = { above: string[]; below: string[]; eof?: boolean };
+
+function NoteInput({ onDone }: { onDone: (text?: string) => void }) {
+  const [v, setV] = useState('');
+  return (
+    <div className="bg-muted/40 flex items-start gap-1.5 border-y px-2 py-1.5 font-sans" onClick={(e) => e.stopPropagation()}>
+      <Textarea
+        autoFocus
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            onDone(v.trim() || undefined);
+          } else if (e.key === 'Escape') onDone();
+        }}
+        placeholder={t('Review note for this line (Enter to add, Esc to cancel)')}
+        className="min-h-8 flex-1 text-[12px]"
+      />
+      <Button size="xs" onClick={() => onDone(v.trim() || undefined)} disabled={!v.trim()}>
+        {t('Add')}
+      </Button>
+    </div>
+  );
+}
+
+export function HunkView({ hunks, review }: { hunks: Hunk[]; review?: HunkReview }) {
+  const [extra, setExtra] = useState<Record<number, Extra>>({});
+  const [noting, setNoting] = useState<string>();
   if (!hunks.length) return <div className="text-muted-foreground px-3 py-2 text-[12px]">{t('New file. Open the diff to see it all.')}</div>;
+  const more = async (i: number, h: Hunk, dir: 'above' | 'below') => {
+    if (!review) return;
+    const ex = extra[i] ?? { above: [], below: [] };
+    const top = h.newStart - ex.above.length;
+    const start = dir === 'above' ? Math.max(1, top - MORE) : h.newStart + h.newLines + ex.below.length;
+    const end = dir === 'above' ? top - 1 : start + MORE - 1;
+    if (end < start) return;
+    const r = await fetchContext(review.path, start, end);
+    if (!r.lines) return;
+    const lines = r.lines;
+    setExtra((s) => {
+      const cur = s[i] ?? { above: [], below: [] };
+      return { ...s, [i]: dir === 'above' ? { ...cur, above: [...lines, ...cur.above] } : { ...cur, below: [...cur.below, ...lines], eof: lines.length < end - start + 1 } };
+    });
+  };
+  const gutter = 'text-muted-foreground/60 w-10 shrink-0 pr-2 text-right select-none';
+  const row = (key: string, kind: string, left: number | '', right: number | '', text: string) => {
+    const line = right === '' ? left : right;
+    const notes = review?.notes.filter((x) => x.line === line && right !== '') ?? [];
+    const finds = review?.findings.filter((x) => x.line === line && right !== '') ?? [];
+    const clickable = !!review && right !== '';
+    return (
+      <div key={key}>
+        <div className={cn('group flex', kind === '+' && 'bg-diff-add', kind === '-' && 'bg-diff-del', kind === '~' && 'opacity-70')}>
+          <span className={gutter}>{left}</span>
+          <span
+            className={cn(gutter, clickable && 'hover:text-foreground hover:bg-accent cursor-pointer')}
+            onClick={clickable ? () => setNoting(key) : undefined}
+            title={clickable ? t('Add a review note on this line') : undefined}
+          >
+            {right}
+          </span>
+          <span className={cn('w-4 shrink-0 select-none', kind === '+' ? 'text-added' : kind === '-' ? 'text-removed' : 'text-muted-foreground/50')}>{kind === '+' || kind === '-' ? kind : ''}</span>
+          <span className="pr-4 whitespace-pre">{text}</span>
+        </div>
+        {notes.map((x, k) => (
+          <div key={`n${k}`} className="bg-muted/40 border-y px-3 py-1 font-sans text-[12px] whitespace-pre-wrap">
+            <MessageSquarePlus className="mr-1 inline size-3" />
+            {x.text}
+          </div>
+        ))}
+        {finds.map((x, k) => (
+          <div key={`f${k}`} className="border-y border-amber-500/40 bg-amber-500/10 px-3 py-1 font-sans text-[12px] whitespace-pre-wrap">
+            <Sparkles className="mr-1 inline size-3 text-amber-500" />
+            {x.text}
+          </div>
+        ))}
+        {noting === key && review && (
+          <NoteInput
+            onDone={(v) => {
+              if (v) review.addNote(Number(line), v);
+              setNoting(undefined);
+            }}
+          />
+        )}
+      </div>
+    );
+  };
+  const linkBtn = 'text-muted-foreground hover:text-foreground cursor-pointer px-1 font-sans text-[11px] hover:underline';
   return (
     <div className="keep-lines overflow-x-auto font-mono text-[12px] leading-[1.55]">
       {hunks.map((h, i) => {
         let o = h.oldStart;
         let n = h.newStart;
+        const ex = extra[i] ?? { above: [], below: [] };
+        const delta = h.oldStart - h.newStart;
+        const top = h.newStart - ex.above.length;
+        const endDelta = h.oldStart + h.oldLines - (h.newStart + h.newLines);
+        const after = h.newStart + h.newLines;
         return (
           <div key={i} className="border-t first:border-t-0">
-            <div className="text-muted-foreground bg-muted/50 px-3 py-0.5 text-[11px]">@@ −{h.oldStart},{h.oldLines} +{h.newStart},{h.newLines} @@</div>
+            <div className="text-muted-foreground bg-muted/50 flex items-center gap-1 px-3 py-0.5 text-[11px]">
+              <span className="flex-1">@@ −{h.oldStart},{h.oldLines} +{h.newStart},{h.newLines} @@</span>
+              {review && top > 1 && h.newStart > 0 && (
+                <button className={linkBtn} onClick={() => more(i, h, 'above')}>
+                  {t('Show more lines above')}
+                </button>
+              )}
+              {review?.tree && (
+                <button className={linkBtn} onClick={() => post({ type: 'changesHunk', action: 'stage', path: review.path, hunk: h, tree: true } as never)}>
+                  {t('Stage hunk')}
+                </button>
+              )}
+              {review && (
+                <button className={cn(linkBtn, 'hover:text-removed')} onClick={() => post({ type: 'changesHunk', action: 'revert', path: review.path, hunk: h, tree: review.tree } as never)}>
+                  {t('Revert hunk')}
+                </button>
+              )}
+            </div>
+            {ex.above.map((l, j) => row(`${i}a${j}`, '~', top + j + delta, top + j, l))}
             {h.lines.map((l, j) => {
               const kind = l[0];
               const left = kind === '+' ? '' : o++;
               const right = kind === '-' ? '' : n++;
-              return (
-                <div key={j} className={cn('flex', kind === '+' && 'bg-diff-add', kind === '-' && 'bg-diff-del')}>
-                  <span className="text-muted-foreground/60 w-10 shrink-0 pr-2 text-right select-none">{left}</span>
-                  <span className="text-muted-foreground/60 w-10 shrink-0 pr-2 text-right select-none">{right}</span>
-                  <span className={cn('w-4 shrink-0 select-none', kind === '+' ? 'text-added' : kind === '-' ? 'text-removed' : 'text-muted-foreground/50')}>{kind === ' ' ? '' : kind}</span>
-                  <span className="pr-4 whitespace-pre">{l.slice(1)}</span>
-                </div>
-              );
+              return row(`${i}h${j}`, kind, left, right, l.slice(1));
             })}
+            {ex.below.map((l, j) => row(`${i}b${j}`, '~', after + j + endDelta, after + j, l))}
+            {review && !ex.eof && h.newStart > 0 && (
+              <div className="bg-muted/30 px-3 py-0.5 text-[11px]">
+                <button className={linkBtn} onClick={() => more(i, h, 'below')}>
+                  {t('Show more lines below')}
+                </button>
+              </div>
+            )}
           </div>
         );
       })}

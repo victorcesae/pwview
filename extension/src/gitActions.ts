@@ -13,12 +13,15 @@ export type ChangesMsg =
   | { type: 'changesRevert'; path: string }
   | { type: 'gitCommit'; message: string }
   | { type: 'gitPush' }
-  | { type: 'gitCreatePr' };
+  | { type: 'gitCreatePr' }
+  | { type: 'changesHunk'; action: 'revert' | 'stage'; path: string; hunk: Hunk; tree?: boolean }
+  | { type: 'changesUndoEdit'; path: string; hunks: Hunk[]; reqId: string }
+  | { type: 'changesContext'; path: string; start: number; end: number; reqId: string };
 
 type Hunk = { oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] };
 export type TreeFile = { path: string; rel: string; added: number; removed: number; hunks: Hunk[]; untracked?: boolean; binary?: boolean };
 
-const CHANGES = new Set(['changesTree', 'changesOpenDiff', 'changesRevert', 'gitCommit', 'gitPush', 'gitCreatePr']);
+const CHANGES = new Set(['changesTree', 'changesOpenDiff', 'changesRevert', 'gitCommit', 'gitPush', 'gitCreatePr', 'changesHunk', 'changesUndoEdit', 'changesContext']);
 export const isChangesMsg = (m: { type: string }): m is ChangesMsg => CHANGES.has(m.type);
 
 function run(exe: string, args: string[], cwd: string): Promise<{ ok: boolean; out: string; err: string }> {
@@ -126,6 +129,96 @@ async function revert(file: string, cwd: string): Promise<boolean> {
   return r.ok;
 }
 
+/** Old / new side of a hunk, without the +/- / space markers. */
+export function hunkSides(h: Hunk): { old: string[]; new: string[] } {
+  const o: string[] = [];
+  const n: string[] = [];
+  for (const l of h.lines) {
+    if (l[0] === '\\') continue;
+    if (l[0] !== '+') o.push(l.slice(1));
+    if (l[0] !== '-') n.push(l.slice(1));
+  }
+  return { old: o, new: n };
+}
+
+/** Reverse-apply hunks to `text` by plain text replacement: each hunk's new side is looked up
+ *  (nearest to its recorded line first) and replaced by its old side. undefined when one no longer matches. */
+export function reverseApplyText(text: string, hunks: Hunk[]): string | undefined {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.split(/\r?\n/);
+  // apply bottom-up so earlier hunks keep their line numbers
+  for (const h of [...hunks].sort((a, b) => b.newStart - a.newStart)) {
+    const { old, new: neu } = hunkSides(h);
+    let at = -1;
+    if (!neu.length) at = Math.min(Math.max(h.newStart, 0), lines.length);
+    else {
+      const matches = (i: number) => neu.every((l, k) => lines[i + k] === l);
+      const want = Math.max(h.newStart - 1, 0);
+      for (let d = 0; d <= lines.length && at < 0; d++) {
+        if (want - d >= 0 && want - d + neu.length <= lines.length && matches(want - d)) at = want - d;
+        else if (d && want + d + neu.length <= lines.length && matches(want + d)) at = want + d;
+        if (want - d < 0 && want + d + neu.length > lines.length) break;
+      }
+    }
+    if (at < 0) return undefined;
+    lines.splice(at, neu.length, ...old);
+  }
+  return lines.join(eol);
+}
+
+/** A one-hunk unified diff of `rel` that `git apply` accepts. */
+export function hunkPatch(rel: string, h: Hunk): string {
+  const r = rel.replace(/\\/g, '/');
+  return `diff --git a/${r} b/${r}\n--- a/${r}\n+++ b/${r}\n@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@\n${h.lines.join('\n')}\n`;
+}
+
+function gitStdin(args: string[], cwd: string, input: string): Promise<{ ok: boolean; err: string }> {
+  return new Promise((resolve) => {
+    const p = execFile('git', args, { cwd, timeout: 60_000, windowsHide: true }, (e, _o, stderr) => resolve({ ok: !e, err: `${stderr || (e ? e.message : '')}`.trim() }));
+    p.stdin?.end(input);
+  });
+}
+
+function revertText(file: string, hunks: Hunk[]): string | undefined {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e: any) {
+    return e?.message ?? String(e);
+  }
+  const out = reverseApplyText(text, hunks);
+  if (out === undefined) return vscode.l10n.t('The file changed since, so the change no longer applies.');
+  fs.writeFileSync(file, out);
+  return undefined;
+}
+
+/** Revert (reverse-apply to the working file) or stage one hunk. Returns an error message, if any. */
+async function hunkAction(m: Extract<ChangesMsg, { type: 'changesHunk' }>, cwd: string): Promise<string | undefined> {
+  const root = (await repoRoot(path.dirname(m.path))) ?? (await repoRoot(cwd));
+  if (m.action === 'stage') {
+    if (!root) return vscode.l10n.t('This folder is not a git repository.');
+    const r = await gitStdin(['apply', '--cached', '--recount', '-'], root, hunkPatch(path.relative(root, m.path), m.hunk));
+    return r.ok ? undefined : r.err;
+  }
+  if (root && (await isTracked(m.path, root))) {
+    const r = await gitStdin(['apply', '-R', '--recount', '-'], root, hunkPatch(path.relative(root, m.path), m.hunk));
+    if (r.ok) return undefined;
+    if (m.tree) return r.err;
+  }
+  return revertText(m.path, [m.hunk]);
+}
+
+/** Current lines start..end (1-based, inclusive) of a file. */
+function contextLines(file: string, start: number, end: number): { lines: string[]; total: number } | { error: string } {
+  try {
+    const all = fs.readFileSync(file, 'utf8').replace(/\r?\n$/, '').split(/\r?\n/);
+    const s = Math.max(1, start);
+    return { lines: all.slice(s - 1, Math.max(s - 1, end)), total: all.length };
+  } catch (e: any) {
+    return { error: e?.message ?? String(e) };
+  }
+}
+
 const fail = (msg: string) => (vscode.window.showErrorMessage(msg), false);
 
 async function commit(cwd: string, suggestion: string): Promise<boolean> {
@@ -186,6 +279,19 @@ export async function handleChanges(m: ChangesMsg, cwd: string, reply: (msg: unk
     case 'gitCommit':
       if (await commit(cwd, m.message || suggestion())) await tree();
       return;
+    case 'changesHunk': {
+      const err = await hunkAction(m, cwd);
+      if (err) vscode.window.showErrorMessage(m.action === 'stage' ? vscode.l10n.t('Could not stage the hunk: {0}', err) : vscode.l10n.t('Could not revert the hunk: {0}', err));
+      if (m.tree) await tree();
+      return;
+    }
+    case 'changesUndoEdit': {
+      const err = revertText(m.path, m.hunks);
+      if (err) vscode.window.showErrorMessage(vscode.l10n.t('Could not undo the edit to {0}: {1}', path.basename(m.path), err));
+      return reply({ type: 'changesUndoResult', reqId: m.reqId, ok: !err });
+    }
+    case 'changesContext':
+      return reply({ type: 'changesContextResult', reqId: m.reqId, start: Math.max(1, m.start), ...contextLines(m.path, m.start, m.end) });
     case 'gitPush':
       return void (await push(cwd));
     case 'gitCreatePr': {

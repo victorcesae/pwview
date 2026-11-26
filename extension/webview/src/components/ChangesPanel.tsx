@@ -2,11 +2,11 @@
 // git working tree, with an inline diff per file, the native diff, revert, and Commit / Push / Create PR.
 import { useEffect, useMemo, useState } from 'react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
-import { ChevronRight, FileDiff, GitCommitHorizontal, GitPullRequest, Loader2, RefreshCw, Undo2, Upload, SquareSplitHorizontal } from 'lucide-react';
+import { ChevronRight, FileDiff, MessageSquareText, ScanSearch, Send, X, GitCommitHorizontal, GitPullRequest, Loader2, RefreshCw, Undo2, Upload, SquareSplitHorizontal } from 'lucide-react';
 import { post as postAny } from '@/bridge';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { HunkView } from '@/views/Session';
+import { HunkView, type HunkReview } from '@/views/Session';
 import { projectOf } from '@/views/toolSummary';
 import type { ChatItem, ChatState, Hunk, ToChat } from '@/types';
 
@@ -16,7 +16,10 @@ const EDIT_TOOLS = /^(Edit|MultiEdit|Write|NotebookEdit)$/;
 const ALL = 'all';
 const TREE = 'tree';
 
-export interface FileChange { path: string; rel: string; added: number; removed: number; hunks: Hunk[]; untracked?: boolean; binary?: boolean }
+export interface FileChange { path: string; rel: string; added: number; removed: number; hunks: Hunk[]; untracked?: boolean; binary?: boolean; edits?: Edit[] }
+/** One Edit / Write tool call of a turn. */
+export interface Edit { id: string; name: string; hunks: Hunk[] }
+export interface Note { path: string; rel: string; line: number; text: string }
 export interface Turn { id: string; prompt: string; files: FileChange[]; added: number; removed: number }
 
 const norm = (p: string) => p.replace(/\\/g, '/');
@@ -29,6 +32,7 @@ function addTo(files: Map<string, FileChange>, it: Extract<ChatItem, { kind: 'to
   if (!hunks.length && it.name === 'Write') f.added += String((it.input as any)?.content ?? '').split('\n').length;
   for (const h of hunks) for (const l of h.lines) l[0] === '+' ? f.added++ : l[0] === '-' && f.removed++;
   f.hunks.push(...hunks);
+  if (hunks.length) (f.edits ??= []).push({ id: it.id, name: it.name, hunks });
 }
 
 /** One entry per user message, with the files the tools changed until the next user message. */
@@ -49,10 +53,11 @@ function mergeTurns(turns: Turn[]): FileChange[] {
   const m = new Map<string, FileChange>();
   for (const tn of turns)
     for (const f of tn.files) {
-      const e = m.get(f.path) ?? m.set(f.path, { ...f, added: 0, removed: 0, hunks: [] }).get(f.path)!;
+      const e = m.get(f.path) ?? m.set(f.path, { ...f, added: 0, removed: 0, hunks: [], edits: [] }).get(f.path)!;
       e.added += f.added;
       e.removed += f.removed;
       e.hunks.push(...f.hunks);
+      e.edits!.push(...(f.edits ?? []));
     }
   return [...m.values()];
 }
@@ -89,8 +94,60 @@ export function TurnChip({ turn }: { turn: Turn }) {
   );
 }
 
-function FileRow({ f, canRevert }: { f: FileChange; canRevert: boolean }) {
+const REVIEW_RE = /^[\s>*-]*`?REVIEW\s+(.+?):(\d+)`?\s*:\s*(.+)$/gm;
+
+/** `REVIEW path:line: finding` lines from the assistant's answers. */
+export function reviewFindings(items: ChatItem[]): { path: string; line: number; text: string }[] {
+  const out: { path: string; line: number; text: string }[] = [];
+  for (const it of items) if (it.kind === 'assistant') for (const m of it.text.matchAll(REVIEW_RE)) out.push({ path: norm(m[1].trim().replace(/^`|`$/g, '')), line: +m[2], text: m[3].trim() });
+  return out;
+}
+const sameFile = (f: FileChange, p: string) => {
+  const full = norm(f.path);
+  return p === full || p === f.rel || full.endsWith('/' + p.replace(/^\.\//, ''));
+};
+
+let undoSeq = 0;
+function UndoEdit({ f, e }: { f: FileChange; e: Edit }) {
+  const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
+  const undo = () => {
+    const reqId = `undo${++undoSeq}`;
+    setState('busy');
+    const on = (m: MessageEvent) => {
+      if (m.data?.type !== 'changesUndoResult' || m.data.reqId !== reqId) return;
+      window.removeEventListener('message', on);
+      setState(m.data.ok ? 'done' : 'idle');
+    };
+    window.addEventListener('message', on);
+    post({ type: 'changesUndoEdit', path: f.path, hunks: e.hunks, reqId });
+  };
+  const lines = e.hunks.flatMap((h) => h.lines);
+  return (
+    <div className="flex items-center gap-2 px-2 py-0.5 text-[11px]">
+      <span className="text-muted-foreground">{e.name}</span>
+      <span className="text-added tabular-nums">+{lines.filter((l) => l[0] === '+').length}</span>
+      <span className="text-removed tabular-nums">−{lines.filter((l) => l[0] === '-').length}</span>
+      <span className="flex-1" />
+      {state === 'done' ? (
+        <span className="text-muted-foreground">{t('Undone')}</span>
+      ) : (
+        <button className="text-muted-foreground hover:text-removed inline-flex cursor-pointer items-center gap-1" disabled={state === 'busy'} onClick={undo} title={t('Reverse-apply only this edit to the file')}>
+          <Undo2 className="size-3" /> {t('Undo this edit')}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FileRow({ f, canRevert, tree, notes, findings, addNote }: { f: FileChange; canRevert: boolean; tree: boolean; notes: Note[]; findings: { line: number; text: string }[]; addNote: (n: Note) => void }) {
   const [open, setOpen] = useState(false);
+  const review: HunkReview = {
+    path: f.path,
+    tree: tree && !f.untracked,
+    notes: notes.filter((n) => n.path === f.path),
+    findings,
+    addNote: (line, text) => addNote({ path: f.path, rel: f.rel, line, text }),
+  };
   return (
     <li className="rounded border">
       <div className="flex items-center gap-1.5 px-1.5 py-0.5 font-mono text-[11.5px]">
@@ -98,6 +155,7 @@ function FileRow({ f, canRevert }: { f: FileChange; canRevert: boolean }) {
           <ChevronRight className={cn('size-3 shrink-0 transition-transform', open && 'rotate-90')} />
           <span className="min-w-0 flex-1 truncate">{f.rel}</span>
           {f.untracked && <span className="text-added text-[10px]">{t('new')}</span>}
+          {findings.length > 0 && <span className="text-[10px] text-amber-500 tabular-nums">{t('{0} findings', findings.length)}</span>}
           {f.added > 0 && <span className="text-added tabular-nums">+{f.added}</span>}
           {f.removed > 0 && <span className="text-removed tabular-nums">−{f.removed}</span>}
         </button>
@@ -110,9 +168,31 @@ function FileRow({ f, canRevert }: { f: FileChange; canRevert: boolean }) {
           </button>
         )}
       </div>
-      {open && <div className="border-t">{f.binary ? <div className="text-muted-foreground px-3 py-2 text-[12px]">{t('Binary file')}</div> : <HunkView hunks={f.hunks} />}</div>}
+      {open && (
+        <div className="border-t">
+          {f.binary ? <div className="text-muted-foreground px-3 py-2 text-[12px]">{t('Binary file')}</div> : <HunkView hunks={f.hunks} review={review} />}
+          {!tree && f.edits && f.edits.length > 0 && (
+            <div className="border-t py-0.5">
+              {f.edits.map((e) => (
+                <UndoEdit key={e.id} f={f} e={e} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </li>
   );
+}
+
+/** The diff of the shown files as unified-diff text, for the review prompt. */
+function diffText(files: FileChange[]): string {
+  let out = '';
+  for (const f of files) {
+    if (f.binary) continue;
+    out += `--- ${f.rel}\n+++ ${f.rel}\n`;
+    for (const h of f.hunks) out += `@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@\n${h.lines.join('\n')}\n`;
+  }
+  return out.length > 60_000 ? out.slice(0, 60_000) + '\n… (truncated)\n' : out;
 }
 
 type TreeState = { loading: boolean; files: FileChange[]; error?: string; root?: string };
@@ -123,6 +203,8 @@ export function ChangesPanel({ chat }: { chat: ChatState }) {
   const [open, setOpen] = useState(false);
   const [sel, setSel] = useState<string>(ALL);
   const [tree, setTree] = useState<TreeState>({ loading: false, files: [] });
+  const [notes, setNotes] = useState<Note[]>([]);
+  const findings = useMemo(() => reviewFindings(chat.items), [chat.items]);
 
   useEffect(() => {
     const onOpen = (e: Event) => {
@@ -153,6 +235,17 @@ export function ChangesPanel({ chat }: { chat: ChatState }) {
   const prompts = (turn ? [turn] : changed).map((x) => x.prompt).filter(Boolean);
   const suggestion = (prompts.length === 1 ? prompts[0] : prompts.at(-1) ?? '').slice(0, 72);
   const count = mergeTurns(changed).length;
+  const sendNotes = () => {
+    const text = `${t('Review notes on the changes:')}\n\n${notes.map((n) => `${n.rel}:${n.line} — ${n.text}`).join('\n')}`;
+    post({ type: 'send', text, images: [], priority: 'later' });
+    setNotes([]);
+  };
+  const askReview = () => {
+    const what = sel === TREE ? 'the uncommitted changes in the working tree' : turn ? `the changes made in the turn "${turn.prompt}"` : 'the changes made in this chat';
+    const fence = '```';
+    const text = `Review ${what} for bugs, regressions, missing edge cases and unclear code. Do not change any files. Answer with one finding per line, exactly in the form\nREVIEW path:line: finding\nwhere path is relative to the repository root and line is the line number in the current file. Diff:\n\n${fence}diff\n${diffText(files)}${fence}`;
+    post({ type: 'send', text, images: [], priority: 'later' });
+  };
 
   const act = 'hover:bg-accent text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px]';
   return (
@@ -171,6 +264,9 @@ export function ChangesPanel({ chat }: { chat: ChatState }) {
               <span className="text-added">+{added}</span> <span className="text-removed">−{removed}</span> <span className="text-muted-foreground">· {files.length === 1 ? t('1 file') : t('{0} files', files.length)}</span>
             </span>
             <span className="flex-1" />
+            <button className={act} onClick={askReview} disabled={!files.length} title={t('Ask the agent to review these changes')}>
+              <ScanSearch className="size-3" /> {t('Review changes')}
+            </button>
             <button className={act} onClick={() => post({ type: 'gitCommit', message: suggestion })} title={t('Stage everything and commit')}>
               <GitCommitHorizontal className="size-3" /> {t('Commit')}
             </button>
@@ -207,11 +303,39 @@ export function ChangesPanel({ chat }: { chat: ChatState }) {
             ) : (
               <ul className="flex flex-col gap-1">
                 {files.map((f) => (
-                  <FileRow key={f.path} f={f} canRevert />
+                  <FileRow key={f.path} f={f} canRevert tree={sel === TREE} notes={notes} findings={findings.filter((x) => sameFile(f, x.path))} addNote={(n) => setNotes((s) => [...s, n])} />
                 ))}
               </ul>
             )}
           </div>
+          {notes.length > 0 && (
+            <div className="flex flex-col gap-1 border-t pt-2">
+              <div className="flex items-center gap-1.5">
+                <MessageSquareText className="size-3.5" />
+                <span className="text-[12px] font-medium">{t('Review notes ({0})', notes.length)}</span>
+                <span className="flex-1" />
+                <button className={act} onClick={() => setNotes([])}>
+                  {t('Clear')}
+                </button>
+                <button className={act} onClick={sendNotes}>
+                  <Send className="size-3" /> {t('Send to agent')}
+                </button>
+              </div>
+              <ul className="max-h-28 overflow-y-auto text-[11.5px]">
+                {notes.map((n, i) => (
+                  <li key={i} className="flex items-start gap-1">
+                    <span className="text-muted-foreground shrink-0 font-mono">
+                      {n.rel}:{n.line}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">— {n.text}</span>
+                    <button className="text-muted-foreground hover:text-foreground cursor-pointer" onClick={() => setNotes((s) => s.filter((_, k) => k !== i))} aria-label={t('Remove')}>
+                      <X className="size-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>

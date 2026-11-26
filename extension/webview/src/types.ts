@@ -140,6 +140,9 @@ export type ToChat =
   | { type: 'gitCommit'; message: string }
   | { type: 'gitPush' }
   | { type: 'gitCreatePr' }
+  | { type: 'changesHunk'; action: 'revert' | 'stage'; path: string; hunk: Hunk; tree?: boolean }
+  | { type: 'changesUndoEdit'; path: string; hunks: Hunk[]; reqId: string }
+  | { type: 'changesContext'; path: string; start: number; end: number; reqId: string }
   | { type: 'recentChats' }
   | { type: 'newChat' }
   | { type: 'gitInfo' }

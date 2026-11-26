@@ -322,5 +322,9 @@
   "Restore the files and the conversation to before this message?": "Restaurar os arquivos e a conversa ao estado de antes desta mensagem?",
   "Changes the agent made to files since then are undone.": "As alterações que o agente fez nos arquivos desde então são desfeitas.",
   "Files restored to before this message.": "Arquivos restaurados ao estado de antes desta mensagem.",
-  "Conversation exported to {0}": "Conversa exportada para {0}"
+  "Conversation exported to {0}": "Conversa exportada para {0}",
+  "The file changed since, so the change no longer applies.": "O arquivo mudou desde então, e a alteração não se aplica mais.",
+  "Could not stage the hunk: {0}": "Não foi possível preparar o trecho: {0}",
+  "Could not revert the hunk: {0}": "Não foi possível reverter o trecho: {0}",
+  "Could not undo the edit to {0}: {1}": "Não foi possível desfazer a edição em {0}: {1}"
 }
