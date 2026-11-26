@@ -42,11 +42,12 @@ export function ThinkingRow({ it }: { it: Extract<ChatItem, { kind: 'thinking' }
   };
   return (
     <div className="text-muted-foreground flex flex-col gap-1 text-[13.5px]" data-thinking>
-      <button className="hover:text-foreground flex min-w-0 cursor-pointer items-center gap-1.5 text-left" onClick={toggle} aria-expanded={open} title={t('Show or hide the thinking ({0})', 'Ctrl/Cmd+O')}>
-        {open ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
+      {/* same layout as the step rows: icon, label, preview, and the chevron on the right */}
+      <button className="hover:text-foreground flex h-7 w-full min-w-0 cursor-pointer items-center gap-2 px-1.5 text-left" onClick={toggle} aria-expanded={open} title={t('Show or hide the thinking ({0})', 'Ctrl/Cmd+O')}>
         <Brain className={cn('size-4 shrink-0', it.streaming && 'animate-pulse')} />
-        <span className="shrink-0 italic">{label}</span>
-        {!open && preview && <span className="min-w-0 truncate opacity-80">· {preview}</span>}
+        <span className="shrink-0">{label}</span>
+        {!open && preview && <span className="min-w-0 flex-1 truncate opacity-80">· {preview}</span>}
+        <span className="ml-auto shrink-0">{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</span>
       </button>
       {open && (
         <div ref={live} className="border-border/60 ml-1.5 max-h-[60vh] overflow-y-auto border-l pl-3 whitespace-pre-wrap opacity-80">
