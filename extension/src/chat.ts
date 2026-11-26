@@ -962,7 +962,11 @@ ${question}`;
     this.changed();
   }
 
+  /** set by Stop: the turn's "error_during_execution" is the stop itself, not a failure */
+  private stopping = false;
+
   async interrupt() {
+    if (this.state.status === 'working' || this.state.status === 'waiting') this.stopping = true;
     await this.q?.interrupt().catch(() => {});
     for (const [id, resolve] of this.pending) {
       resolve({ behavior: 'deny', message: 'Interrupted by the user', interrupt: true });
@@ -1328,8 +1332,18 @@ ${question}`;
         this.state.costUsd += r.total_cost_usd ?? 0;
         const u = r.usage ?? {};
         this.state.tokens = (this.state.tokens ?? 0) + (u.input_tokens ?? 0) + (u.output_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
-        if (r.subtype !== 'success' || r.is_error)
-          this.state.items.push({ kind: 'result', id: uid(), text: str(r.result) || r.subtype, isError: true, durationMs: r.duration_ms, ts: new Date().toISOString() });
+        const stopped = this.stopping && r.subtype === 'error_during_execution';
+        this.stopping = false;
+        if (stopped) this.state.items.push({ kind: 'system', id: uid(), text: 'Stopped. The conversation is kept: send a message to go on.', ts: new Date().toISOString() } as ChatItem);
+        else if (r.subtype !== 'success' || r.is_error)
+          this.state.items.push({
+            kind: 'result',
+            id: uid(),
+            text: r.subtype === 'error_during_execution' && !str(r.result) ? 'The run stopped with an error (error_during_execution). The conversation is kept: send a message to go on, or Try again.' : str(r.result) || r.subtype,
+            isError: true,
+            durationMs: r.duration_ms,
+            ts: new Date().toISOString(),
+          });
         for (const it of this.state.items) if (it.kind === 'assistant' || it.kind === 'thinking') it.streaming = false;
         const items = this.state.items;
         const lastUser = items.map((x) => x.kind).lastIndexOf('user');

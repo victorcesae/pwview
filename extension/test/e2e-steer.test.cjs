@@ -29,7 +29,7 @@ function until(c, cond, ms = 240_000) {
 const SLOW_TASK =
   'Run these three Bash commands, one per tool call, in order, waiting for each: `sleep 6 && echo step1`, then `sleep 6 && echo step2`, then `sleep 6 && echo step3`. After the last one, write a one-line summary.';
 
-function setup() {
+function setup(extra = {}) {
   execSync(
     `npx esbuild src/chat.ts src/util.ts --bundle --platform=node --format=cjs --outdir="${out}" --alias:vscode="${stub}" --define:import.meta.url=importMetaUrl --inject:build/import-meta-url.js --log-level=error`,
     { cwd: root },
@@ -37,7 +37,7 @@ function setup() {
   const { ChatSession } = require(path.join(out, 'chat.js'));
   const { agentExecutable } = require(path.join(out, 'util.js'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'steerhouse-steer-'));
-  const c = new ChatSession({ cwd, executable: agentExecutable(), model: 'haiku', permissionMode: 'acceptEdits' }, () => {});
+  const c = new ChatSession({ cwd, executable: agentExecutable(), model: 'haiku', permissionMode: 'acceptEdits', ...extra }, () => {});
   c.start();
   const said = () => c.state.items.filter((i) => i.kind === 'assistant').map((i) => i.text).join('\n');
   const bash = () => c.state.items.filter((i) => i.kind === 'tool' && (i.name === 'Bash' || i.name === 'PowerShell'));
@@ -110,6 +110,37 @@ test('e2e: a side question is answered while the agent keeps working, and the ag
     await until(c, () => c.state.status === 'idle' && c.turns >= 1);
     assert.equal(bash().length, 3, 'the main task carried on to the end');
     assert.doesNotMatch(said(), /which step is running/i);
+  } finally {
+    c.close();
+    await removeTestSession(c.state.cwd);
+  }
+});
+
+for (const relay of [false, true])
+test(`e2e: after Stop the chat keeps its conversation and goes on with the next message${relay ? ' (through the relay, as in VS Code)' : ''}`, { skip, timeout: 420_000 }, async () => {
+  const { c, said, bash } = setup(relay ? { relayScript: path.join(root, 'dist', 'relay.js') } : {});
+  try {
+    c.send('Remember the code word MANGO-42. Then: ' + SLOW_TASK, [], 'later');
+    await until(c, () => bash().length >= 1);
+    await c.interrupt();
+    await until(c, () => c.state.status === 'idle', 60_000);
+    const results = c.state.items.filter((i) => i.kind === 'result').map((i) => i.text);
+    assert.deepEqual(results, [], 'a stop is not shown as an error');
+    assert.ok(c.state.items.some((i) => i.kind === 'system' && /^Stopped/.test(i.text)), 'it says it stopped');
+    console.log(`stop: status=${c.state.status}, results=${JSON.stringify(results)}, systems=${JSON.stringify(c.state.items.filter((i) => i.kind === 'system').map((i) => i.text))}`);
+    c.send('What was the code word I gave you? Answer with just the word.', [], 'later');
+    await until(c, () => c.state.status === 'idle' && /MANGO-42/.test(said()), 120_000);
+    console.log(`after stop: status=${c.state.status}, error=${c.state.error}, remembered=${/MANGO-42/.test(said())}`);
+    // reopened later: the history read back from disk still has the conversation
+    const { historyFromTranscript } = require(path.join(out, 'chat.js'));
+    const os2 = require('os');
+    const dir = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os2.homedir(), '.claude'), 'projects');
+    const file = require('fs').readdirSync(dir).map((d) => path.join(dir, d, c.state.sessionId + '.jsonl')).find((f) => require('fs').existsSync(f));
+    const h = historyFromTranscript(file);
+    const kinds = h.items.map((i) => i.kind + (i.kind === 'user' ? ':' + i.text.slice(0, 30) : ''));
+    console.log('reopened: ' + JSON.stringify(kinds));
+    assert.ok(h.items.some((i) => i.kind === 'user' && /MANGO-42/.test(i.text)), 'the first prompt is in the reopened chat');
+    assert.ok(h.items.some((i) => i.kind === 'assistant' && /MANGO-42/.test(i.text)), 'the answer after Stop is in the reopened chat');
   } finally {
     c.close();
     await removeTestSession(c.state.cwd);

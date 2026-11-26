@@ -41,7 +41,7 @@ export function ThinkingRow({ it }: { it: Extract<ChatItem, { kind: 'thinking' }
     setOpen(!open);
   };
   return (
-    <div className="text-muted-foreground/80 flex flex-col gap-1 pl-7 text-[12px]" data-thinking>
+    <div className="text-muted-foreground/80 flex flex-col gap-1 text-[12px]" data-thinking>
       <button className="hover:text-foreground flex min-w-0 cursor-pointer items-center gap-1.5 text-left" onClick={toggle} aria-expanded={open} title={t('Show or hide the thinking ({0})', 'Ctrl/Cmd+O')}>
         {open ? <ChevronDown className="size-3 shrink-0" /> : <ChevronRight className="size-3 shrink-0" />}
         <Brain className={cn('size-3 shrink-0', it.streaming && 'animate-pulse')} />

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.28
+- Much faster start: the parsed sessions are kept on disk between VS Code sessions (about 0.2 s instead of 10 s or more to list them), and the list fills in after the views and chats appear instead of holding up startup.
+- Stopping a chat shows "Stopped. The conversation is kept" instead of a red error_during_execution; a real error says the conversation is kept and how to go on.
+- Chat names in the sidebar are on one line (no ⏎ from multi-line prompts) and shorter.
+- Answers no longer have the AI icon beside them.
+- System notes ("Resumed…", "Context cleared…", "Stopped…") and the activity line are translated.
+
 ## 1.0.27
 - Bigger message box: the chat and the box use up to 72rem of width (was 46rem), and the box starts about 4 lines tall and grows to almost half the window.
 - Slimmer chat header: one row, the title shortens with … instead of pushing the buttons to a second line; the account chip hides on narrow windows.

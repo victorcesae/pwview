@@ -572,7 +572,7 @@ function UserMessage({ it }: { it: Extract<ChatItem, { kind: 'user' }> }) {
 /** A side question and its answer: off to the side, the agent doing the work never sees it. */
 function AsideCard({ it }: { it: Extract<ChatItem, { kind: 'aside' }> }) {
   return (
-    <div className="border-primary/30 bg-primary/5 ml-8 flex flex-col gap-1 rounded-lg border border-dashed px-3 py-2 text-[12.5px]" data-aside>
+    <div className="border-primary/30 bg-primary/5 flex flex-col gap-1 rounded-lg border border-dashed px-3 py-2 text-[12.5px]" data-aside>
       <div className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
         <MessageCircleQuestion className="size-3.5" />
         <span className="font-medium">{t('Side question')}</span>
@@ -659,7 +659,6 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
       if (!it.text.trim() && !it.streaming) return null;
       return (
         <div className="group/answer flex gap-2.5">
-          <AgentAvatar />
           <div className="min-w-0 flex-1">
             <Fold live={it.streaming}>
               <Markdown text={it.text} />
@@ -700,7 +699,7 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
     case 'question':
       return <QuestionCard it={it} />;
     case 'result':
-      return <div className="border-error/40 bg-error/10 text-error rounded-lg border px-3 py-2 text-[12px]">{it.text}</div>;
+      return <div className="border-error/40 bg-error/10 text-error rounded-lg border px-3 py-2 text-[12px]">{t(it.text)}</div>;
     case 'agentReport':
       return <AgentReport it={it} />;
     case 'aside':
@@ -711,7 +710,7 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
       return (
         <div className="text-muted-foreground flex items-center justify-center gap-1.5 text-[11px]">
           <Link2 className="size-3" />
-          {it.text}
+          {t(it.text)}
         </div>
       );
   }
@@ -1141,7 +1140,7 @@ export function ChatView({ data }: { data: ChatData }) {
             })}
           </div>
           {!working && top.some((i) => i.kind === 'user') && ['assistant', 'result', 'tool'].includes(top.at(-1)?.kind ?? '') && (
-            <div className="-mt-1 flex justify-start pl-7">
+            <div className="-mt-1 flex justify-start">
               <Button size="xs" variant="ghost" onClick={() => post({ type: 'retry' })} title={t('Send your last message again')}>
                 <RotateCcw /> {t('Try again')}
               </Button>
@@ -1175,7 +1174,7 @@ export function ChatView({ data }: { data: ChatData }) {
         {working && chat.activity && (
           <div className="text-muted-foreground flex items-center gap-2 px-1 text-[12px]" role="status">
             <Loader2 className="text-working size-3.5 animate-spin" />
-            <span className="truncate">{chat.activity}</span>
+            <span className="truncate">{t(chat.activity)}</span>
             {chat.turnStarted && (
               <span className="shrink-0 opacity-80" data-elapsed>
                 · <Elapsed since={chat.turnStarted} />

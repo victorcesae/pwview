@@ -104,6 +104,13 @@ export function activate(ctx: vscode.ExtensionContext) {
       .filter((a) => !a.provider && !seen.has(a.configDir) && !!seen.add(a.configDir))
       .map((a) => ({ account: a.id, dir: path.join(a.configDir, 'projects') }));
   });
+  // parsed transcripts from the last session: startup doesn't re-read every transcript
+  const scanCache = path.join(ctx.globalStorageUri.fsPath, 'transcripts.cache');
+  const cacheVersion = String((ctx.extension.packageJSON as any).version);
+  engine.restoreCache(scanCache, cacheVersion);
+  const saveScanCache = () => engine.saveCache(scanCache, cacheVersion);
+  const cacheTimer = setInterval(saveScanCache, 60_000);
+  ctx.subscriptions.push({ dispose: () => (clearInterval(cacheTimer), saveScanCache()) });
   /** Env for an account, with a provider's API key read from VS Code's secure storage. */
   const envFor = async (a: Account) => accountEnv(a, a.provider?.hasKey ? await ctx.secrets.get(secretKey(a.provider.id)) : undefined);
   const accountOf = (id: string) => listAccounts().find((a) => a.id === id) ?? listAccounts()[0];
@@ -1033,7 +1040,8 @@ export function activate(ctx: vscode.ExtensionContext) {
     const n = sessions.filter((s) => s.info.state === 'working').length;
     treeView.badge = n ? { value: n, tooltip: `${n} agent session(s) working` } : undefined;
   }
-  refresh(true);
+  // after activation returns: the views and restored chats appear first, the list fills in right after
+  setTimeout(() => refresh(true).then(saveScanCache), 0);
   // until Claude Code is installed and logged in, the way back to the guide sits at the top of the tree
   syncSetupContext().then((checks) => tree.setNeedsSetup(checks.some((c) => (c.name === 'Claude Code' || c.name === 'Login') && c.ok === false))).catch(() => {});
   restoreTestHooks(chats);

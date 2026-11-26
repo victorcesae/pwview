@@ -360,7 +360,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
       }
       case 'session': {
         const i = node.s.info;
-        const it = new vscode.TreeItem(clip(i.title, 70), C.Collapsed);
+        const it = new vscode.TreeItem(clip(i.title, 48), C.Collapsed);
         it.id = `${node.via ?? ''}|s:${i.id}`;
         // the agent's own mark (Claude, GPT, Llama…); a spinner while it works
         it.iconPath = i.state === 'working' ? stateIcon('working') : vendorIcon(i.model);

@@ -371,6 +371,38 @@ export function projectTranscripts(project: string, dirs: string[]): { id: strin
 
 export class Engine {
   private cache = new Map<string, { key: string; t: Transcript }>();
+  /** set when a transcript was parsed since the cache was last saved */
+  private dirty = false;
+
+  /**
+   * The parsed transcripts, kept on disk between VS Code sessions: reading 200 MB of transcripts
+   * takes ~10 s at startup, loading this takes ~20 ms. Entries are checked against each file's
+   * mtime and size as before, so a stale one is simply parsed again.
+   */
+  restoreCache(file: string, version: string) {
+    try {
+      const saved = require('v8').deserialize(fs.readFileSync(file)) as { version: string; entries: [string, { key: string; t: Transcript }][] };
+      if (saved?.version !== version || !Array.isArray(saved.entries)) return;
+      for (const [k, v] of saved.entries) if (!this.cache.has(k)) this.cache.set(k, v);
+    } catch {
+      /* none yet, or unreadable: parsed again */
+    }
+  }
+
+  /** Writes the cache when something new was parsed (only transcripts that still exist). */
+  saveCache(file: string, version: string) {
+    if (!this.dirty) return;
+    this.dirty = false;
+    try {
+      const entries = [...this.cache.entries()].filter(([k]) => fs.existsSync(k));
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      const tmp = `${file}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, require('v8').serialize({ version, entries }));
+      fs.renameSync(tmp, file);
+    } catch {
+      /* best effort: next start parses again */
+    }
+  }
 
   /** One transcript root per Claude account (each account has its own config folder). */
   constructor(private roots: () => { account: string; dir: string }[] = () => [{ account: 'default', dir: path.join(claudeDir(), 'projects') }]) {}
@@ -387,6 +419,7 @@ export class Engine {
     if (hit && hit.key === key) return { mtime: st.mtimeMs, t: hit.t };
     const t = parse(file, sid, aid);
     this.cache.set(file, { key, t });
+    this.dirty = true;
     return { mtime: st.mtimeMs, t };
   }
 
@@ -460,7 +493,8 @@ export class Engine {
             account,
             id: sid,
             project: t.cwd ?? dir.name,
-            title: t.title ?? t.firstPrompt ?? '(untitled)',
+            // one line: a prompt's line breaks would show as ⏎ in lists and tab titles
+            title: (t.title ?? t.firstPrompt ?? '(untitled)').replace(/\s+/g, ' ').trim() || '(untitled)',
             firstPrompt: t.firstPrompt,
             lastPrompt: t.lastPrompt,
             branch: t.branch,
