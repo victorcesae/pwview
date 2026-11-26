@@ -141,5 +141,6 @@
   "setting.verify.max.fixes": "When verify fails, how many times per prompt the agent is automatically asked to fix it (0: never).",
   "setting.terminal.location": "Where Steerhouse opens terminals (Open terminal, /terminal, following a command's output).",
   "setting.terminal.location.right": "Beside the chat, as a tab on the right",
-  "setting.terminal.location.bottom": "In the bottom panel, like VS Code's own terminals"
+  "setting.terminal.location.bottom": "In the bottom panel, like VS Code's own terminals",
+  "cmd.add.account.or.provider": "Add Account or Provider…"
 }

@@ -145,7 +145,7 @@ test('tree: by chat — Pinned, Active, Recent across folders, Archived at the e
     const hidden = tree.getChildren(top[2]).find((x) => x.kind === 'hiddenChats');
     assert.deepStrictEqual(ids(hidden), ['d', 'e']);
     const row = tree.getTreeItem(tree.getChildren(top[0])[0]);
-    assert.match(row.description, /^alpha · main · /);
+    assert.match(row.description, /^\S+ · alpha · main$/, "status or age first, then folder and branch");
     assert.match(row.contextValue, /^session pinned shown/);
     assert.match(tree.getTreeItem(tree.getChildren(hidden)[0]).contextValue, /^session unpinned hidden/);
     const projects = tree.getChildren(top[3]);

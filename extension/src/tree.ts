@@ -11,6 +11,7 @@ import { accountIdentity, listAccounts, preferredAccount, type Account, listCurs
 import { modelLabel } from './pricing';
 import { vendorOf } from './providers';
 import { ago, clip, rel } from './util';
+import { rowDescription, rowStatus, type RowKind } from './rowStatus';
 
 export type Node =
   | { kind: 'hint'; text: string; command: string; icon: string }
@@ -118,6 +119,58 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
     this.emitter.fire(undefined);
   }
 
+  /** Live status of an open chat ('waiting' = an approval or a question is pending); set by extension.ts. */
+  liveStatus?: (id: string) => string | undefined;
+  /** per chat: first seen working, seen to finish, last opened (ms); in memory only */
+  private since = new Map<string, number>();
+  private finished = new Map<string, number>();
+  private seen = new Map<string, number>();
+  /** rows on screen whose description ticks ("Working 14s"), repainted alone by the ticker */
+  private ticking = new Set<Node>();
+  private ticker?: ReturnType<typeof setInterval>;
+
+  /** The user opened this chat: it no longer reads "Done". */
+  markSeen(id: string) {
+    this.seen.set(id, Date.now());
+    if (this.finished.has(id)) this.refresh();
+  }
+
+  /** Notes when chats start and stop working (cheap: one pass over the list per refresh). */
+  private track(sessions: Session[]) {
+    const now = Date.now();
+    for (const s of sessions) {
+      const id = s.info.id;
+      if (s.info.state === 'working') {
+        if (!this.since.has(id)) this.since.set(id, s.info.started && now - Date.parse(s.info.started) < 20_000 ? Date.parse(s.info.started) : now);
+        this.finished.delete(id);
+      } else if (this.since.has(id)) {
+        this.since.delete(id);
+        this.finished.set(id, now);
+      }
+    }
+    for (const [id, t] of this.finished) if (now - t > 15 * 60_000) this.finished.delete(id);
+    this.ticking.clear();
+    const live = this.since.size > 0 || sessions.some((s) => this.liveStatus?.(s.info.id) === 'waiting');
+    if (live && !this.ticker) (this.ticker = setInterval(() => this.tick(), 5000)).unref?.(); // never keeps the process alive
+    else if (!live && this.ticker) (clearInterval(this.ticker), (this.ticker = undefined));
+  }
+
+  /** Repaints only the working rows (their seconds), not the whole tree. */
+  private tick() {
+    for (const n of this.ticking) this.emitter.fire(n);
+  }
+
+  dispose() {
+    if (this.ticker) clearInterval(this.ticker);
+  }
+
+  private status(i: Session['info']): { kind: RowKind; label: string } {
+    return rowStatus(
+      { state: i.state, waiting: this.liveStatus?.(i.id) === 'waiting', workingSince: this.since.get(i.id), finishedAt: this.finished.get(i.id), seenAt: this.seen.get(i.id), updated: i.updated, now: Date.now() },
+      (s, ...a) => vscode.l10n.t(s, ...a),
+    );
+  }
+
   private workspaceRoots() {
     return (vscode.workspace.workspaceFolders ?? []).map((f) => norm(f.uri.fsPath));
   }
@@ -129,6 +182,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
     const { shown: sessions, runs } = collapseRuns(this.sessions());
     this.runs = runs;
     if (!node) {
+      this.track(sessions);
       const out: Node[] = [];
       const h = this.hooks();
       if (h !== 'all')
@@ -191,17 +245,17 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         return [
           ...listAccounts().map((a): Node => ({ kind: 'account', a })),
           ...listCursorAccounts().map((c): Node => ({ kind: 'cursorAccount', c, a: c })),
-          { kind: 'hint', text: vscode.l10n.t('Add a Claude account…'), command: 'steerhouse.addAccount', icon: 'add' },
-          { kind: 'hint', text: vscode.l10n.t('Add a Cursor account…'), command: 'steerhouse.addCursorAccount', icon: 'add' },
-          { kind: 'hint', text: vscode.l10n.t('Add a model provider (Ollama, OpenRouter…)…'), command: 'steerhouse.addProvider', icon: 'server' },
+          { kind: 'hint', text: vscode.l10n.t('Add account or provider…'), command: 'steerhouse.addAccountOrProvider', icon: 'add' },
         ];
       case 'rules': {
         const list = node.scope === 'user' ? userRules() : projectRules(node.root!);
         return list.map((r): Node => ({ kind: 'rule', scope: node.scope, r }));
       }
       case 'session': {
+        // one row per conversation: the sub-agents of its earlier runs (same chat continued in a new
+        // session, e.g. after compacting) are listed here too, in order, instead of a nested copy
         const older = node.via === 'run' ? [] : (this.runs.get(node.s.info.id) ?? []);
-        const out: Node[] = [...older.map((s): Node => ({ kind: 'session', s, via: 'run' })), ...node.s.agents.map((a) => ({ kind: 'agent', s: node.s, a: a.info, via: node.via }) as Node)];
+        const out: Node[] = [...[...older].reverse().flatMap((s) => s.agents.map((a): Node => ({ kind: 'agent', s, a: a.info, via: `run:${s.info.id}` }))), ...node.s.agents.map((a) => ({ kind: 'agent', s: node.s, a: a.info, via: node.via }) as Node)];
         const own = node.s.t.changes;
         if (own.length) out.push({ kind: 'changes', s: node.s, list: own, via: node.via });
         if (fs.existsSync(node.s.info.project)) out.push({ kind: 'files', root: node.s.info.project, s: node.s, sessions: [node.s], via: node.via });
@@ -360,12 +414,21 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
       }
       case 'session': {
         const i = node.s.info;
-        const it = new vscode.TreeItem(clip(i.title, 48), C.Collapsed);
+        const it = new vscode.TreeItem(clip(i.title || i.firstPrompt || vscode.l10n.t('Untitled chat'), 48), C.Collapsed);
         it.id = `${node.via ?? ''}|s:${i.id}`;
-        // the agent's own mark (Claude, GPT, Llama…); a spinner while it works
-        it.iconPath = i.state === 'working' ? stateIcon('working') : vendorIcon(i.model);
-        const bits = [listAccounts().length > 1 ? `👤 ${listAccounts().find((a) => a.id === i.account)?.name ?? i.account}` : '', this.attached().has(i.id) ? '⌨ terminal' : '', i.model ? modelLabel(i.model) : '', i.branch, `${i.edits} edits`, i.agents.length ? `${i.agents.length} agents` : '', i.pendingComments ? `${i.pendingComments} comments queued` : '', ago(i.updated)];
-        it.description = node.flat ? [path.basename(i.project) || i.project, i.branch, ago(i.updated)].filter(Boolean).join(' · ') : bits.filter(Boolean).join(' · ');
+        // status first (t3code-style): a spinner while it works, a bell when it waits for you, a check when just done, else the agent's mark
+        const st = this.status(i);
+        if (st.kind === 'working') this.ticking.add(node);
+        it.iconPath =
+          st.kind === 'working'
+            ? stateIcon('working')
+            : st.kind === 'waiting'
+              ? new vscode.ThemeIcon('bell-dot', new vscode.ThemeColor('list.warningForeground'))
+              : st.kind === 'done'
+                ? new vscode.ThemeIcon('pass', new vscode.ThemeColor('testing.iconPassed'))
+                : vendorIcon(i.model);
+        const bits = [listAccounts().length > 1 ? `👤 ${listAccounts().find((a) => a.id === i.account)?.name ?? i.account}` : '', this.attached().has(i.id) ? '⌨ terminal' : '', i.model ? modelLabel(i.model) : '', i.branch, `${i.edits} edits`, i.agents.length ? `${i.agents.length} agents` : '', i.pendingComments ? `${i.pendingComments} comments queued` : ''];
+        it.description = node.flat ? rowDescription(st.label, path.basename(i.project) || i.project, i.branch) : [st.label, ...bits].filter(Boolean).join(' · ');
         const cm = this.chatMarks;
         const snoozed = cm?.snoozedUntil(i.id);
         if (node.flat && cm?.isArchived(i.id)) it.description += ' · ' + vscode.l10n.t('archived');
@@ -393,9 +456,16 @@ $(terminal) Runs in a VS Code terminal: **Send now** can interrupt it.`);
         const a = node.a;
         const it = new vscode.TreeItem(clip(a.description, 70), a.edits ? C.Collapsed : C.None);
         it.id = `${node.via ?? ''}|a:${node.s.info.id}:${a.id}`;
-        it.iconPath = a.state === 'working' ? stateIcon('working') : new vscode.ThemeIcon('hubot');
-        it.description = [a.agentType, `${a.edits} edits`, `${a.tools} tools`, ago(a.updated)].filter(Boolean).join(' · ');
-        it.tooltip = `Sub-agent ${a.id}\n${a.description}`;
+        // what it is doing, like t3code's subagent rows: Working · <its last step>, Stopped, or Done
+        const status = a.state === 'working' ? vscode.l10n.t('Working') : a.stopped ? vscode.l10n.t('Stopped') : vscode.l10n.t('Done');
+        it.iconPath =
+          a.state === 'working'
+            ? stateIcon('working')
+            : a.stopped
+              ? new vscode.ThemeIcon('debug-stop', new vscode.ThemeColor('disabledForeground'))
+              : new vscode.ThemeIcon('pass', new vscode.ThemeColor('testing.iconPassed'));
+        it.description = [status, a.state === 'working' ? a.doing : `${a.edits} edits · ${a.tools} tools`, ago(a.updated)].filter(Boolean).join(' · ');
+        it.tooltip = new vscode.MarkdownString(`**${a.description}**\n\n${status}${a.doing ? ` — ${a.doing}` : ''}\n\n${a.agentType} · ${a.edits} edits · ${a.tools} tools · ${ago(a.updated)}`);
         it.command = { command: 'steerhouse.openSession', title: 'Open', arguments: [node.s.info.id, a.id] };
         return it;
       }
