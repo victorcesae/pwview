@@ -149,5 +149,6 @@
   "cmd.add.account.or.provider": "Adicionar conta ou provedor…",
   "setting.shell": "Shell dos comandos que você roda pela caixa do chat com !. \"auto\" usa o perfil de terminal padrão do VS Code (PowerShell no Windows, a menos que você tenha escolhido outro). Ou um nome (powershell, pwsh, cmd, git bash, bash, zsh) ou um caminho completo.",
   "cmd.new.cursor.chat": "Novo chat com o Cursor",
-  "cmd.new.chat.from.editor": "Novo chat do Steerhouse (no projeto deste arquivo)"
+  "cmd.new.chat.from.editor": "Novo chat do Steerhouse (no projeto deste arquivo)",
+  "cmd.new.opencode.chat": "Novo chat com o OpenCode"
 }

@@ -250,6 +250,11 @@
         "category": "Steerhouse"
       },
       {
+        "command": "steerhouse.newOpenCodeChat",
+        "title": "%cmd.new.opencode.chat%",
+        "category": "Steerhouse"
+      },
+      {
         "command": "steerhouse.resumeInTerminal",
         "title": "%cmd.resume.in.terminal%",
         "category": "Steerhouse",
@@ -1638,7 +1643,7 @@
     "build:webview": "vite build --config webview/vite.config.mts",
     "dev:webview": "vite --config webview/vite.config.mts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
-    "test": "node --test test/uploads.test.cjs test/relay.test.cjs test/codeCompletion.test.cjs test/shell.test.cjs test/pwview.test.cjs test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs test/scm.test.cjs test/mentions.test.cjs test/hunks.test.cjs test/secretScan.test.cjs test/verify.test.cjs test/bestOfN.test.cjs test/mediaPaths.test.cjs test/rowStatus.test.cjs test/codex.test.cjs test/acp.test.cjs test/cursor.test.cjs",
+    "test": "node --test test/uploads.test.cjs test/relay.test.cjs test/codeCompletion.test.cjs test/shell.test.cjs test/pwview.test.cjs test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs test/scm.test.cjs test/mentions.test.cjs test/hunks.test.cjs test/secretScan.test.cjs test/verify.test.cjs test/bestOfN.test.cjs test/mediaPaths.test.cjs test/rowStatus.test.cjs test/codex.test.cjs test/acp.test.cjs test/cursor.test.cjs test/opencode.test.cjs",
     "test:e2e": "node --test test/e2e-relay.test.cjs test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs test/e2e-fork.test.cjs test/e2e-bg.test.cjs",
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs",

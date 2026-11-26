@@ -416,5 +416,6 @@
   "Pick one to change it": "Escolha uma para mudar",
   "Empty to turn it off": "Vazio para desligar",
   "A shell name or the full path to its executable": "Um nome de shell ou o caminho completo do executável",
-  "$(check) {0}: {1}": "$(check) {0}: {1}"
+  "$(check) {0}: {1}": "$(check) {0}: {1}",
+  "OpenCode was not found. Install it (npm i -g opencode-ai) and add a provider with `opencode auth login`.": "O OpenCode não foi encontrado. Instale-o (npm i -g opencode-ai) e adicione um provedor com `opencode auth login`."
 }
