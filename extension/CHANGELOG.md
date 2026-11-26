@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.25
+- Long chats are easier to get around: long messages fold with "Show more", a rail on the right has one mark per prompt (hover to preview, click to jump), and Alt+↑ / Alt+↓ go to the previous / next prompt.
+- Scrolling up while the agent is writing stays where you put it; following resumes only when you come back to the bottom.
+- The sidebar no longer repeats a chat that was run again: the newest run is listed, the others are under it as earlier runs.
+- The agent's reasoning shows in collapsible "Thought for Ns" blocks (Ctrl/Cmd+O opens or closes all).
+- Restore menu on your messages: code only, conversation only, or both.
+- Token and cost chip by the message box; copy or export the conversation as Markdown; the tab title shows ● while working and ⚠ while waiting for you.
+- Changes panel: revert or stage a single hunk, undo one edit, write review notes on lines and send them to the agent, "Review changes" with findings shown on the diff, and "Show more lines" around a hunk.
+- New mentions: @problems, @diff, @diff:main, @chat, @url:…; Alt+K adds the editor selection with its line range (@file#L5-10).
+- Tab completion: uses your other open files and recent edits, answers faster (streamed, stops at the line limit, no pause after ( . { = , : Enter or after accepting one), remembers past suggestions, and can be snoozed or turned off per language from the status bar.
+
 ## 1.0.24
 - Sessions sidebar organized by chat: Pinned, Active and Recent across all folders, with pin, hide for a day/week and archive; projects (source control, rules, files) move to a Projects section. Set steerhouse.sidebarGrouping to "projects" for the old layout.
 - Changes panel: what each turn changed with +/- counts and inline diffs, the whole working tree from git, native diff, revert a file, and Commit / Push / Create PR. A "+N −M" chip at the end of each turn opens it.

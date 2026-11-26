@@ -23,6 +23,7 @@ import { CommandPalette, keys } from '@/components/CommandPalette';
 import { duration, Elapsed } from '@/components/Elapsed';
 import { composerApi } from './Composer';
 import { ThinkingRow, toggleAllThinking } from '@/components/Thinking';
+import { Fold, JumpRail, usePromptKeys, type Prompt } from '@/components/MessageNav';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const post = (m: ToChat) => postAny(m as never);
@@ -511,7 +512,11 @@ function UserMessage({ it }: { it: Extract<ChatItem, { kind: 'user' }> }) {
           </div>
         </div>
       ) : (
-        it.text && <Markdown text={it.text} className="bg-muted max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-1.5" />
+        it.text && (
+          <Fold className="flex max-w-[85%] flex-col items-end">
+            <Markdown text={it.text} className="bg-muted rounded-2xl rounded-br-md px-3.5 py-1.5" />
+          </Fold>
+        )
       )}
       <div className="flex items-center gap-1">
         {!editing && it.forkAt && (
@@ -620,7 +625,9 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
         <div className="group/answer flex gap-2.5">
           <AgentAvatar />
           <div className="min-w-0 flex-1">
-            <Markdown text={it.text} />
+            <Fold live={it.streaming}>
+              <Markdown text={it.text} />
+            </Fold>
             {it.streaming && <span className="bg-foreground/70 ml-0.5 inline-block h-3.5 w-1.5 animate-pulse align-middle" />}
             {!it.streaming && (
               <div className="mt-0.5 flex gap-1 opacity-0 transition-opacity group-hover/answer:opacity-100 focus-within:opacity-100">
@@ -892,6 +899,22 @@ export function ChatView({ data }: { data: ChatData }) {
     if (added > 0) virtualizer.scrollToIndex(added, { align: 'start' });
   }, [rows.length]);
 
+  // ---- getting around: your prompts, the row at the top of the view, jumping
+  const prompts = useMemo<Prompt[]>(() => rows.flatMap((g, row) => (!Array.isArray(g) && g.kind === 'user' ? [{ row, text: g.text }] : [])), [rows]);
+  const [topRow, setTopRow] = useState(0);
+  const rowAtTop = () => {
+    const el = scroller.current;
+    if (!el) return 0;
+    const first = virtualizer.getVirtualItems().find((v) => v.end > el.scrollTop + 8);
+    return first?.index ?? 0;
+  };
+  const jumpTo = (row: number) => {
+    stick.current = false;
+    setAtBottom(row >= rows.length - 1);
+    virtualizer.scrollToIndex(row, { align: 'start' });
+    setTopRow(row);
+  };
+  usePromptKeys(prompts, rowAtTop, jumpTo);
   const release = () => {
     if (!stick.current) return;
     stick.current = false;
@@ -1007,6 +1030,7 @@ export function ChatView({ data }: { data: ChatData }) {
       )}
 
       <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-w-0 flex-1">
       <div
         ref={scroller}
         className="min-w-0 flex-1 overflow-y-auto"
@@ -1022,6 +1046,7 @@ export function ChatView({ data }: { data: ChatData }) {
           if (gap < 24) stick.current = true;
           else if (gap > 200) stick.current = false;
           setAtBottom(stick.current);
+          setTopRow(rowAtTop());
         }}
       >
         <div className="mx-auto flex w-full max-w-[46rem] flex-col gap-1.5 px-5 py-5">
@@ -1074,6 +1099,8 @@ export function ChatView({ data }: { data: ChatData }) {
           {chat.error && <div className="border-error/40 bg-error/10 text-error rounded-lg border px-3 py-2 text-[12px]">{chat.error}</div>}
           <div ref={end} />
         </div>
+      </div>
+      <JumpRail prompts={prompts} total={rows.length} current={topRow} onJump={jumpTo} />
       </div>
       <SideRail chat={chat} />
       </div>
