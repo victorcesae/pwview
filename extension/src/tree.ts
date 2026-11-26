@@ -122,8 +122,12 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
     return (vscode.workspace.workspaceFolders ?? []).map((f) => norm(f.uri.fsPath));
   }
 
+  /** older runs of the same chat, by the id of the newest one */
+  private runs = new Map<string, Session[]>();
+
   getChildren(node?: Node): Node[] {
-    const sessions = this.sessions();
+    const { shown: sessions, runs } = collapseRuns(this.sessions());
+    this.runs = runs;
     if (!node) {
       const out: Node[] = [];
       const h = this.hooks();
@@ -196,7 +200,8 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         return list.map((r): Node => ({ kind: 'rule', scope: node.scope, r }));
       }
       case 'session': {
-        const out: Node[] = node.s.agents.map((a) => ({ kind: 'agent', s: node.s, a: a.info, via: node.via }));
+        const older = node.via === 'run' ? [] : (this.runs.get(node.s.info.id) ?? []);
+        const out: Node[] = [...older.map((s): Node => ({ kind: 'session', s, via: 'run' })), ...node.s.agents.map((a) => ({ kind: 'agent', s: node.s, a: a.info, via: node.via }) as Node)];
         const own = node.s.t.changes;
         if (own.length) out.push({ kind: 'changes', s: node.s, list: own, via: node.via });
         if (fs.existsSync(node.s.info.project)) out.push({ kind: 'files', root: node.s.info.project, s: node.s, sessions: [node.s], via: node.via });
@@ -365,6 +370,9 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
         const snoozed = cm?.snoozedUntil(i.id);
         if (node.flat && cm?.isArchived(i.id)) it.description += ' · ' + vscode.l10n.t('archived');
         else if (node.flat && snoozed) it.description += ' · ' + vscode.l10n.t('hidden until {0}', new Date(snoozed).toLocaleString());
+        const nRuns = node.via === 'run' ? 0 : (this.runs.get(i.id)?.length ?? 0);
+        if (nRuns) it.description = `${it.description} · ${vscode.l10n.t('{0} earlier runs', nRuns)}`;
+        if (node.via === 'run') it.description = `${vscode.l10n.t('earlier run')} · ${it.description}`;
         const md = new vscode.MarkdownString(undefined, true);
         md.appendMarkdown(`**${i.title}**\n\n`);
         md.appendMarkdown(`$(folder) \`${i.project}\`  \n`);
@@ -547,4 +555,38 @@ export function registerChatMarks(ctx: vscode.ExtensionContext, tree: SessionsTr
     cmd('steerhouse.archiveChat', async (l) => (await cm.set('chatPinned', l, false), cm.set('chatArchived', l, true))),
     cmd('steerhouse.unarchiveChat', async (l) => (await cm.set('chatArchived', l, false), cm.snooze(l, undefined))),
   ];
+}
+
+/**
+ * "Edit and run again" and restores fork the session: each copy starts with the same prompt and
+ * would show as a duplicate. Only the newest copy is listed; the others become its earlier runs.
+ */
+export function collapseRuns(all: Session[]): { shown: Session[]; runs: Map<string, Session[]> } {
+  const groups = new Map<string, Session[]>();
+  const shown: Session[] = [];
+  for (const s of all) {
+    const p = s.info.firstPrompt?.trim();
+    if (!p || p.length < 12) {
+      shown.push(s);
+      continue;
+    }
+    const k = `${norm(s.info.project)}\0${p}`;
+    const g = groups.get(k);
+    if (g) g.push(s);
+    else (groups.set(k, [s]), shown.push(s));
+  }
+  const runs = new Map<string, Session[]>();
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    g.sort((a, b) => (b.info.updated ?? '').localeCompare(a.info.updated ?? ''));
+    const i = shown.indexOf(g.find((x) => shown.includes(x))!);
+    shown[i] = g[0]; // the newest stands for the group, where the group was listed
+    runs.set(g[0].info.id, g.slice(1));
+  }
+  // a working or pinned older run must not vanish: list it on its own
+  for (const [id, older] of runs) {
+    const keep = older.filter((s) => s.info.state === 'working');
+    if (keep.length) (shown.push(...keep), runs.set(id, older.filter((s) => !keep.includes(s))));
+  }
+  return { shown, runs };
 }

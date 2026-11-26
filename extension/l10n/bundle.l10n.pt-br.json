@@ -314,5 +314,7 @@
   "$(check) Turn on for {0}": "$(check) Ligar para {0}",
   "$(circle-slash) Turn off for {0}": "$(circle-slash) Desligar para {0}",
   "$(arrow-swap) Change provider…": "$(arrow-swap) Trocar provedor…",
-  "$(close) Turn off": "$(close) Desligar"
+  "$(close) Turn off": "$(close) Desligar",
+  "{0} earlier runs": "{0} execuções anteriores",
+  "earlier run": "execução anterior"
 }

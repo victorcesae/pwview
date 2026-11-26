@@ -860,6 +860,11 @@ export function ChatView({ data }: { data: ChatData }) {
     if (added > 0) virtualizer.scrollToIndex(added, { align: 'start' });
   }, [rows.length]);
 
+  const release = () => {
+    if (!stick.current) return;
+    stick.current = false;
+    setAtBottom(false);
+  };
   // follow new output while you're at the bottom
   const lastText = chat.items.at(-1)?.kind === 'assistant' ? (chat.items.at(-1) as { text: string }).text.length : 0;
   useEffect(() => {
@@ -978,9 +983,17 @@ export function ChatView({ data }: { data: ChatData }) {
       <div
         ref={scroller}
         className="min-w-0 flex-1 overflow-y-auto"
+        // any move up by you stops following the output at once; following resumes only when you
+        // come back to the very bottom (growing text must not pull you down while you read)
+        onWheel={(e) => e.deltaY < 0 && release()}
+        onTouchMove={() => release()}
+        onKeyDown={(e) => ['PageUp', 'ArrowUp', 'Home'].includes(e.key) && release()}
+        onMouseDown={(e) => e.target === e.currentTarget && release()}
         onScroll={(e) => {
           const el = e.currentTarget;
-          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+          if (gap < 24) stick.current = true;
+          else if (gap > 200) stick.current = false;
           setAtBottom(stick.current);
         }}
       >
