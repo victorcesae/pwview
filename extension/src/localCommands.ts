@@ -8,7 +8,7 @@ import type { ChatSession } from './chat';
 import { claudeDir } from './paths';
 
 /** The commands the chat handles itself (the webview lists the same names). */
-export const LOCAL_COMMANDS = ['config', 'permissions', 'model', 'mcp', 'hooks', 'memory', 'agents', 'login', 'doctor', 'clear', 'terminal'] as const;
+export const LOCAL_COMMANDS = ['config', 'permissions', 'model', 'mcp', 'hooks', 'memory', 'agents', 'login', 'doctor', 'clear', 'terminal', 'steerhouse'] as const;
 export type LocalCommand = (typeof LOCAL_COMMANDS)[number];
 
 /** Claude Code's settings files for a folder, most personal last, like its own /config. */
@@ -113,8 +113,66 @@ export async function runLocalCommand(name: LocalCommand, c: ChatSession) {
       return vscode.commands.executeCommand('steerhouse.doctor');
     case 'clear':
       return vscode.commands.executeCommand('steerhouse.newChatHere', { path: cwd });
+    case 'steerhouse':
+      return steerhouseSettings();
     case 'terminal':
       if (!c.state.sessionId) return vscode.window.showInformationMessage(vscode.l10n.t('Send a first message, then the session can open in the terminal.'));
       return vscode.commands.executeCommand('steerhouse.resumeInTerminal', c.state.sessionId);
   }
+}
+
+/** Steerhouse's own settings, from the chat: each with its value now, changed right there. */
+export async function steerhouseSettings() {
+  const cfg = () => vscode.workspace.getConfiguration('steerhouse');
+  type Opt = { label: string; value: unknown; description?: string };
+  const items: { key: string; label: string; options?: Opt[]; text?: boolean }[] = [
+    { key: 'terminalLocation', label: vscode.l10n.t('Terminal position'), options: [{ label: vscode.l10n.t('Right, beside the chat'), value: 'right' }, { label: vscode.l10n.t('Bottom panel'), value: 'bottom' }] },
+    {
+      key: 'shell',
+      label: vscode.l10n.t('Shell for ! commands'),
+      options: [
+        { label: vscode.l10n.t('Automatic (your default VS Code terminal)'), value: 'auto' },
+        ...(process.platform === 'win32'
+          ? [{ label: 'PowerShell', value: 'powershell' }, { label: 'PowerShell 7 (pwsh)', value: 'pwsh' }, { label: 'Command Prompt (cmd)', value: 'cmd' }, { label: 'Git Bash', value: 'git bash' }]
+          : [{ label: 'bash', value: 'bash' }, { label: 'zsh', value: 'zsh' }, { label: 'fish', value: 'fish' }]),
+        { label: vscode.l10n.t('Other (type a name or path)…'), value: '__custom' },
+      ],
+    },
+    { key: 'sidebarGrouping', label: vscode.l10n.t('Sidebar'), options: [{ label: vscode.l10n.t('By chat (Pinned, Active, Recent)'), value: 'chats' }, { label: vscode.l10n.t('By project folder'), value: 'projects' }] },
+    { key: 'notifications', label: vscode.l10n.t('Notify when a chat finishes or needs you'), options: [{ label: vscode.l10n.t('On'), value: true }, { label: vscode.l10n.t('Off'), value: false }] },
+    { key: 'codeCompletion.enabled', label: vscode.l10n.t('Tab completion in the editor'), options: [{ label: vscode.l10n.t('On'), value: true }, { label: vscode.l10n.t('Off'), value: false }] },
+    { key: 'verify.command', label: vscode.l10n.t('Verify command after each turn'), text: true },
+    { key: 'defaultSurface', label: vscode.l10n.t('Where chats open'), options: [{ label: vscode.l10n.t('Steerhouse chat'), value: 'chat' }, { label: vscode.l10n.t('Terminal'), value: 'terminal' }] },
+  ];
+  const show = (v: unknown) => (v === true ? vscode.l10n.t('On') : v === false ? vscode.l10n.t('Off') : v === '' || v === undefined ? vscode.l10n.t('not set') : String(v));
+  const pick = await vscode.window.showQuickPick(
+    [
+      ...items.map((i) => ({ label: i.label, description: show(cfg().get(i.key)), i })),
+      { label: '', kind: vscode.QuickPickItemKind.Separator },
+      { label: vscode.l10n.t('$(settings-gear) All Steerhouse settings…'), i: undefined },
+    ] as (vscode.QuickPickItem & { i?: (typeof items)[number] })[],
+    { title: vscode.l10n.t('Steerhouse settings'), placeHolder: vscode.l10n.t('Pick one to change it') },
+  );
+  if (!pick) return;
+  if (!pick.i) return vscode.commands.executeCommand('workbench.action.openSettings', '@ext:victorcesae.steerhouse');
+  const it = pick.i;
+  let value: unknown;
+  if (it.text) {
+    value = await vscode.window.showInputBox({ title: it.label, value: String(cfg().get(it.key) ?? ''), prompt: vscode.l10n.t('Empty to turn it off') });
+    if (value === undefined) return;
+  } else {
+    const now = cfg().get(it.key);
+    const o = await vscode.window.showQuickPick(
+      it.options!.map((x) => ({ label: x.label, description: x.value === now ? vscode.l10n.t('current') : undefined, x })),
+      { title: it.label },
+    );
+    if (!o) return;
+    value = o.x.value;
+    if (value === '__custom') {
+      value = await vscode.window.showInputBox({ title: it.label, prompt: vscode.l10n.t('A shell name or the full path to its executable') });
+      if (!value) return;
+    }
+  }
+  await cfg().update(it.key, value, vscode.ConfigurationTarget.Global);
+  vscode.window.setStatusBarMessage(vscode.l10n.t('$(check) {0}: {1}', it.label, show(value)), 4000);
 }

@@ -88,7 +88,7 @@ function restoreTestHooks(chats: { describe(): unknown; testSend(text: string): 
 
 let handOverQueues: (() => void) | undefined;
 
-type FollowTarget = { outputFile?: string; command?: string; description?: string; chatTitle?: string };
+type FollowTarget = { outputFile?: string; command?: string; description?: string; chatTitle?: string; cwd?: string };
 const following = new Map<string, vscode.Terminal>();
 
 export function activate(ctx: vscode.ExtensionContext) {
@@ -833,9 +833,13 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (open && open.exitStatus === undefined) return open.show();
       const what = clip(t.description || t.command || 'output', 30);
       // the same command as in the chat's Background commands list: what it is, the command line, where it runs from
-      const label = [t.description && t.command && t.description !== t.command ? t.description : '', t.command ? `$ ${t.command}` : '', t.chatTitle ? vscode.l10n.t('from the chat "{0}"', clip(t.chatTitle, 60)) : '']
-        .filter(Boolean)
-        .join('\n');
+      // looks like the user's own terminal: their prompt line with the command, then its output
+      const home = require('os').homedir();
+      const where = t.cwd ? (t.cwd.startsWith(home) ? '~' + t.cwd.slice(home.length) : t.cwd) : '~';
+      const who = `${require('os').userInfo().username}@${require('os').hostname().split('.')[0]}`;
+      const label = t.command
+        ? `\x1b[1;32m${who}\x1b[0m:\x1b[1;34m${where}\x1b[0m$ ${t.command}`
+        : t.description || '';
       const term = vscode.window.createTerminal({ name: `▶ ${what}`, pty: followPty(t.outputFile, label), location: terminalLocation(), iconPath: new vscode.ThemeIcon('debug-console') });
       following.set(t.outputFile, term);
       term.show();
@@ -893,6 +897,14 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!(await RUNTIMES.cursor.detect()).exe) return vscode.window.showWarningMessage(vscode.l10n.t('Cursor Agent is not installed on this machine. Install it, then add the account: {0}', 'https://cursor.com/cli'));
       ctx.globalState.update('steerhouse.lastAgent', 'runtime:cursor' + (account ? ':' + account.id : ''));
       chats.start({ cwd, runtime: 'cursor', ...(account ? { env: cursorAccountEnv(account), runtimeAccount: account.name } : {}) });
+    }),
+    // the Steerhouse button in the editor's title bar (where Claude Code has its own): a chat in this file's project
+    vscode.commands.registerCommand('steerhouse.newChatFromEditor', async (uri?: vscode.Uri) => {
+      const file = uri instanceof vscode.Uri ? uri : vscode.window.activeTextEditor?.document.uri;
+      const folder = (file && vscode.workspace.getWorkspaceFolder(file)?.uri.fsPath) ?? (vscode.workspace.workspaceFolders?.length === 1 ? vscode.workspace.workspaceFolders[0].uri.fsPath : await pickFolder(ctx));
+      if (!folder) return;
+      const account = await pickAgent(folder);
+      if (account) chats.start({ cwd: folder, account, env: await envFor(account) });
     }),
     vscode.commands.registerCommand('steerhouse.newChat', () => {
       void (async () => {

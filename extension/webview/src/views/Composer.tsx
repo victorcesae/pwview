@@ -33,6 +33,7 @@ export const LOCAL_COMMANDS: { name: string; hint: string }[] = [
   { name: 'agents', hint: 'Subagents: open or create one' },
   { name: 'login', hint: 'Claude accounts' },
   { name: 'doctor', hint: 'Check the setup' },
+  { name: 'steerhouse', hint: 'Steerhouse settings: terminal position, shell, sidebar…' },
   { name: 'btw', hint: 'Ask a side question: answered without stopping or changing the work' },
   { name: 'clear', hint: 'Clear the context, keep this tab and what was said' },
   { name: 'terminal', hint: 'Open this session in Claude Code, for any other command' },

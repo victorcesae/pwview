@@ -825,7 +825,7 @@ export class Chats {
         return c.stopTask(m.id).catch((e) => vscode.window.showErrorMessage(vscode.l10n.t('Could not stop it: {0}', String(e?.message ?? e))));
       case 'followTask': {
         const t = c.state.tasks.find((x) => x.id === m.id);
-        return t && vscode.commands.executeCommand('steerhouse.followTask', { ...t, outputFile: c.taskFile(t), chatTitle: c.state.title });
+        return t && vscode.commands.executeCommand('steerhouse.followTask', { ...t, outputFile: c.taskFile(t), chatTitle: c.state.title, cwd: c.state.cwd });
       }
       case 'openTaskFile': {
         const file = c.taskOutput(m.id).file;

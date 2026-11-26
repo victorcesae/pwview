@@ -218,6 +218,12 @@
         "category": "Steerhouse"
       },
       {
+        "command": "steerhouse.newChatFromEditor",
+        "title": "%cmd.new.chat.from.editor%",
+        "category": "Steerhouse",
+        "icon": { "light": "media/steerhouse-light.svg", "dark": "media/steerhouse-dark.svg" }
+      },
+      {
         "command": "steerhouse.newChat",
         "title": "%cmd.new.chat%",
         "category": "Steerhouse",
@@ -605,6 +611,9 @@
       }
     ],
     "menus": {
+      "editor/title": [
+        { "command": "steerhouse.newChatFromEditor", "group": "navigation@-100" }
+      ],
       "editor/context": [
         {
           "command": "steerhouse.addSelectionToChat",
