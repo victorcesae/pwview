@@ -977,23 +977,22 @@ export function ChatView({ data }: { data: ChatData }) {
     <LightboxProvider>
     <AgentCtx.Provider value={{ model: shownModel, host: chat.host, hostIcon: chat.hostIcon }}>
     <div className="flex h-screen flex-col">
-      <header className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
+      <header className="flex items-center gap-2 border-b px-3 py-1 [&>*]:shrink-0">
         <StateDot state={working ? 'working' : chat.status === 'idle' ? 'recent' : 'idle'} />
         <span className="inline-flex items-center gap-0.5" title={`${hostName(chat.host)}${chat.host ? ' + ' : ''}${vendorName(vendorOf(shownModel))}${chat.model ? ' · ' + chat.model : ''}`}>
           <HostMark host={chat.host} icon={chat.hostIcon} />
           {chat.host && <span className="text-muted-foreground text-[10px]">+</span>}
           <VendorMark vendor={vendorOf(shownModel)} />
         </span>
-        <h1 className="min-w-0 truncate text-[14px] font-semibold">{chat.title}</h1>
+        <h1 className="min-w-0 flex-1 !shrink truncate text-[13px] font-semibold" title={chat.title}>{chat.title}</h1>
         <WorkFolders chat={chat} />
-        <span className="flex-1" />
         {chat.status === 'starting' && (
           <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11.5px]" role="status">
             <Loader2 className="size-3.5 animate-spin" /> {t('Starting Claude Code…')}
           </span>
         )}
         <span
-          className="text-muted-foreground inline-flex max-w-64 items-center gap-1 truncate rounded-md border px-1.5 py-0.5 text-[11px]"
+          className="text-muted-foreground hidden max-w-52 items-center gap-1 truncate rounded-md border px-1.5 py-0.5 text-[11px] min-[900px]:inline-flex"
           title={[chat.account.email, chat.account.organization, chat.account.plan, chat.account.provider].filter(Boolean).join(' · ')}
         >
           <UserRound className="size-3 shrink-0" />

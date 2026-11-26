@@ -31,6 +31,9 @@ export function ThinkingRow({ it }: { it: Extract<ChatItem, { kind: 'thinking' }
   const text = it.text.trim();
   if (!text && !it.streaming) return null;
   const first = text.split('\n').find((l) => l.trim())?.replace(/^[#*\s]+|\*+$/g, '') ?? '';
+  // while it streams, the line being written now; once done, how it began
+  const latest = [...text.split('\n')].reverse().find((l) => l.trim())?.replace(/^[#*\s]+|\*+$/g, '') ?? '';
+  const preview = it.streaming ? latest : first;
   const secs = it.durationMs !== undefined ? Math.max(1, Math.round(it.durationMs / 1000)) : undefined;
   const label = it.streaming ? t('Thinking…') : secs !== undefined ? t('Thought for {0}s', secs) : t('Thought');
   const toggle = () => {
@@ -43,10 +46,10 @@ export function ThinkingRow({ it }: { it: Extract<ChatItem, { kind: 'thinking' }
         {open ? <ChevronDown className="size-3 shrink-0" /> : <ChevronRight className="size-3 shrink-0" />}
         <Brain className={cn('size-3 shrink-0', it.streaming && 'animate-pulse')} />
         <span className="shrink-0 italic">{label}</span>
-        {!open && !it.streaming && first && <span className="min-w-0 truncate opacity-70">· {first}</span>}
+        {!open && preview && <span className="min-w-0 truncate opacity-70">· {preview}</span>}
       </button>
-      {(open || it.streaming) && (
-        <div ref={live} className={cn('border-border/60 ml-1.5 border-l pl-3 whitespace-pre-wrap opacity-80', !open && 'max-h-[4.8em] overflow-hidden', open && 'max-h-[60vh] overflow-y-auto')}>
+      {open && (
+        <div ref={live} className="border-border/60 ml-1.5 max-h-[60vh] overflow-y-auto border-l pl-3 whitespace-pre-wrap opacity-80">
           {text}
         </div>
       )}
