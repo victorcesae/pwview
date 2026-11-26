@@ -1,4 +1,4 @@
-import { Ban, Bot, Command, Globe, ChevronUp, Copy, SquareTerminal, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
+import { Ban, Bot, History, MessageSquare, Command, Globe, ChevronUp, Copy, SquareTerminal, Quote, Search, Trash2, Pencil, RotateCcw, UserRound, Check, ChevronDown, ChevronRight, CircleDashed, ClipboardList, FileDiff, ImagePlus, Link2, ListOrdered, Loader2, Navigation, Send, ShieldQuestion, Square, X, Zap } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
@@ -22,6 +22,8 @@ import { PlanCard } from '@/components/PlanCard';
 import { CommandPalette, keys } from '@/components/CommandPalette';
 import { duration, Elapsed } from '@/components/Elapsed';
 import { composerApi } from './Composer';
+import { ThinkingRow, toggleAllThinking } from '@/components/Thinking';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const post = (m: ToChat) => postAny(m as never);
 
@@ -517,6 +519,30 @@ function UserMessage({ it }: { it: Extract<ChatItem, { kind: 'user' }> }) {
             <Pencil /> {t('Edit')}
           </Button>
         )}
+        {!editing && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="xs" variant="ghost" className="opacity-0 transition-opacity group-hover/msg:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100" title={t('Restore the code or the conversation to this message')} data-restore>
+                <History /> {t('Restore')}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => post({ type: 'restore', id: it.id, what: 'code' })}>
+                <FileDiff /> {t('Restore code to here')}
+              </DropdownMenuItem>
+              {it.forkAt && (
+                <DropdownMenuItem onSelect={() => post({ type: 'restore', id: it.id, what: 'conversation' })}>
+                  <MessageSquare /> {t('Restore conversation to here')}
+                </DropdownMenuItem>
+              )}
+              {it.forkAt && (
+                <DropdownMenuItem onSelect={() => post({ type: 'restore', id: it.id, what: 'both' })}>
+                  <RotateCcw /> {t('Restore both')}
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         {it.priority && it.priority !== 'later' && (
           <span className="text-muted-foreground opacity-60" title={`${PRIORITY[it.priority].label}: ${PRIORITY[it.priority].hint}`} aria-label={PRIORITY[it.priority].label}>
             {(() => {
@@ -614,6 +640,8 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
           </div>
         </div>
       );
+    case 'thinking':
+      return <ThinkingRow it={it} />;
     case 'tool':
       return (
         <ToolRow it={it} sessionId={sessionId}>
@@ -713,6 +741,7 @@ function rowText(g: ChatItem | ToolItem[]): string {
   switch (g.kind) {
     case 'user':
     case 'assistant':
+    case 'thinking':
     case 'system':
     case 'result':
       return g.text;
@@ -821,6 +850,9 @@ export function ChatView({ data }: { data: ChatData }) {
       if (mod && !e.shiftKey && !e.altKey && k === 'k') {
         e.preventDefault();
         setPaletteOpen(true);
+      } else if (mod && !e.shiftKey && !e.altKey && k === 'o') {
+        e.preventDefault();
+        toggleAllThinking();
       } else if (mod && !e.shiftKey && !e.altKey && k === 'l') {
         e.preventDefault();
         composerApi.focus();
@@ -897,11 +929,6 @@ export function ChatView({ data }: { data: ChatData }) {
           <span className="truncate">{chat.account.email ?? chat.account.name}</span>
           {chat.account.plan && <span className="opacity-70">· {chat.account.plan}</span>}
         </span>
-        {chat.costUsd > 0 && (
-          <span className="text-muted-foreground text-[11px] tabular-nums" title={t('Tokens and API-equivalent cost of this chat')}>
-            {chat.tokens ? `${chat.tokens >= 1e6 ? (chat.tokens / 1e6).toFixed(1) + 'M' : (chat.tokens / 1e3).toFixed(1) + 'k'} ${t('tokens')} · ` : ''}${chat.costUsd.toFixed(2)}
-          </span>
-        )}
         <Button size="xs" variant="ghost" onClick={() => setPaletteOpen(true)} title={t('Command palette ({0})', keys('Mod+K'))} aria-label={t('Command palette')} data-open-palette>
           <Command />
         </Button>

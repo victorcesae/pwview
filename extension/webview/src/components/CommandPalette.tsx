@@ -1,11 +1,13 @@
 // Ctrl/Cmd+K in a chat: one searchable list of everything the chat can do, with its shortcut.
-import { Bot, Eraser, Gauge, MessageSquarePlus, Search, ShieldCheck, Sparkles, Square, SquareSlash, SquareTerminal, TextCursorInput } from 'lucide-react';
+import { Bot, Brain, ClipboardCopy, Eraser, FileDown, Gauge, MessageSquarePlus, Search, ShieldCheck, Sparkles, Square, SquareSlash, SquareTerminal, TextCursorInput } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { post as postAny } from '@/bridge';
 import { StateDot } from '@/components/common';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ChatState, RecentChat, ToChat } from '@/types';
+import { chatMarkdown } from '@/lib/exportChat';
+import { toggleAllThinking } from '@/components/Thinking';
 import { allCommands, composerApi, EFFORT_LABEL, EFFORTS, MODES } from '@/views/Composer';
 
 const post = (m: ToChat) => postAny(m as never);
@@ -31,6 +33,9 @@ export function CommandPalette({ chat, onClose }: { chat: ChatState; onClose: ()
     return () => window.removeEventListener('message', on);
   }, []);
 
+  const chatRef = useRef(chat);
+  chatRef.current = chat;
+  const md = () => chatMarkdown(chatRef.current, { you: t('You'), assistant: t('Claude') });
   const actions = useMemo<Action[]>(() => {
     const g = { chat: t('Chat'), model: t('Model'), effort: t('Effort'), mode: t('Permission mode'), slash: t('Commands'), recent: t('Recent chats') };
     const list: Action[] = [
@@ -40,6 +45,9 @@ export function CommandPalette({ chat, onClose }: { chat: ChatState; onClose: ()
       { id: 'clear', group: g.chat, label: t('Clear the conversation (/clear)'), icon: Eraser, run: () => post({ type: 'localCommand', name: 'clear' }) },
       { id: 'terminal', group: g.chat, label: t('Open terminal'), icon: SquareTerminal, run: () => post({ type: 'openTerminal' }) },
       { id: 'search', group: g.chat, label: t('Search this chat…'), shortcut: keys('Mod+F'), icon: Search, run: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true })) },
+      { id: 'thinking', group: g.chat, label: t('Expand or collapse thinking'), shortcut: keys('Mod+O'), icon: Brain, run: toggleAllThinking },
+      { id: 'copyMd', group: g.chat, label: t('Copy conversation as Markdown'), icon: ClipboardCopy, run: () => void navigator.clipboard?.writeText(md()) },
+      { id: 'exportMd', group: g.chat, label: t('Export conversation to file…'), icon: FileDown, run: () => post({ type: 'exportChat', markdown: md() }) },
       ...chat.models.map((m) => ({ id: 'model:' + m.value, group: g.model, label: t('Model: {0}', m.displayName), hint: m.value === chat.model ? t('current') : undefined, icon: Sparkles, run: () => post({ type: 'setModel', model: m.value }) })),
       ...EFFORTS.map((e) => ({ id: 'effort:' + e, group: g.effort, label: t('Effort: {0}', t(EFFORT_LABEL[e])), hint: e === chat.effort ? t('current') : undefined, icon: Gauge, run: () => post({ type: 'setEffort', effort: e }) })),
       ...MODES.map((m) => ({ id: 'mode:' + m.value, group: g.mode, label: t(m.label), hint: m.value === chat.permissionMode ? t('current') : t(m.hint), icon: ShieldCheck, run: () => post({ type: 'setMode', mode: m.value }) })),
