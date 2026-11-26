@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import type { ChatState, RecentChat, ToChat } from '@/types';
 import { chatMarkdown } from '@/lib/exportChat';
 import { toggleAllThinking } from '@/components/Thinking';
-import { allCommands, composerApi, EFFORT_LABEL, EFFORTS, MODES } from '@/views/Composer';
+import { allCommands, composerApi, EFFORT_LABEL, EFFORTS, MODES, verifyOn } from '@/views/Composer';
 
 const post = (m: ToChat) => postAny(m as never);
 export const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -45,6 +45,7 @@ export function CommandPalette({ chat, onClose }: { chat: ChatState; onClose: ()
       { id: 'clear', group: g.chat, label: t('Clear the conversation (/clear)'), icon: Eraser, run: () => post({ type: 'localCommand', name: 'clear' }) },
       { id: 'terminal', group: g.chat, label: t('Open terminal'), icon: SquareTerminal, run: () => post({ type: 'openTerminal' }) },
       { id: 'search', group: g.chat, label: t('Search this chat…'), shortcut: keys('Mod+F'), icon: Search, run: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true })) },
+      { id: 'verify', group: g.chat, label: verifyOn(chat) ? t('Stop verifying after each turn') : t('Verify after each turn'), hint: chat.verify?.command, icon: ShieldCheck, run: () => post({ type: 'setVerify', on: !verifyOn(chat) }) },
       { id: 'thinking', group: g.chat, label: t('Expand or collapse thinking'), shortcut: keys('Mod+O'), icon: Brain, run: toggleAllThinking },
       { id: 'copyMd', group: g.chat, label: t('Copy conversation as Markdown'), icon: ClipboardCopy, run: () => void navigator.clipboard?.writeText(md()) },
       { id: 'exportMd', group: g.chat, label: t('Export conversation to file…'), icon: FileDown, run: () => post({ type: 'exportChat', markdown: md() }) },
@@ -55,7 +56,7 @@ export function CommandPalette({ chat, onClose }: { chat: ChatState; onClose: ()
       ...recent.map((r) => ({ id: 'chat:' + r.id, group: g.recent, label: r.title, hint: r.project, icon: Bot, state: r.state, run: () => post({ type: 'openSession', id: r.id }) })),
     ];
     return list;
-  }, [chat.models, chat.model, chat.effort, chat.permissionMode, chat.slashCommands, recent, working]);
+  }, [chat.models, chat.model, chat.effort, chat.permissionMode, chat.slashCommands, chat.verify?.enabled, chat.verify?.command, recent, working]);
 
   const shown = useMemo(() => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);

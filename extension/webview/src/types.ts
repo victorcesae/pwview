@@ -31,6 +31,8 @@ export type ToExtension =
   | { type: 'shell'; command: string }
   | { type: 'stopShell'; id: string }
   | { type: 'setTabCompletion'; on: boolean }
+  | { type: 'setVerify'; on: boolean }
+  | { type: 'verifyOutput'; turn: string }
   | { type: 'taskOutput'; id: string }
   | { type: 'stopTask'; id: string }
   | { type: 'followTask'; id: string }
@@ -62,16 +64,16 @@ export type Priority = 'later' | 'next' | 'now';
 export type Todo = { content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string };
 export type Question = { question: string; header: string; multiSelect: boolean; options: { label: string; description: string }[] };
 export type ChatItem =
-  | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string }
-  | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; durationMs?: number }
-  | { kind: 'thinking'; id: string; text: string; streaming?: boolean; parent?: string; durationMs?: number }
-  | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; images?: string[]; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
+  | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string; /** sent by Steerhouse (verify fix) */ auto?: boolean }
+  | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; durationMs?: number; ts?: string }
+  | { kind: 'thinking'; id: string; text: string; streaming?: boolean; parent?: string; durationMs?: number; ts?: string }
+  | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; images?: string[]; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number; ts?: string }
   | { kind: 'shell'; id: string; command: string; output: string; status: 'running' | 'done' | 'error'; exitCode?: number | null; error?: string }
   | { kind: 'permission'; id: string; tool: string; summary: string; input: unknown; canAlways: boolean; status: 'pending' | 'allowed' | 'denied'; reason?: string }
   | { kind: 'plan'; id: string; plan: string; status: 'pending' | 'approved' | 'rejected' }
   | { kind: 'question'; id: string; questions: Question[]; status: 'pending' | 'answered'; answers?: Record<string, string> }
-  | { kind: 'result'; id: string; text: string; isError: boolean; costUsd?: number; durationMs?: number }
-  | { kind: 'system'; id: string; text: string }
+  | { kind: 'result'; id: string; text: string; isError: boolean; costUsd?: number; durationMs?: number; ts?: string }
+  | { kind: 'system'; id: string; text: string; ts?: string }
   /** a subagent's final report, or a background task ending (Claude Code injects these as user turns) */
   | { kind: 'blocked'; id: string; tool: string; command: string; reason: string; rule?: string; status?: 'allowed' }
   | { kind: 'agentReport'; id: string; from: string; title?: string; text?: string; status?: string; ts?: string }
@@ -82,8 +84,11 @@ export interface ChatState {
   key: string; sessionId?: string; cwd: string; title: string; model?: string; models: { value: string; displayName: string }[];
   permissionMode: PermissionMode; effort?: Effort; fastMode: boolean; ultracode: boolean; status: 'starting' | 'idle' | 'working' | 'waiting' | 'closed' | 'error'; activity?: string; turnStarted?: number;
   tabCompletion?: boolean;
+  verify?: VerifyState;
   todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[]; tokens?: number; context?: { used: number; max: number; percentage: number; detailed?: boolean; categories?: { id?: string; name: string; tokens: number; kind: 'used' | 'free' | 'buffer' | 'deferred' }[] }; earlier: number; slashCommands: string[]; mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string }; host?: string; hostIcon?: string; limits?: Limits; suggestion?: string; stash?: string[]; tasks?: BgTaskView[]; prs?: Record<string, { state: 'open' | 'draft' | 'merged' | 'closed' | 'unknown'; title?: string; tasks?: { done: number; total: number }; checks?: PrCheckView[]; review?: 'approved' | 'changes_requested' | 'required' }>; error?: string;
 }
+export interface VerifyResult { ok: boolean; command: string; durationMs: number; exitCode?: number | null; timedOut?: boolean; cancelled?: boolean }
+export interface VerifyState { enabled?: boolean; command?: string; running?: string; results: Record<string, VerifyResult> }
 export type LinkedSession = { id: string; title: string; state: State; activity?: string };
 export type ChatData = { view: 'chat'; chat: ChatState; linked: LinkedSession[] };
 export type ToChat =
@@ -109,6 +114,8 @@ export type ToChat =
   | { type: 'shell'; command: string }
   | { type: 'stopShell'; id: string }
   | { type: 'setTabCompletion'; on: boolean }
+  | { type: 'setVerify'; on: boolean }
+  | { type: 'verifyOutput'; turn: string }
   | { type: 'taskOutput'; id: string }
   | { type: 'stopTask'; id: string }
   | { type: 'followTask'; id: string }

@@ -342,5 +342,12 @@
   "Push anyway": "Fazer push mesmo assim",
   "Create PR anyway": "Criar PR mesmo assim",
   "Possible secrets found ({0})": "Possíveis segredos encontrados ({0})",
-  "Remove them (or add {0} to a line that is a false alarm) before you share these changes.": "Remova-os (ou adicione {0} a uma linha que seja alarme falso) antes de compartilhar estas alterações."
+  "Remove them (or add {0} to a line that is a false alarm) before you share these changes.": "Remova-os (ou adicione {0} a uma linha que seja alarme falso) antes de compartilhar estas alterações.",
+  "Use it": "Usar",
+  "Edit…": "Editar…",
+  "No": "Não",
+  "Steerhouse: verify each turn that changes files by running `{0}` in {1}?": "Steerhouse: verificar cada turno que altera arquivos rodando `{0}` em {1}?",
+  "Verify command (runs in {0})": "Comando de verificação (roda em {0})",
+  "Timed out after {0}s.": "Tempo esgotado após {0}s.",
+  "Verify still fails after {0} automatic fix attempts; stopping. Check the output on the turn.": "A verificação ainda falha após {0} tentativas automáticas de correção; parando. Veja a saída no turno."
 }

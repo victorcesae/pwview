@@ -20,6 +20,7 @@ import { agentExecutable } from './util';
 import { LOCAL_COMMANDS, runLocalCommand, type LocalCommand } from './localCommands';
 import { accountEnv, type Account } from './accounts';
 import { checkoutWorktree, git, repoRoot } from './worktree';
+import { Verifier } from './verify';
 
 const tabCompletion = () => vscode.workspace.getConfiguration('steerhouse').get<boolean>('tabCompletion', true);
 
@@ -61,6 +62,8 @@ export type FromChat =
   | { type: 'prFixCheck'; url: string; name: string; workflow?: string }
   | { type: 'prOpenFile'; url: string; path: string }
   | { type: 'contextDetail' }
+  | { type: 'setVerify'; on: boolean }
+  | { type: 'verifyOutput'; turn: string }
   | { type: 'toggleMcp'; name: string; enabled: boolean }
   | { type: 'reconnectMcp'; name: string }
   | { type: 'manageConnectors' }
@@ -99,6 +102,8 @@ async function gitInfo(cwd: string) {
 
 interface Open {
   chat: ChatSession;
+  /** verify after each turn */
+  verifier?: Verifier;
   panel: vscode.WebviewPanel;
   /** pending repaint (streaming updates are throttled to ~25 fps) */
   timer?: ReturnType<typeof setTimeout>;
@@ -325,6 +330,7 @@ export class Chats {
     );
     c.close();
     o.chat = fork;
+    this.attachVerifier(o);
     o.sent = undefined;
     o.prUrls = undefined;
     fork.start();
@@ -393,10 +399,19 @@ export class Chats {
     fresh.state.items = fresh.state.items.filter((it) => !(it.kind === 'system' && it.text.startsWith('Resumed:')));
     c.close();
     o.chat = fresh;
+    this.attachVerifier(o);
     o.sent = undefined;
     o.prUrls = undefined;
     fresh.start();
     this.post(o);
+  }
+
+  /** Verify after each turn for the chat this tab shows now (again after a fork or /clear, keeping the toggle and results). */
+  private attachVerifier(o: Open) {
+    const prev = o.verifier;
+    prev?.dispose();
+    const v = (o.verifier = new Verifier(this.ctx, o.chat, () => this.schedule(o), prev));
+    o.chat.onTurnEnd = () => void v.turnEnded();
   }
 
   /** Tells you when a chat you're not looking at finishes or waits for an approval or an answer. */
@@ -502,12 +517,14 @@ export class Chats {
     const history = transcript ? historyFromTranscript(transcript) : undefined;
     const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), relayScript: this.relayScript(), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.account?.provider?.model }, () => this.schedule(entry));
     const entry: Open = { chat, panel, accountId: opts.account?.id };
+    this.attachVerifier(entry);
     this.open.push(entry);
     panel.webview.html = html(panel.webview, root);
     panel.webview.onDidReceiveMessage((m: FromChat) => this.onMessage(entry, m));
     panel.onDidDispose(() => {
       this.open = this.open.filter((o) => o !== entry); // first: closing the chat repaints it
       clearTimeout(entry.timer);
+      entry.verifier?.dispose();
       if (!isShuttingDown()) entry.chat.close(); // a tab closed by hand; a reload leaves the prompt running
     });
     chat.start();
@@ -588,8 +605,13 @@ export class Chats {
       case 'send': {
         // @problems, @diff, @chat:, @url:, path#L5-10: the agent reads what they stand for, the bubble keeps the names
         for (const note of await resolveMentions(m.text, { cwd: c.state.cwd, problems: () => problemsIn(c.state.cwd), chat: (t) => this.chatSummary(o, t) })) c.addNote(note);
+        o.verifier?.cancel(); // never verify under you: what you say now goes first
         return c.send(m.text, m.images, m.priority);
       }
+      case 'setVerify':
+        return o.verifier?.setEnabled(m.on);
+      case 'verifyOutput':
+        return this.send(o, { type: 'verifyOutput', turn: m.turn, output: o.verifier?.output(m.turn) ?? '' });
       case 'allowRule':
         try {
           const file = c.allowRule(m.id, m.rule);
@@ -626,6 +648,7 @@ export class Chats {
       case 'loadEarlier':
         return c.loadEarlier(m.all);
       case 'interrupt':
+        o.verifier?.cancel();
         return c.interrupt();
       case 'respond':
         return c.respond(m.id, m.decision, m.message, m.answers);
