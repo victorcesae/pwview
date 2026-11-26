@@ -10,6 +10,7 @@ import { handleChanges, isChangesMsg, type ChangesMsg } from './gitActions';
 import { findUrls } from './bgtasks';
 import { completeFiles } from './folders';
 import { saveUpload } from './uploads';
+import { openFileAt } from './fileActions';
 import { isShuttingDown } from './relayClient';
 import { vendorOf } from './providers';
 import type { Session } from './engine';
@@ -601,7 +602,7 @@ export class Chats {
       case 'openUrl':
         return openUrl(m.url);
       case 'openFile':
-        return vscode.window.showTextDocument(vscode.Uri.file(m.path));
+        return openFileAt(m.path, c.state.cwd);
       case 'openChange':
         return c.state.sessionId && vscode.commands.executeCommand('steerhouse.openChange', c.state.sessionId, m.changeId);
       case 'openSession':
@@ -640,7 +641,7 @@ function html(webview: vscode.Webview, root: vscode.Uri) {
   const css = webview.asWebviewUri(vscode.Uri.joinPath(root, 'index.css'));
   return `<!doctype html>
 <html lang="${vscode.env.language}"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:; font-src ${webview.cspSource};">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' ${webview.cspSource}; img-src ${webview.cspSource} data:; font-src ${webview.cspSource};">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="${css}"></head>
 <body><div id="root"></div><script type="module" nonce="${nonce}" src="${js}"></script></body></html>`;
