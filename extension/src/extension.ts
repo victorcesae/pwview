@@ -613,7 +613,10 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('steerhouse.openRules', (file: string, scope: 'user' | 'project') => openRules(file, scope).then(() => tree.refresh())),
     vscode.commands.registerCommand('steerhouse.editUserRules', () => editRules('user').then(() => tree.refresh())),
     vscode.commands.registerCommand('steerhouse.editProjectRules', (n?: { root?: string }) => editRules('project', n?.root).then(() => tree.refresh())),
-    vscode.commands.registerCommand('steerhouse.openSession', (id: string, agentId?: string) => dashboard.show(id, agentId)),
+    // a session opens straight into its chat; the activity page only for a sub-agent or the terminal surface
+    vscode.commands.registerCommand('steerhouse.openSession', (id: string, agentId?: string) =>
+      agentId || surface() === 'terminal' || !find(id) ? dashboard.show(id, agentId) : vscode.commands.executeCommand('steerhouse.resumeSession', id),
+    ),
     vscode.commands.registerCommand('steerhouse.openChange', openChange),
     vscode.commands.registerCommand('steerhouse.newSession', newSession),
     vscode.commands.registerCommand('steerhouse.messageSession', (x: unknown) => {

@@ -258,6 +258,7 @@ function ToolGroup({ items, sessionId }: { items: ToolItem[]; sessionId?: string
   }, [open]);
   const running = items.some((i) => i.status === 'running');
   const failed = items.some((i) => i.status === 'error');
+  const pics = items.flatMap((i) => i.images ?? []);
   const total = items.reduce((a, i) => ({ add: a.add + stat(i).add, del: a.del + stat(i).del }), { add: 0, del: 0 });
   return (
     <div ref={box}>
@@ -272,6 +273,14 @@ function ToolGroup({ items, sessionId }: { items: ToolItem[]; sessionId?: string
         )}
         {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
       </button>
+      {/* screenshots and images the agent read show up right away, without opening the steps */}
+      {!open && pics.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-2" data-tool-images>
+          {pics.map((src, i) => (
+            <Zoomable key={i} src={src} className="max-h-56 max-w-full rounded-md border object-contain" />
+          ))}
+        </div>
+      )}
       {open && (
         <div className="bg-card mt-1.5 overflow-hidden rounded-lg border">
           {items.map((it) => (
@@ -662,16 +671,24 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
 function QueuedRow({ q }: { q: ChatState['queue'][number] }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(q.text);
+  const active = useRef(false);
   const steer = q.priority === 'next';
   const Icon = steer ? Navigation : ListOrdered;
   const startEdit = () => {
     setText(q.text);
     setEditing(true);
+    active.current = true;
+    post({ type: 'holdQueued', id: q.id, hold: true });
   };
-  const save = () => {
-    if (text.trim() && text !== q.text) post({ type: 'editQueued', id: q.id, text });
+  const finish = (keep: boolean) => {
+    if (!active.current) return; // Escape then blur: only the first counts
+    active.current = false;
+    if (keep && text.trim() && text !== q.text) post({ type: 'editQueued', id: q.id, text });
+    if (!keep) setText(q.text);
     setEditing(false);
+    post({ type: 'holdQueued', id: q.id, hold: false });
   };
+  const save = () => finish(true);
   return (
     <div className="flex items-center gap-2 rounded-lg border border-dashed px-2.5 py-1 text-[12px]">
       <span title={steer ? t('Steer: handed over when the agent starts its next step') : t('Queue: handed over when the turn ends')}>
@@ -683,11 +700,8 @@ function QueuedRow({ q }: { q: ChatState['queue'][number] }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') save();
-            if (e.key === 'Escape') {
-              setText(q.text);
-              setEditing(false);
-            }
+            if (e.key === 'Enter') (e.preventDefault(), save());
+            if (e.key === 'Escape') (e.preventDefault(), finish(false));
           }}
           onBlur={save}
           className="bg-input min-w-0 flex-1 rounded border px-1.5 py-0.5 text-[12px] outline-none"

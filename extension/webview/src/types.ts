@@ -90,6 +90,7 @@ export type ToChat =
   | { type: 'promote'; id: string; priority?: Priority }
   | { type: 'cancelQueued'; id: string }
   | { type: 'editQueued'; id: string; text: string }
+  | { type: 'holdQueued'; id: string; hold: boolean }
   | { type: 'interrupt' }
   | { type: 'loadEarlier'; all?: boolean }
   | { type: 'openUrl'; url: string }

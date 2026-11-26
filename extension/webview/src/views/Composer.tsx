@@ -30,7 +30,7 @@ export const LOCAL_COMMANDS: { name: string; hint: string }[] = [
   { name: 'agents', hint: 'Subagents: open or create one' },
   { name: 'login', hint: 'Claude accounts' },
   { name: 'doctor', hint: 'Check the setup' },
-  { name: 'clear', hint: 'New chat in this folder' },
+  { name: 'clear', hint: 'Clear the context, keep this tab and what was said' },
   { name: 'terminal', hint: 'Open this session in Claude Code, for any other command' },
 ];
 /** "/permissions" alone (no arguments) when the chat runs it itself. */

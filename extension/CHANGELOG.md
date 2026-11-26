@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.23
+- /clear clears the context in the same tab: the conversation stays on screen above a divider (and in your history) instead of being replaced by a new chat.
+- Editing a waiting Steer message pauses it, so it is no longer sent half-edited; Esc restores the original text.
+- Images from tools (screenshots, pictures the agent read) show in the chat right away, without opening the steps.
+- Clicking a session opens its chat directly instead of the activity page (sub-agents still open the activity page).
+
 ## 1.0.22
 - Bypass permissions can be chosen in a running chat: chats now start with it allowed (the mode stays the one you picked until you change it). A chat started before this update says to start a new chat, or close it and open it again, instead of failing.
 

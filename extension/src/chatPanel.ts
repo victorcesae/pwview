@@ -25,6 +25,7 @@ export type FromChat =
   | { type: 'promote'; id: string; priority?: Priority }
   | { type: 'cancelQueued'; id: string }
   | { type: 'editQueued'; id: string; text: string }
+  | { type: 'holdQueued'; id: string; hold: boolean }
   | { type: 'interrupt' }
   | { type: 'loadEarlier'; all?: boolean }
   | { type: 'openUrl'; url: string }
@@ -221,6 +222,34 @@ export class Chats {
     this.post(o);
   }
 
+  /**
+   * /clear: a fresh context in the same tab. What was said stays on screen above a divider (and the
+   * old session stays in your history); the agent starts the next message with nothing in context.
+   */
+  private async clearContext(o: Open) {
+    const c = o.chat;
+    if (c.state.status === 'working' || c.state.status === 'waiting') await c.interrupt();
+    const items = [...c.state.items.filter((it) => it.kind !== 'permission'), { kind: 'system' as const, id: `clear-${Date.now()}`, text: 'Context cleared: the agent no longer sees the messages above' }];
+    const fresh = new ChatSession(
+      {
+        ...c.options,
+        resume: undefined,
+        fork: undefined,
+        title: c.state.title,
+        history: { items, todos: [] },
+        prefs: { model: c.state.model, effort: c.state.effort, permissionMode: c.state.permissionMode, fastMode: c.state.fastMode, ultracode: c.state.ultracode },
+      },
+      () => this.schedule(o),
+    );
+    fresh.state.items = fresh.state.items.filter((it) => !(it.kind === 'system' && it.text.startsWith('Resumed:')));
+    c.close();
+    o.chat = fresh;
+    o.sent = undefined;
+    o.prUrls = undefined;
+    fresh.start();
+    this.post(o);
+  }
+
   /** Tells you when a chat you're not looking at finishes or waits for an approval or an answer. */
   private notify(o: Open) {
     const s = o.chat.state;
@@ -408,6 +437,7 @@ export class Chats {
         return;
       case 'localCommand':
         if (!(LOCAL_COMMANDS as readonly string[]).includes(m.name)) return;
+        if (m.name === 'clear') return this.clearContext(o);
         return runLocalCommand(m.name as LocalCommand, c).then(
           () => {},
           (e) => vscode.window.showWarningMessage(`Steerhouse: /${m.name}: ${e?.message ?? e}`),
@@ -416,6 +446,8 @@ export class Chats {
         return c.promote(m.id, m.priority);
       case 'editQueued':
         return c.editQueued(m.id, m.text);
+      case 'holdQueued':
+        return c.holdQueued(m.id, m.hold);
       case 'cancelQueued':
         return c.cancelQueued(m.id);
       case 'retry':

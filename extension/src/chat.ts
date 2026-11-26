@@ -565,6 +565,14 @@ export class ChatSession {
     this.changed();
   }
 
+  /** While the user edits a waiting steer, it must not go out half-written: pause its timer, re-arm after. */
+  holdQueued(id: string, hold: boolean) {
+    const m = this.queued.find((x) => x.id === id);
+    if (!m) return;
+    if (hold) this.disarm(id);
+    else if (m.priority === 'next') this.armSteer(id);
+  }
+
   /**
    * A steer waits only a short undo window (edit / cancel / switch), then goes in at once.
    * Measured against the real CLI: handing it over immediately is what makes the agent follow

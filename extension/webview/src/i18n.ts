@@ -40,6 +40,7 @@ const PT: Record<string, string> = {
   "Claude accounts": "Contas do Claude",
   "Check the setup": "Verificar a instalação",
   "New chat in this folder": "Novo chat nesta pasta",
+  "Clear the context, keep this tab and what was said": "Limpa o contexto, mantém esta aba e a conversa",
   "Open this session in Claude Code, for any other command": "Abrir esta sessão no Claude Code, para qualquer outro comando",
   'Report from subagent': 'Relatório do subagente',
   'Background task {0}: {1}': 'Tarefa em segundo plano {0}: {1}',
