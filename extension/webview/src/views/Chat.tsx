@@ -14,7 +14,7 @@ import { Composer, PRIORITY } from './Composer';
 import { GalleryRow, LightboxProvider, Zoomable } from '@/components/Lightbox';
 import { MediaCards } from '@/components/MediaCards';
 import { toolText } from '@/lib/mediaPaths';
-import { fileOf, groupTools, inp, KIND, stat, summarizeTools, type ToolItem } from './toolSummary';
+import { groupTools, inp, isAgentCall, KIND, stat, summarizeTools, type ToolItem } from './toolSummary';
 import { SideRail } from '@/components/SideRail';
 import { TurnChip, turnEnds, turnsOf } from '@/components/ChangesPanel';
 import { WorkFolders } from '@/components/WorkFolders';
@@ -29,7 +29,7 @@ import { Fold, JumpRail, usePromptKeys, type Prompt } from '@/components/Message
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Timeline } from '@/components/Timeline';
 import { VerifyBadge } from '@/components/VerifyBadge';
-import { Clock } from 'lucide-react';
+import { Clock, FileText, Hammer, Plug, Terminal, Wrench } from 'lucide-react';
 
 const post = (m: ToChat) => postAny(m as never);
 
@@ -75,108 +75,6 @@ function TodoCard({ todos }: { todos: Todo[] }) {
 }
 
 // ---------------------------------------------------------------- transcript items
-
-function ToolRow({ it, sessionId, children }: { it: Extract<ChatItem, { kind: 'tool' }>; sessionId?: string; children?: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const isAgent = it.name === 'Agent' || it.name === 'Task';
-  const expandable = !!(it.result || it.patch?.length || children);
-  return (
-    <div className={cn('rounded-lg border', isAgent && 'border-agent/30')}>
-      <button disabled={!expandable} onClick={() => setOpen(!open)} className={cn('flex w-full cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left disabled:cursor-default', open && 'bg-card sticky top-0 z-10 rounded-t-lg border-b')}>
-        {it.status === 'running' ? (
-          <Loader2 className="text-working size-3.5 shrink-0 animate-spin" />
-        ) : it.status === 'error' ? (
-          <X className="text-removed size-3.5 shrink-0" />
-        ) : (
-          <ToolIcon kind="tool" tool={it.name} className={cn('size-3.5 shrink-0', isAgent ? 'text-agent' : 'text-muted-foreground')} />
-        )}
-        <span className={cn('shrink-0 text-[12px] font-medium', isAgent && 'text-agent')}>{isAgent ? t('Sub-agent') : it.name}</span>
-        <span className="text-muted-foreground truncate font-mono text-[12px]">{it.file ? base(it.file) : it.summary}</span>
-        {it.elapsed !== undefined && it.status === 'running' && <span className="text-muted-foreground ml-auto text-[11px] tabular-nums">{Math.round(it.elapsed)}s</span>}
-        {it.patch && it.patch.length > 0 && (
-          <span className="ml-auto flex items-center gap-2">
-            <span className="font-mono text-[11px]">
-              <span className="text-added">+{it.patch.flatMap((h) => h.lines).filter((l) => l[0] === '+').length}</span>{' '}
-              <span className="text-removed">−{it.patch.flatMap((h) => h.lines).filter((l) => l[0] === '-').length}</span>
-            </span>
-          </span>
-        )}
-        {expandable && (open ? <ChevronDown className="text-muted-foreground size-3.5 shrink-0" /> : <ChevronRight className="text-muted-foreground size-3.5 shrink-0" />)}
-      </button>
-      {open && (
-        <div>
-          {children && <div className="flex flex-col gap-1.5 p-2 pl-4">{children}</div>}
-          {it.patch && it.patch.length > 0 ? (
-            <>
-              <HunkView hunks={it.patch} />
-              <div className="flex justify-end gap-2 border-t px-2 py-1.5">
-                {it.file && (
-                  <Button size="xs" variant="ghost" onClick={() => post({ type: 'openFile', path: it.file! })}>
-                    {t('Open file')}
-                  </Button>
-                )}
-                {sessionId && (
-                  <Button size="xs" variant="outline" onClick={() => post({ type: 'openChange', changeId: it.id })}>
-                    <FileDiff /> {t('Open diff')}
-                  </Button>
-                )}
-              </div>
-            </>
-          ) : (
-            !children && (
-              <>
-                <ToolInput it={it} />
-                <ToolOutput it={it} />
-              </>
-            )
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StepLabel({ it }: { it: ToolItem }) {
-  const i = inp(it);
-  const strong = (s: string) => <span className="text-foreground font-medium">{s}</span>;
-  switch (KIND(it.name)) {
-    case 'read': {
-      const off = Number(i.offset ?? 0);
-      const lim = Number(i.limit ?? 0);
-      return (
-        <>
-          {t('Read')} {strong(fileOf(it))} {off > 0 && lim > 0 && <span className="opacity-70">({off}–{off + lim})</span>}
-        </>
-      );
-    }
-    case 'edit':
-      return (
-        <>
-          {it.name === 'Write' ? t('Wrote') : t('Edited')} {strong(fileOf(it))}
-        </>
-      );
-    case 'run':
-      return <span className="truncate">{String(i.description ?? '') || <span className="font-mono">{String(i.command ?? it.summary)}</span>}</span>;
-    case 'search':
-      return (
-        <>
-          {t('Searched')} <span className="font-mono">{it.summary}</span>
-        </>
-      );
-    case 'fetch':
-      return (
-        <>
-          {t('Fetched')} <span className="font-mono">{it.summary}</span>
-        </>
-      );
-    default:
-      return (
-        <>
-          {it.name} <span className="font-mono opacity-80">{it.summary}</span>
-        </>
-      );
-  }
-}
 
 /** What a call returned: its text, and the pictures it read or took (click to enlarge). */
 function ToolOutput({ it }: { it: ToolItem }) {
@@ -232,26 +130,78 @@ function CollapseBar({ onClick }: { onClick: () => void }) {
   );
 }
 
+// ---------------------------------------------------------------- work steps (t3code-style rows)
+
+/** The sub-agent items nested under each Agent call (by the call's id). */
+const KidsCtx = createContext<Map<string, ChatItem[]>>(new Map());
+
+/** One icon per kind of call: >_ for commands, a magnifier for searches, a pencil for edits… */
+function StepIcon({ it, className }: { it: ToolItem; className?: string }) {
+  const c = cn('size-3.5 shrink-0', className);
+  if (it.status === 'running') return <Loader2 className={cn(c, 'text-working animate-spin')} />;
+  const cls = cn(c, it.status === 'error' && 'text-removed');
+  switch (KIND(it.name)) {
+    case 'run':
+      return <Terminal className={cls} />;
+    case 'search':
+      return <Search className={cls} />;
+    case 'read':
+      return <FileText className={cls} />;
+    case 'edit':
+      return <Pencil className={cls} />;
+    case 'browser':
+      return <Globe className={cls} />;
+    case 'mcp':
+      return <Plug className={cls} />;
+    default:
+      return <Wrench className={cls} />;
+  }
+}
+
+const mcpName = (n: string) => n.replace(/^mcp__([^_]+)__/, '$1: ');
+
+/** The one-line gist of a call: the command, the pattern, the path. */
+function stepText(it: ToolItem): string {
+  const i = inp(it);
+  switch (KIND(it.name)) {
+    case 'run':
+      return String(i.command ?? it.summary);
+    case 'search':
+      return String(i.pattern ?? i.query ?? it.summary);
+    case 'read':
+    case 'edit':
+      return it.file ?? String(i.file_path ?? i.notebook_path ?? it.summary);
+    case 'browser':
+      return String(i.url ?? '') || it.summary || mcpName(it.name);
+    default:
+      return it.summary ? `${mcpName(it.name)} ${it.summary}` : mcpName(it.name);
+  }
+}
+
+/** How long a call took: the elapsed time Claude Code reported, when it did. */
+const stepTime = (it: ToolItem) => (it.elapsed !== undefined && it.elapsed >= 1 ? duration(it.elapsed * 1000) : undefined);
+
+/** One compact row per call; clicking it shows the input and output (or the diff) below. */
 function ToolStep({ it, sessionId }: { it: ToolItem; sessionId?: string }) {
   const [open, setOpen] = useState(false);
   const { add, del } = stat(it);
+  const time = stepTime(it);
+  const text = stepText(it);
   return (
-    <div className="border-b last:border-b-0">
-      <button onClick={() => setOpen(!open)} className={cn('hover:bg-accent/50 text-muted-foreground flex w-full cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-left text-[12.5px]', open && 'bg-card sticky top-0 z-10 border-b')}>
-        {it.status === 'running' && <Loader2 className="text-working size-3 shrink-0 animate-spin" />}
-        {it.status === 'error' && <X className="text-removed size-3 shrink-0" />}
-        <span className="flex min-w-0 items-center gap-1.5 truncate">
-          <StepLabel it={it} />
-        </span>
+    <div data-step>
+      <button onClick={() => setOpen(!open)} aria-expanded={open} className={cn('hover:bg-accent/40 text-muted-foreground hover:text-foreground flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-[12.5px]', open && 'bg-background sticky top-0 z-10')} title={text}>
+        <StepIcon it={it} />
+        <span className={cn('min-w-0 flex-1 truncate', KIND(it.name) === 'run' && 'font-mono text-[12px]')}>{text}</span>
         {(add > 0 || del > 0) && (
-          <span className="font-mono text-[11.5px]">
+          <span className="shrink-0 font-mono text-[11.5px]">
             <span className="text-added">+{add}</span> <span className="text-removed">−{del}</span>
           </span>
         )}
-        {open ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
+        {time && <span className="shrink-0 text-[11px] tabular-nums opacity-70">{time}</span>}
+        {open ? <ChevronDown className="size-3.5 shrink-0 opacity-70" /> : <ChevronRight className="size-3.5 shrink-0 opacity-70" />}
       </button>
       {open && (
-        <div className="bg-background/40">
+        <div className="bg-muted/20 mt-0.5 mb-1 ml-7 overflow-hidden rounded-md border">
           <ToolDetails it={it} sessionId={sessionId} />
           <CollapseBar onClick={() => setOpen(false)} />
         </div>
@@ -276,17 +226,16 @@ function ToolGroup({ items, sessionId }: { items: ToolItem[]; sessionId?: string
   const mediaText = useMemo(() => (running ? undefined : items.map((i) => (i.status === 'done' ? toolText(i.input, i.result) : '')).join('\n')), [items, running]);
   const total = items.reduce((a, i) => ({ add: a.add + stat(i).add, del: a.del + stat(i).del }), { add: 0, del: 0 });
   return (
-    <div ref={box}>
-      <button onClick={() => setOpen(!open)} className={cn('text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 text-left text-[13px]', open && 'bg-background sticky top-0 z-20 w-full py-1')}>
-        {running && <span className="bg-working size-1.5 shrink-0 animate-pulse rounded-full" aria-label={t('Working…')} />}
-        {failed && !running && <X className="text-removed size-3.5" />}
-        <span>{summarizeTools(items)}</span>
+    <div ref={box} data-tool-group>
+      <button onClick={() => setOpen(!open)} aria-expanded={open} className={cn('text-muted-foreground hover:text-foreground flex h-7 w-full cursor-pointer items-center gap-2 px-1.5 text-left text-[13.5px]', open && 'bg-background sticky top-0 z-20')}>
+        {running ? <Loader2 className="text-working size-3.5 shrink-0 animate-spin" aria-label={t('Working…')} /> : failed ? <X className="text-removed size-3.5 shrink-0" /> : <Hammer className="size-3.5 shrink-0" />}
+        <span className="min-w-0 truncate">{summarizeTools(items)}</span>
         {(total.add > 0 || total.del > 0) && (
-          <span className="font-mono text-[12px]">
+          <span className="shrink-0 font-mono text-[12px]">
             <span className="text-added">+{total.add}</span> <span className="text-removed">−{total.del}</span>
           </span>
         )}
-        {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+        {open ? <ChevronDown className="ml-auto size-3.5 shrink-0" /> : <ChevronRight className="ml-auto size-3.5 shrink-0" />}
       </button>
       {/* screenshots and images the agent read show up right away, without opening the steps */}
       {!open && pics.length > 0 && (
@@ -297,13 +246,103 @@ function ToolGroup({ items, sessionId }: { items: ToolItem[]; sessionId?: string
         </div>
       )}
       {open && (
-        <div className="bg-muted/20 mt-1.5 overflow-hidden rounded-md border">
+        <div className="flex flex-col">
           {items.map((it) => (
             <ToolStep key={it.id} it={it} sessionId={sessionId} />
           ))}
         </div>
       )}
       <MediaCards text={mediaText} />
+    </div>
+  );
+}
+
+const tsOf = (s?: string) => (s ? Date.parse(s) : NaN);
+
+/** When a sub-agent started, and (once done) when its last step happened. */
+function agentSpan(it: ToolItem, kids: ChatItem[] | undefined): { start?: number; end?: number } {
+  const start = tsOf(it.ts);
+  if (!Number.isFinite(start)) return {};
+  if (it.status === 'running') return { start };
+  const times = (kids ?? []).map((k) => tsOf('ts' in k ? k.ts : undefined)).filter(Number.isFinite);
+  const last = times.length ? Math.max(...times) : NaN;
+  return { start, end: Number.isFinite(last) && last >= start ? last : undefined };
+}
+
+function AgentTime({ it, kids }: { it: ToolItem; kids?: ChatItem[] }) {
+  const { start, end } = agentSpan(it, kids);
+  if (it.status === 'running' && start) return <Elapsed since={start} />;
+  if (start && end) return <span className="tabular-nums">{duration(end - start)}</span>;
+  return null;
+}
+
+/** A sub-agent: its model's mark, what it was asked to do, Running / Done / Failed, its elapsed time; its steps nest below. */
+function AgentRow({ it, sessionId }: { it: ToolItem; sessionId?: string }) {
+  const [open, setOpen] = useState(false);
+  const kids = useContext(KidsCtx).get(it.id);
+  const { model } = useContext(AgentCtx);
+  const sub = String(inp(it).model ?? '') || model;
+  const title = String(inp(it).description ?? '') || it.summary || t('Sub-agent');
+  // the sub-agent's own calls, without the TodoWrite noise
+  const rows = useMemo(() => groupTools(kids ?? []).flatMap((g) => (Array.isArray(g) ? g : [g])), [kids]);
+  const state = it.status === 'running' ? <span className="text-working">{t('Running')}</span> : it.status === 'error' ? <span className="text-removed">{t('Failed')}</span> : <span className="text-added">{t('Done')}</span>;
+  return (
+    <div data-agent-row>
+      <button onClick={() => setOpen(!open)} aria-expanded={open} className={cn('hover:bg-accent/40 flex h-11 w-full cursor-pointer items-center gap-2.5 rounded-md px-1.5 text-left', open && 'bg-background sticky top-0 z-10')} title={title}>
+        <VendorMark vendor={vendorOf(sub)} className="size-6 rounded-md text-[9px]" title={sub} />
+        <span className="flex min-w-0 flex-1 flex-col leading-tight">
+          <span className="truncate text-[13px] font-medium">{title}</span>
+          <span className="text-[11.5px]">{state}</span>
+        </span>
+        <span className="text-muted-foreground shrink-0 text-[11.5px]">
+          <AgentTime it={it} kids={kids} />
+        </span>
+        {open ? <ChevronDown className="text-muted-foreground size-3.5 shrink-0" /> : <ChevronRight className="text-muted-foreground size-3.5 shrink-0" />}
+      </button>
+      {open && (
+        <div className="border-border/60 mt-0.5 ml-4 flex flex-col gap-0.5 border-l pl-2.5">
+          {rows.map((c) => (
+            <Item key={c.id} it={c} sessionId={sessionId} />
+          ))}
+          {it.result && (
+            <div className="bg-muted/20 overflow-hidden rounded-md border">
+              <ToolOutput it={it} />
+            </div>
+          )}
+          {!rows.length && !it.result && <div className="text-muted-foreground px-1.5 py-1 text-[12px]">{t('Working…')}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Several sub-agents running side by side: "3 subagents · 3 working", their marks stacked, total time; one row each. */
+function AgentGroup({ items, sessionId }: { items: ToolItem[]; sessionId?: string }) {
+  const kidsOf = useContext(KidsCtx);
+  const { model } = useContext(AgentCtx);
+  const working = items.filter((i) => i.status === 'running').length;
+  const spans = items.map((i) => agentSpan(i, kidsOf.get(i.id)));
+  const starts = spans.map((s) => s.start).filter((n): n is number => !!n);
+  const start = starts.length ? Math.min(...starts) : undefined;
+  const ends = spans.map((s) => s.end).filter((n): n is number => !!n);
+  const end = !working && ends.length === items.length ? Math.max(...ends) : undefined;
+  return (
+    <div className="bg-card/40 rounded-lg border px-1.5 py-1" data-agent-group>
+      <div className="flex h-8 items-center gap-2 px-1.5 text-[12.5px]">
+        <span className="flex shrink-0">
+          {items.slice(0, 4).map((i, n) => (
+            <VendorMark key={i.id} vendor={vendorOf(String(inp(i).model ?? '') || model)} className={cn('ring-background size-5 rounded-md text-[8px] ring-2', n > 0 && '-ml-1.5')} />
+          ))}
+        </span>
+        <span className="font-medium">{t('{0} subagents', items.length)}</span>
+        {working > 0 && <span className="text-working">· {t('{0} working', working)}</span>}
+        <span className="text-muted-foreground ml-auto text-[11.5px]">{working > 0 && start ? <Elapsed since={start} /> : start && end ? <span className="tabular-nums">{duration(end - start)}</span> : null}</span>
+      </div>
+      <div className="flex flex-col">
+        {items.map((i) => (
+          <AgentRow key={i.id} it={i} sessionId={sessionId} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -691,11 +730,7 @@ function Item({ it, children, sessionId }: { it: ChatItem; children?: React.Reac
     case 'thinking':
       return <ThinkingRow it={it} />;
     case 'tool':
-      return (
-        <ToolRow it={it} sessionId={sessionId}>
-          {children}
-        </ToolRow>
-      );
+      return isAgentCall(it) ? <AgentRow it={it} sessionId={sessionId} /> : <ToolStep it={it} sessionId={sessionId} />;
     case 'shell':
       return <ShellRow it={it} />;
     case 'permission':
@@ -851,6 +886,8 @@ export function ChatView({ data }: { data: ChatData }) {
     }
     return { top, byParent };
   }, [chat.items]);
+  // sub-agents still running (the composer's status line names them)
+  const waitingOn = useMemo(() => top.filter(isAgentCall).filter((i) => i.status === 'running').map((i) => String(inp(i).description ?? '') || t('Sub-agent')), [top]);
 
   // Long chats: only rows near the viewport are in the DOM; heights are measured as they render.
   const rows = useMemo(() => groupTools(top), [top]);
@@ -986,6 +1023,7 @@ export function ChatView({ data }: { data: ChatData }) {
   return (
     <LightboxProvider rank={rank}>
     <AgentCtx.Provider value={{ model: shownModel, host: chat.host, hostIcon: chat.hostIcon }}>
+    <KidsCtx.Provider value={byParent}>
     <div className="flex h-screen flex-col">
       <header className="flex items-center gap-2 border-b px-3 py-1 [&>*]:shrink-0">
         <StateDot state={working ? 'working' : chat.status === 'idle' ? 'recent' : 'idle'} />
@@ -1135,11 +1173,9 @@ export function ChatView({ data }: { data: ChatData }) {
                 <GalleryRow.Provider key={v.key} value={String(v.key)}>
                 <div data-index={v.index} ref={virtualizer.measureElement} className={cn('absolute left-0 w-full pb-3', matchSet.has(v.index) && 'search-hit', v.index === current && 'search-current', v.index === playRow && 'timeline-current')} style={{ top: v.start }}>
                   {Array.isArray(g) ? (
-                    <ToolGroup items={g} sessionId={chat.sessionId} />
+                    isAgentCall(g[0]) ? <AgentGroup items={g} sessionId={chat.sessionId} /> : <ToolGroup items={g} sessionId={chat.sessionId} />
                   ) : (
-                    <Item it={g} sessionId={chat.sessionId}>
-                      {g.kind === 'tool' && byParent.get(g.id)?.map((c) => <Item key={c.id} it={c} sessionId={chat.sessionId} />)}
-                    </Item>
+                    <Item it={g} sessionId={chat.sessionId} />
                   )}
                   {turnChips.has(v.index) && (
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -1184,7 +1220,17 @@ export function ChatView({ data }: { data: ChatData }) {
           </button>
         )}
         <TodoCard todos={chat.todos} />
-        {working && chat.activity && (
+        {working && waitingOn.length > 0 ? (
+          <div className="text-muted-foreground flex items-center gap-2 px-1 text-[12px]" role="status" data-waiting-subagents>
+            <Loader2 className="text-working size-3.5 shrink-0 animate-spin" />
+            <span className="min-w-0 truncate">
+              {waitingOn.length === 1 ? t('Waiting on 1 subagent:') : t('Waiting on {0} subagents:', waitingOn.length)} <span className="text-foreground/80">{waitingOn.join(', ')}</span>
+            </span>
+            <button className="hover:text-foreground ml-auto shrink-0 cursor-pointer text-[11px] opacity-70" onClick={() => post({ type: 'interrupt' })}>
+              · {t('Stop')}
+            </button>
+          </div>
+        ) : working && chat.activity && (
           <div className="text-muted-foreground flex items-center gap-2 px-1 text-[12px]" role="status">
             <Loader2 className="text-working size-3.5 animate-spin" />
             <span className="truncate">{t(chat.activity)}</span>
@@ -1214,6 +1260,7 @@ export function ChatView({ data }: { data: ChatData }) {
       </div>
       {paletteOpen && <CommandPalette chat={chat} onClose={() => setPaletteOpen(false)} />}
     </div>
+    </KidsCtx.Provider>
     </AgentCtx.Provider>
     </LightboxProvider>
   );

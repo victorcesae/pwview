@@ -36,15 +36,25 @@ test('chat ui: consecutive tool calls become one group; sub-agents and text brea
   assert.deepEqual(shape, ['user', '1+2+4', 'assistant', 'tool:Agent', '6'], 'TodoWrite is hidden (the plan card shows it)');
 });
 
+test('chat ui: sub-agents launched back to back form one agents group', () => {
+  const { groupTools } = load('en');
+  const g = groupTools([tool('1', 'Bash', {}), tool('2', 'Agent', { description: 'a' }), tool('3', 'Task', { description: 'b' }), tool('4', 'Agent', {}), tool('5', 'Read', { file_path: '/a' })]);
+  assert.deepEqual(g.map((x) => (Array.isArray(x) ? x.map((t) => t.id).join('+') : x.id)), ['1', '2+3+4', '5']);
+});
+
 test('chat ui: summary sentence in English', () => {
   const { summarizeTools } = load('en');
-  assert.equal(summarizeTools([tool('1', 'Read', { file_path: '/x/chat.ts' }), tool('2', 'Edit', { file_path: '/x/chat.ts' }, { patch }), tool('3', 'Bash', { command: 'x' })]), 'Read and edited chat.ts, ran 1 command');
-  assert.equal(summarizeTools([tool('1', 'Read', { file_path: '/a' }), tool('2', 'Read', { file_path: '/b' }), tool('3', 'Grep', {}), tool('4', 'Grep', {})]), 'Read 2 files, searched 2 times');
+  const bash = (id) => tool(id, 'Bash', { command: 'x' });
+  assert.equal(summarizeTools([bash('1'), bash('2'), bash('3'), bash('4'), tool('5', 'Grep', {})]), 'Ran 4 commands and searched code 1 time');
+  assert.equal(summarizeTools([tool('1', 'Read', { file_path: '/x/chat.ts' }), tool('2', 'Edit', { file_path: '/x/chat.ts' }, { patch }), bash('3')]), 'Ran 1 command, read 1 file and edited 1 file');
+  assert.equal(summarizeTools([tool('1', 'Read', { file_path: '/a' }), tool('2', 'Read', { file_path: '/b' }), tool('3', 'Glob', {}), tool('4', 'WebSearch', {})]), 'Read 2 files and searched code 2 times');
+  assert.equal(summarizeTools([tool('1', 'WebFetch', {}), tool('2', 'mcp__playwright__browser_click', {}), tool('3', 'mcp__github__get_issue', {}), tool('4', 'Skill', {}), tool('5', 'ToolSearch', {})]), 'Used browser 2 times, used 1 tool and performed 2 other actions');
+  assert.equal(summarizeTools([tool('1', 'Write', {}), tool('2', 'MultiEdit', {})]), 'Edited 2 files');
 });
 
 test('chat ui: summary sentence in Portuguese', () => {
   const { summarizeTools } = load('pt-br');
-  assert.equal(summarizeTools([tool('1', 'Read', { file_path: '/x/chat.ts' }), tool('2', 'Edit', { file_path: '/x/chat.ts' }), tool('3', 'Bash', { command: 'x' })]), 'Leu e editou chat.ts, executou 1 comando');
+  assert.equal(summarizeTools([tool('1', 'Read', { file_path: '/x/chat.ts' }), tool('2', 'Edit', { file_path: '/x/chat.ts' }), tool('3', 'Bash', { command: 'x' })]), 'Executou 1 comando, leu 1 arquivo e editou 1 arquivo');
   assert.equal(summarizeTools([tool('1', 'Bash', {}), tool('2', 'Bash', {})]), 'Executou 2 comandos');
   delete globalThis.document;
 });
