@@ -2,7 +2,7 @@
 // progress, review decision and CI checks (GitHub Actions); a PR's checks unfold on click.
 import { useEffect, useState } from 'react';
 import { post } from '@/bridge';
-import { Check, ChevronRight, FileText, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, ListChecks, Loader2, MinusCircle, X } from 'lucide-react';
+import { Check, ChevronRight, FileText, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, ListChecks, Loader2, MinusCircle, Wrench, X } from 'lucide-react';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ChatState, PrCheckView } from '@/types';
@@ -185,6 +185,16 @@ function PrRow({ url, label, st }: { url: string; label: string; st?: Status }) 
                   </a>
                 ) : (
                   <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                )}
+                {c.state === 'fail' && github && (
+                  <button
+                    className="hover:bg-accent text-muted-foreground hover:text-foreground inline-flex shrink-0 cursor-pointer items-center gap-1 rounded px-1.5 py-0.5"
+                    title={t('Send the failed log to the agent and ask it to fix the check')}
+                    onClick={() => post({ type: 'prFixCheck', url, name: c.name, workflow: c.workflow })}
+                    data-fix-check
+                  >
+                    <Wrench className="size-3" /> {t('Fix with agent')}
+                  </button>
                 )}
               </li>
             );

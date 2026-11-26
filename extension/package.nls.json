@@ -1,4 +1,5 @@
 {
+  "setting.ci.notify.failures": "When a check on a pull request a chat opened turns red, show a notification with Fix with agent, which sends the failed log to the chat.",
   "cmd.add.to.chat": "Add to Chat",
   "cmd.add.selection.to.chat": "Add Selection to Chat",
   "setting.keep.chats.running": "Chats keep working when VS Code reloads or closes, and reconnect when you reopen them. With nobody connected, a chat stops 15 minutes after it finishes, or after 24 hours if it is still waiting. Closing a chat's tab stops it.",

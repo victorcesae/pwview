@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ghExe } from './prs';
 import { removePath } from './fileActions';
+import { ALLOW_MARK, describeFindings, scanDiff, scanFileNames } from './secretScan';
 
 export type ChangesMsg =
   | { type: 'changesTree' }
@@ -221,6 +222,36 @@ function contextLines(file: string, start: number, end: number): { lines: string
 
 const fail = (msg: string) => (vscode.window.showErrorMessage(msg), false);
 
+/** Secret scan of what is about to leave: the staged changes (commit) or the commits not on the
+ *  remote yet (push, PR). True to go on: nothing found, or the user chose to go on anyway. */
+async function secretsOk(root: string, what: 'commit' | 'push' | 'pr'): Promise<boolean> {
+  let diff: string;
+  let names: string;
+  if (what === 'commit') {
+    diff = (await git(['diff', '--cached', '--no-color', '--no-ext-diff', '-U0'], root)).out;
+    names = (await git(['diff', '--cached', '--name-only', '--diff-filter=AMR'], root)).out;
+  } else if ((await git(['rev-parse', '--verify', '--quiet', '@{u}'], root)).ok) {
+    diff = (await git(['diff', '--no-color', '--no-ext-diff', '-U0', '@{u}..HEAD'], root)).out;
+    names = (await git(['diff', '--name-only', '--diff-filter=AMR', '@{u}..HEAD'], root)).out;
+  } else {
+    // no upstream: every commit no remote has
+    diff = (await git(['log', '-p', '--no-color', '--no-ext-diff', '-U0', '--format=', 'HEAD', '--not', '--remotes'], root)).out;
+    names = (await git(['log', '--name-only', '--diff-filter=AMR', '--format=', 'HEAD', '--not', '--remotes'], root)).out;
+  }
+  const findings = [...scanFileNames([...new Set(names.split('\n').map((x) => x.trim()).filter(Boolean))]), ...scanDiff(diff)];
+  if (!findings.length) return true;
+  const go = what === 'commit' ? vscode.l10n.t('Commit anyway') : what === 'push' ? vscode.l10n.t('Push anyway') : vscode.l10n.t('Create PR anyway');
+  const pick = await vscode.window.showWarningMessage(
+    vscode.l10n.t('Possible secrets found ({0})', findings.length),
+    {
+      modal: true,
+      detail: `${describeFindings(findings)}\n\n${vscode.l10n.t('Remove them (or add {0} to a line that is a false alarm) before you share these changes.', ALLOW_MARK)}`,
+    },
+    go,
+  );
+  return pick === go;
+}
+
 async function commit(cwd: string, suggestion: string): Promise<boolean> {
   const root = await repoRoot(cwd);
   if (!root) return fail(vscode.l10n.t('This folder is not a git repository.'));
@@ -234,6 +265,7 @@ async function commit(cwd: string, suggestion: string): Promise<boolean> {
   if (!message?.trim()) return false;
   const add = await git(['add', '-A'], root);
   if (!add.ok) return fail(vscode.l10n.t('git add failed: {0}', add.err));
+  if (!(await secretsOk(root, 'commit'))) return false;
   const c = await git(['commit', '-m', message], root);
   if (!c.ok) return fail(vscode.l10n.t('Commit failed: {0}', c.err || c.out));
   vscode.window.showInformationMessage(vscode.l10n.t('Committed: {0}', message.split('\n')[0]));
@@ -249,6 +281,7 @@ async function push(cwd: string): Promise<boolean> {
   if (!remote) return fail(vscode.l10n.t('This repository has no remote to push to.'));
   const ok = vscode.l10n.t('Push');
   if ((await vscode.window.showWarningMessage(vscode.l10n.t('Push {0} to {1}?', branch, remote), { modal: true }, ok)) !== ok) return false;
+  if (!(await secretsOk(root, 'push'))) return false;
   const r = await git(upstream.ok ? ['push'] : ['push', '-u', remote, 'HEAD'], root);
   if (!r.ok) return fail(vscode.l10n.t('Push failed: {0}', r.err));
   vscode.window.showInformationMessage(vscode.l10n.t('Pushed {0}', branch));
@@ -258,7 +291,9 @@ async function push(cwd: string): Promise<boolean> {
 async function createPr(cwd: string): Promise<string | undefined> {
   const exe = ghExe();
   if (!exe) return void fail(vscode.l10n.t('GitHub CLI (gh) not found'));
-  const r = await run(exe, ['pr', 'create', '--fill'], (await repoRoot(cwd)) ?? cwd);
+  const root = (await repoRoot(cwd)) ?? cwd;
+  if (!(await secretsOk(root, 'pr'))) return;
+  const r = await run(exe, ['pr', 'create', '--fill'], root);
   const url = /https:\/\/\S+\/pull\/\d+/.exec(`${r.out}\n${r.err}`)?.[0];
   if (!url) return void fail(vscode.l10n.t('Could not create the pull request: {0}', r.err || r.out));
   return url;

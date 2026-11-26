@@ -1,4 +1,5 @@
 {
+  "setting.ci.notify.failures": "Quando uma verificação de um pull request aberto por um chat fica vermelha, mostra uma notificação com Corrigir com o agente, que envia o log da falha ao chat.",
   "cmd.add.to.chat": "Adicionar ao chat",
   "cmd.add.selection.to.chat": "Adicionar seleção ao chat",
   "setting.keep.chats.running": "Os chats continuam trabalhando quando o VS Code recarrega ou fecha e se reconectam quando você os reabre. Sem ninguém conectado, um chat para 15 minutos depois de terminar, ou após 24 horas se ainda estiver esperando. Fechar a aba de um chat o interrompe.",

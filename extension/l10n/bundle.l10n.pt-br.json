@@ -326,5 +326,21 @@
   "The file changed since, so the change no longer applies.": "O arquivo mudou desde então, e a alteração não se aplica mais.",
   "Could not stage the hunk: {0}": "Não foi possível preparar o trecho: {0}",
   "Could not revert the hunk: {0}": "Não foi possível reverter o trecho: {0}",
-  "Could not undo the edit to {0}: {1}": "Não foi possível desfazer a edição em {0}: {1}"
+  "Could not undo the edit to {0}: {1}": "Não foi possível desfazer a edição em {0}: {1}",
+  "Fix with agent": "Corrigir com o agente",
+  "CI check {0} failed on {1}.": "A verificação de CI {0} falhou em {1}.",
+  "Fetching the log of {0}…": "Buscando o log de {0}…",
+  "Send without log": "Enviar sem o log",
+  "Could not fetch the failed log: {0}": "Não foi possível buscar o log da falha: {0}",
+  "Checks out the PR branch in its own folder": "Faz checkout do branch do PR em uma pasta própria",
+  "New chat in this folder": "Novo chat nesta pasta",
+  "The agent switches to {0} itself": "O próprio agente muda para {0}",
+  "Send to this chat anyway": "Enviar para este chat mesmo assim",
+  "This chat is on {0}": "Este chat está em {0}",
+  "The PR is on branch {0}, this chat on {1}": "O PR está no branch {0}, este chat em {1}",
+  "Commit anyway": "Fazer commit mesmo assim",
+  "Push anyway": "Fazer push mesmo assim",
+  "Create PR anyway": "Criar PR mesmo assim",
+  "Possible secrets found ({0})": "Possíveis segredos encontrados ({0})",
+  "Remove them (or add {0} to a line that is a false alarm) before you share these changes.": "Remova-os (ou adicione {0} a uma linha que seja alarme falso) antes de compartilhar estas alterações."
 }

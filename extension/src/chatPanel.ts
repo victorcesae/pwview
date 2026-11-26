@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ChatSession, historyFromTranscript, Priority, type ChatItem, type ChatPrefs } from './chat';
 import { hostIcon } from './hostIcon';
-import { blockedByPolicy, findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMethod } from './prs';
+import { blockedByPolicy, ciFixPrompt, failedCheckLog, findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMethod, type PrCheck, type PrStatus } from './prs';
 import { openUrl } from './browser';
 import { handleChanges, isChangesMsg, type ChangesMsg } from './gitActions';
 import { findUrls } from './bgtasks';
@@ -19,7 +19,7 @@ import { addLink, briefing, loadLinks, removeLink, sameConnection } from './link
 import { agentExecutable } from './util';
 import { LOCAL_COMMANDS, runLocalCommand, type LocalCommand } from './localCommands';
 import { accountEnv, type Account } from './accounts';
-import { git, repoRoot } from './worktree';
+import { checkoutWorktree, git, repoRoot } from './worktree';
 
 const tabCompletion = () => vscode.workspace.getConfiguration('steerhouse').get<boolean>('tabCompletion', true);
 
@@ -56,6 +56,7 @@ export type FromChat =
   | { type: 'prFiles'; url: string }
   | { type: 'prViewed'; url: string; prId: string; path: string; viewed: boolean }
   | { type: 'prMerge'; url: string }
+  | { type: 'prFixCheck'; url: string; name: string; workflow?: string }
   | { type: 'prOpenFile'; url: string; path: string }
   | { type: 'contextDetail' }
   | { type: 'toggleMcp'; name: string; enabled: boolean }
@@ -143,7 +144,13 @@ export function changedItems(sent: Sent, items: ChatItem[]): ChatItem[] {
 
 export class Chats {
   /** live status of the PRs the chats' agents opened */
-  private prs = new PrTracker(() => this.refresh());
+  private prs = new PrTracker(
+    () => this.refresh(),
+    undefined,
+    (url, check, st) => this.notifyFailed(url, check, st),
+  );
+  /** Opens a new chat (the extension picks the agent); set by extension.ts. */
+  startNew?: (cwd: string, prompt: string, title?: string) => void;
   private open: Open[] = [];
 
   constructor(
@@ -163,6 +170,52 @@ export class Chats {
 
   private front() {
     return this.open.find((x) => x.panel.active) ?? this.open.find((x) => x.panel.visible) ?? this.open.at(-1);
+  }
+
+  /** A tracked PR's check just turned red: offer to have the agent fix it. */
+  private async notifyFailed(url: string, check: PrCheck, st: PrStatus) {
+    if (!vscode.workspace.getConfiguration('steerhouse').get<boolean>('ci.notifyFailures', true)) return;
+    const o = this.open.find((x) => x.prUrls?.has(url));
+    if (!o) return;
+    const fix = vscode.l10n.t('Fix with agent');
+    const pick = await vscode.window.showWarningMessage(vscode.l10n.t('CI check {0} failed on {1}.', check.name, st.number ? `#${st.number}` : (st.title ?? url)), fix);
+    if (pick === fix && this.open.includes(o)) await this.fixCheck(o, url, check);
+  }
+
+  /** Fetches the failed check's log and asks an agent to fix it: this chat when it is on the PR's
+   *  branch, else (on request) a new chat in a worktree of that branch or in this folder. */
+  private async fixCheck(o: Open, url: string, check: PrCheck) {
+    const st = this.prs.get(url);
+    const cwd = o.chat.state.cwd;
+    const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Fetching the log of {0}…', check.name) }, () => failedCheckLog(url, check, st?.branch, cwd));
+    if (!r.ok) {
+      const go = vscode.l10n.t('Send without log');
+      if ((await vscode.window.showWarningMessage(vscode.l10n.t('Could not fetch the failed log: {0}', r.log.slice(0, 300)), go)) !== go) return;
+    }
+    const prompt = ciFixPrompt(check.workflow ? `${check.workflow} / ${check.name}` : check.name, { url, number: st?.number, branch: st?.branch }, r.ok ? r.log : `(log not available: ${r.log})`);
+    const here = (await git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)).out.trim();
+    if (!st?.branch || st.branch === here) {
+      o.panel.reveal();
+      return o.chat.send(prompt, [], 'later');
+    }
+    type P = vscode.QuickPickItem & { how: 'worktree' | 'folder' | 'this' };
+    const pick = await vscode.window.showQuickPick<P>(
+      [
+        { label: vscode.l10n.t('New chat in a worktree of {0}', st.branch), detail: vscode.l10n.t('Checks out the PR branch in its own folder'), how: 'worktree' },
+        { label: vscode.l10n.t('New chat in this folder'), detail: vscode.l10n.t('The agent switches to {0} itself', st.branch), how: 'folder' },
+        { label: vscode.l10n.t('Send to this chat anyway'), detail: vscode.l10n.t('This chat is on {0}', here || '?'), how: 'this' },
+      ],
+      { title: vscode.l10n.t('The PR is on branch {0}, this chat on {1}', st.branch, here || '?') },
+    );
+    if (!pick) return;
+    if (pick.how === 'this') {
+      o.panel.reveal();
+      return o.chat.send(prompt, [], 'later');
+    }
+    if (pick.how === 'folder') return this.startNew?.(cwd, prompt, `Fix ${check.name}`);
+    const dir = await checkoutWorktree(cwd, st.branch);
+    if ('error' in dir) return vscode.window.showErrorMessage(vscode.l10n.t('Could not create the worktree: {0}', dir.error.slice(0, 300)));
+    this.startNew?.(dir.dir, prompt, `Fix ${check.name}`);
   }
 
   /** The folder of the chat in front, if any is open. */
@@ -600,6 +653,10 @@ export class Chats {
         const local = path.join(c.state.cwd, m.path);
         if (fs.existsSync(local)) return vscode.window.showTextDocument(vscode.Uri.file(local));
         return openUrl(`${m.url}/files`);
+      }
+      case 'prFixCheck': {
+        const check = this.prs.get(m.url)?.checks?.find((x) => x.name === m.name && (x.workflow ?? '') === (m.workflow ?? '')) ?? { name: m.name, workflow: m.workflow, state: 'fail' as const };
+        return this.fixCheck(o, m.url, check);
       }
       case 'prMerge': {
         const st = this.prs.get(m.url);
