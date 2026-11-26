@@ -70,6 +70,10 @@ export interface Transcript {
 
 export interface AgentInfo {
   id: string;
+  /** stopped by the user (Claude Code's meta file says so), or its last turn was interrupted */
+  stopped?: boolean;
+  /** what it did last, one line (for "Working · …") */
+  doing?: string;
   description: string;
   agentType: string;
   parentToolUseId: string;
@@ -471,7 +475,10 @@ export class Engine {
               description: str(meta.description) || al.t.firstPrompt || aid,
               agentType: str(meta.agentType),
               parentToolUseId: str(meta.toolUseId),
-              state: stateOf(al.mtime, al.t.pending.size > 0),
+              stopped: !!meta.stoppedByUser || /Request interrupted by user/.test(al.t.events.at(-1)?.text ?? ''),
+              doing: al.t.events.filter((e) => e.text).at(-1)?.text?.replace(/\s+/g, ' ').slice(0, 120),
+              // stopped is final; a tool call still open (a long command) keeps it working for a while
+              state: meta.stoppedByUser ? 'idle' : stateOf(al.mtime, al.t.pending.size > 0),
               updated: al.t.updated,
               edits: al.t.changes.length,
               tools: al.t.toolCount,

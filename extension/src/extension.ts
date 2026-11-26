@@ -200,6 +200,8 @@ export function activate(ctx: vscode.ExtensionContext) {
   });
   const dashboard = new Dashboard(ctx, () => sessions, hooksOk, () => attachedSessions(), (m) => onWebview(m), (days) => usageReport(engine.scan(Math.max(days, cfg().get<number>('days', 3))), days));
   const chats = new Chats(ctx, () => sessions, (id) => dashboard.show(id));
+  tree.liveStatus = (id) => chats.find(id)?.chat.state.status;
+  ctx.subscriptions.push({ dispose: () => tree.dispose() });
   ctx.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('steerhouse.tabCompletion') && chats.refresh()));
   registerCodeCompletion(ctx);
   handOverQueues = () => chats.handOverQueues();
@@ -628,7 +630,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('steerhouse.editProjectRules', (n?: { root?: string }) => editRules('project', n?.root).then(() => tree.refresh())),
     // a session opens straight into its chat; the activity page only for a sub-agent or the terminal surface
     vscode.commands.registerCommand('steerhouse.openSession', (id: string, agentId?: string) =>
-      agentId || surface() === 'terminal' || !find(id) ? dashboard.show(id, agentId) : vscode.commands.executeCommand('steerhouse.resumeSession', id),
+      (tree.markSeen(id), agentId) || surface() === 'terminal' || !find(id) ? dashboard.show(id, agentId) : vscode.commands.executeCommand('steerhouse.resumeSession', id),
     ),
     vscode.commands.registerCommand('steerhouse.openChange', openChange),
     vscode.commands.registerCommand('steerhouse.newSession', newSession),
@@ -930,6 +932,18 @@ export function activate(ctx: vscode.ExtensionContext) {
         const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (cwd) chats.start({ cwd, account: acc, env: await envFor(acc) });
       }
+    }),
+    // one "Add…" row under Accounts: pick what to add
+    vscode.commands.registerCommand('steerhouse.addAccountOrProvider', async () => {
+      const pick = await vscode.window.showQuickPick(
+        [
+          { label: '$(add) ' + vscode.l10n.t('Claude account'), description: vscode.l10n.t('another Claude login (Pro, Max, Team or API key)'), cmd: 'steerhouse.addAccount' },
+          { label: '$(add) ' + vscode.l10n.t('Cursor account'), description: vscode.l10n.t('runs Cursor Agent in a terminal'), cmd: 'steerhouse.addCursorAccount' },
+          { label: '$(server) ' + vscode.l10n.t('Model provider'), description: vscode.l10n.t('Ollama, OpenRouter or any Anthropic-compatible endpoint'), cmd: 'steerhouse.addProvider' },
+        ],
+        { title: vscode.l10n.t('Add account or provider'), placeHolder: vscode.l10n.t('What do you want to add?') },
+      );
+      if (pick) await vscode.commands.executeCommand(pick.cmd);
     }),
     vscode.commands.registerCommand('steerhouse.addAccount', async () => {
       const name = await vscode.window.showInputBox({ prompt: vscode.l10n.t('Name for the new Claude account'), placeHolder: vscode.l10n.t('Work, Personal, Client X…') });

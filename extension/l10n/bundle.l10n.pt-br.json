@@ -373,5 +373,20 @@
   "Clean Up": "Limpar",
   "Remove the {0} Best of N worktrees and their branches?": "Remover as {0} worktrees do Melhor de N e suas branches?",
   "Their uncommitted changes are deleted for good. Apply the one you want first.": "As mudanças não commitadas delas são apagadas de vez. Aplique a que você quer antes.",
-  "$(git-branch) Steerhouse: Best of N worktrees removed": "$(git-branch) Steerhouse: worktrees do Melhor de N removidas"
+  "$(git-branch) Steerhouse: Best of N worktrees removed": "$(git-branch) Steerhouse: worktrees do Melhor de N removidas",
+  "Waiting for you": "Esperando você",
+  "Working {0}": "Trabalhando {0}",
+  "Done": "Concluído",
+  "Untitled chat": "Chat sem título",
+  "Add account or provider…": "Adicionar conta ou provedor…",
+  "Add account or provider": "Adicionar conta ou provedor",
+  "What do you want to add?": "O que você quer adicionar?",
+  "Claude account": "Conta Claude",
+  "Cursor account": "Conta Cursor",
+  "Model provider": "Provedor de modelos",
+  "another Claude login (Pro, Max, Team or API key)": "outro login do Claude (Pro, Max, Team ou chave de API)",
+  "runs Cursor Agent in a terminal": "roda o Cursor Agent em um terminal",
+  "Ollama, OpenRouter or any Anthropic-compatible endpoint": "Ollama, OpenRouter ou qualquer endpoint compatível com a Anthropic",
+  "Working": "Trabalhando",
+  "Stopped": "Parado"
 }
