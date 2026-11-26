@@ -276,8 +276,11 @@ test('shell: each kind of shell gets the command line its own way', () => {
 test('shell: runs in the given shell', async () => {
   const { ShellRun, shellSpec } = S;
   const r = await new Promise((done) => {
-    const run = new ShellRun('echo "$0"', { cwd: process.cwd(), env: process.env, shell: shellSpec('/bin/bash') }, () => {}, (x) => done({ ...x, out: run.output }));
+    // Windows: PowerShell (what VS Code opens there by default); elsewhere bash
+    const win = process.platform === 'win32';
+    const cmd = win ? 'Write-Output "ps-$($PSVersionTable.PSEdition)"' : 'echo "$0"';
+    const run = new ShellRun(cmd, { cwd: process.cwd(), env: process.env, shell: shellSpec(win ? 'powershell.exe' : '/bin/bash') }, () => {}, (x) => done({ ...x, out: run.output }));
   });
-  assert.equal(r.exitCode, 0);
-  assert.match(r.out, /bash/);
+  assert.equal(r.exitCode, 0, r.out);
+  assert.match(r.out, process.platform === 'win32' ? /ps-(Desktop|Core)/ : /bash/);
 });
