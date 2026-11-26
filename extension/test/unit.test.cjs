@@ -105,6 +105,8 @@ test('chat: Queue waits for the turn end; Steer goes in after a short undo windo
   assert.deepEqual(queued(c).map((m) => [m.priority, m.content.at(-1).text]), [['now', 'queued two']], 'a queued message can be sent now');
   c.input.q.length = 0;
 
+  // the model took another step after the steer went in: it read it in this turn
+  h(c, { type: 'stream_event', parent_tool_use_id: null, event: { type: 'message_start', message: { id: 'm2' } } });
   h(c, { type: 'result', subtype: 'success', total_cost_usd: 0.01, duration_ms: 5, usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100 } });
   assert.deepEqual(queued(c).map((m) => m.content.at(-1).text), ['queued one'], 'turn end delivers the next queued message');
   assert.equal(c.state.queue.length, 0);
@@ -442,4 +444,37 @@ test('a question asked again shows one card, and its answer reaches both', async
   c.respond(cards[0].id, 'allow', undefined, { 'Keep?': 'Yes' });
   for (const r of await Promise.all([first, again])) assert.deepStrictEqual(r.updatedInput.answers, { 'Keep?': 'Yes' });
   assert.strictEqual(cards[0].status, 'answered');
+});
+
+test('chat: a steer that arrives after the last step keeps the chat working for its follow-up turn', async () => {
+  const c = newChat();
+  c.steerGraceMs = 0;
+  c.followUpWaitMs = 40;
+  c.send('first', [], 'later');
+  c.input.q.length = 0;
+  c.send('queued', [], 'later');
+  c.send('late steer', [], 'next');
+  await sleep(10);
+  assert.deepEqual(queued(c).map((m) => m.content.at(-1).text), ['late steer']);
+  c.input.q.length = 0;
+  h(c, { type: 'result', subtype: 'success', total_cost_usd: 0, duration_ms: 5, usage: {} });
+  assert.equal(c.state.status, 'working', 'not idle: Claude Code answers the steer in a turn of its own');
+  assert.equal(c.input.q.length, 0, 'the queued message waits for that turn');
+  await sleep(80);
+  assert.equal(c.state.status, 'working', 'no follow-up turn came: the queued message goes instead');
+  assert.deepEqual(queued(c).map((m) => m.content.at(-1).text), ['queued']);
+});
+
+test('chat: a waiting message being edited when the turn ends keeps the edit', () => {
+  const c = newChat();
+  c.send('first', [], 'later');
+  c.input.q.length = 0;
+  c.send('draft', [], 'later');
+  const id = c.state.queue[0].id;
+  c.holdQueued(id, true);
+  h(c, { type: 'result', subtype: 'success', total_cost_usd: 0, duration_ms: 5, usage: {} });
+  assert.equal(c.input.q.length, 0, 'not sent while being edited');
+  c.editQueued(id, 'edited');
+  c.holdQueued(id, false);
+  assert.deepEqual(queued(c).map((m) => m.content.at(-1).text), ['edited']);
 });

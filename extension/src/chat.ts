@@ -589,6 +589,19 @@ export class ChatSession {
 
   /** Steers handed to Claude Code after the model last started writing: it may still be working on them. */
   private lateSteers = 0;
+  private followUpTimer?: ReturnType<typeof setTimeout>;
+  followUpWaitMs = 5000;
+  private followUpMissing() {
+    if (this.state.status !== 'working' || this.state.activity !== 'Picking up your steer…') return;
+    this.state.status = 'idle';
+    this.state.activity = undefined;
+    const next = this.queued.find((q) => !q.held);
+    if (next) {
+      this.queued = this.queued.filter((q) => q !== next);
+      this.push(next.text, next.images, 'later');
+    }
+    this.changed();
+  }
 
   /**
    * A steer waits only a short undo window (edit / cancel / switch), then goes in at once.
@@ -1081,7 +1094,7 @@ export class ChatSession {
         const e: any = m.event;
         const key = parent ?? '';
         if (e.type === 'message_start') {
-          if (!parent) this.lateSteers = 0; // the model is reading everything handed over so far
+          if (!parent) (this.lateSteers = 0, clearTimeout(this.followUpTimer)); // the model is reading everything handed over so far
           this.currentMsg.set(key, e.message?.id ?? uid());
           if (!parent) this.state.activity = 'Thinking…';
         } else if (e.type === 'content_block_start' && e.content_block?.type === 'text') {
@@ -1201,6 +1214,9 @@ export class ChatSession {
         this.lateSteers = 0;
         this.state.status = followUp ? 'working' : 'idle';
         this.state.activity = followUp ? 'Picking up your steer…' : undefined;
+        clearTimeout(this.followUpTimer);
+        // the follow-up turn should start at once; if it doesn't, don't stay "working" forever
+        if (followUp) this.followUpTimer = setTimeout(() => this.followUpMissing(), this.followUpWaitMs);
         this.refreshLimits();
         this.q
           ?.getContextUsage({ detail: 'summary' })
