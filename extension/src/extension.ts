@@ -33,7 +33,7 @@ import { addLink, briefing, sameConnection } from './links';
 import { PRESETS, listModels, secretKey, vendorOf } from './providers';
 import { addAccount, addProvider, listAccounts, preferredAccount, removeAccount, setPreferred, accountEnv, type Account, addCursorAccount, cursorAccountEnv, listCursorAccounts, removeCursorAccount, renameAccount, type CursorAccount } from './accounts';
 import { Node, SessionsTree, registerChatMarks, setMediaRoot } from './tree';
-import { agentExecutable, ago, clip, runAgent, terminalLocation } from './util';
+import { agentExecutable, ago, clip, runAgent, setLayoutStore, sizeTerminalSplit, terminalLocation } from './util';
 
 const SCHEME = 'steerhouse';
 
@@ -104,6 +104,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       .filter((a) => !a.provider && !seen.has(a.configDir) && !!seen.add(a.configDir))
       .map((a) => ({ account: a.id, dir: path.join(a.configDir, 'projects') }));
   });
+  setLayoutStore(ctx.globalState);
   // parsed transcripts from the last session: startup doesn't re-read every transcript
   const scanCache = path.join(ctx.globalStorageUri.fsPath, 'transcripts.cache');
   const cacheVersion = String((ctx.extension.packageJSON as any).version);
@@ -814,13 +815,16 @@ export function activate(ctx: vscode.ExtensionContext) {
       const term = vscode.window.createTerminal({ name: `▶ ${t.chatTitle ? clip(t.chatTitle, 20) + ' · ' : ''}${what}`, pty: followPty(t.outputFile, label), location: terminalLocation(), iconPath: new vscode.ThemeIcon('debug-console') });
       following.set(t.outputFile, term);
       term.show();
+      void sizeTerminalSplit(term);
     }),
     vscode.commands.registerCommand('steerhouse.openTaskFile', (x?: { task?: { outputFile?: string } }) => x?.task?.outputFile && vscode.window.showTextDocument(vscode.Uri.file(x.task.outputFile), { preview: true })),
     vscode.commands.registerCommand('steerhouse.openTerminalHere', (n?: { path?: string } | vscode.Uri | string) => {
       const dir = typeof n === 'string' ? n : n instanceof vscode.Uri ? n.fsPath : (n?.path ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
       if (!dir) return vscode.window.showWarningMessage(vscode.l10n.t('Open a folder first.'));
       const cwd = fs.existsSync(dir) && fs.statSync(dir).isDirectory() ? dir : path.dirname(dir);
-      vscode.window.createTerminal({ name: path.basename(cwd), cwd, location: terminalLocation() }).show();
+      const term = vscode.window.createTerminal({ name: path.basename(cwd), cwd, location: terminalLocation() });
+      term.show();
+      void sizeTerminalSplit(term);
     }),
     vscode.commands.registerCommand('steerhouse.newChatHere', (n?: { kind?: string; path?: string } | vscode.Uri) => {
       const cwd = n instanceof vscode.Uri ? n.fsPath : n?.path;

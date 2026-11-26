@@ -158,6 +158,50 @@ export function runAgent(name: string, cwd: string, args: string[], extraEnv: Re
   });
   launched.set(token, term);
   term.show();
+  void sizeTerminalSplit(term);
+}
+
+// ---- the chat / terminal split: 80/20 by default, and the user's own resize is kept
+
+let layoutStore: vscode.Memento | undefined;
+const SPLIT_KEY = 'steerhouse.terminalSplit';
+/** Where the chat/terminal split is remembered (set at activation). */
+export function setLayoutStore(m: vscode.Memento) {
+  layoutStore = m;
+}
+type Layout = { orientation: number; groups: { size?: number; groups?: unknown[] }[] };
+const getLayout = () => vscode.commands.executeCommand<Layout>('vscode.getEditorLayout').then((l) => l, () => undefined);
+/** Share of the width the chat keeps (the rest is the terminal). */
+export const chatShare = () => Math.min(0.9, Math.max(0.3, layoutStore?.get<number>(SPLIT_KEY) ?? 0.8));
+/** The share of the left group in a side-by-side pair of editor groups, or undefined for any other layout. */
+export function leftShare(l: Layout | undefined): number | undefined {
+  if (!l || l.orientation !== 0 || l.groups.length !== 2) return undefined;
+  const [a, b] = l.groups.map((g) => g.size ?? 0);
+  return a + b > 0 ? a / (a + b) : undefined;
+}
+
+let watching: ReturnType<typeof setInterval> | undefined;
+/**
+ * After a terminal opened beside the chat: size the pair to the remembered split, then keep the
+ * user's resizing (read every few seconds while the pair is there).
+ */
+export async function sizeTerminalSplit(term: vscode.Terminal) {
+  if (vscode.workspace.getConfiguration('steerhouse').get<string>('terminalLocation', 'right') === 'bottom') return;
+  await new Promise((r) => setTimeout(r, 150)); // the new group exists once the terminal is shown
+  const l = await getLayout();
+  if (leftShare(l) === undefined) return; // not a simple chat | terminal pair: leave the user's layout alone
+  const share = chatShare();
+  await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: share }, { size: 1 - share }] }).then(undefined, () => {});
+  clearInterval(watching);
+  let last = share;
+  watching = setInterval(async () => {
+    if (term.exitStatus !== undefined || !vscode.window.terminals.includes(term)) return (clearInterval(watching), (watching = undefined));
+    const now = leftShare(await getLayout());
+    if (now !== undefined && Math.abs(now - last) > 0.02) {
+      last = now;
+      layoutStore?.update(SPLIT_KEY, Math.round(now * 100) / 100);
+    }
+  }, 3000);
 }
 
 /** Where Steerhouse opens terminals: beside the chat (an editor tab on the right, the default) or in the bottom panel. */

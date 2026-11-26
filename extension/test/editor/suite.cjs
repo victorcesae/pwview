@@ -79,6 +79,15 @@ async function run() {
     // the default: beside the chat, as an editor tab (not the bottom panel)
     const loc = term.creationOptions.location;
     assert.ok(loc && typeof loc === 'object' && loc.viewColumn === vscode.ViewColumn.Beside, 'opens on the right: ' + JSON.stringify(loc));
+    // sized 80/20 (chat / terminal) when it makes a simple pair
+    await wait(1200);
+    const layout = await vscode.commands.executeCommand('vscode.getEditorLayout');
+    console.log('LAYOUT ' + JSON.stringify(layout));
+    if (layout && layout.groups && layout.groups.length === 2) {
+      const [a, b] = layout.groups.map((g) => g.size);
+      // ~80%, unless the terminal is already at VS Code's minimum group width (small test window)
+      assert.ok(Math.abs(a / (a + b) - 0.8) < 0.05 || (a > b && b <= 230), 'chat keeps ~80%: ' + JSON.stringify(layout));
+    }
     term.dispose();
   });
   await check('source control: VS Code Git reports a repo branch and changed files the way Steerhouse reads them', async () => {
