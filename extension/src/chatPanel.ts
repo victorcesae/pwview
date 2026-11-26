@@ -558,17 +558,39 @@ export class Chats {
     return true;
   }
 
+  /** The vendor's mark, with a status dot drawn in its corner (made once per vendor and status). */
+  private tabIcon(vendor: string, badge: '' | 'working' | 'waiting'): vscode.Uri {
+    const base = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'vendors', `${vendor}.svg`);
+    if (!badge) return base;
+    try {
+      const dir = path.join(this.ctx.globalStorageUri.fsPath, 'tab-icons');
+      const file = path.join(dir, `${vendor}-${badge}.svg`);
+      if (!fs.existsSync(file)) {
+        const svg = fs.readFileSync(base.fsPath, 'utf8');
+        const color = badge === 'working' ? '#3794ff' : '#e5a50a';
+        const dot = `<circle cx="13" cy="13" r="3.2" fill="${color}" stroke="#1e1e1e" stroke-width="1.2"/>`;
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(file, svg.replace(/<\/svg>\s*$/, `${dot}</svg>`));
+      }
+      return vscode.Uri.file(file);
+    } catch {
+      return base;
+    }
+  }
+
   private post(o: Open) {
     const s = o.chat.state;
     this.savePrefs(o);
     this.notify(o);
-    const mark = s.status === 'waiting' ? '⚠ ' : s.status === 'working' ? '● ' : '';
-    o.panel.title = mark + s.title.slice(0, 40);
-    // tab icon: the model's vendor mark (Claude, GPT, Llama…)
+    o.panel.title = s.title.replace(/\s+/g, ' ').trim().slice(0, 40);
+    // tab icon: the model's vendor mark (Claude, GPT, Llama…), with a dot while it works or waits for you
+    // (a dot in the title text sits off-center next to VS Code's own tab icons)
     const vendor = s.model ? vendorOf(s.model) : s.account.gateway ? 'other' : 'anthropic';
-    if (o.vendor !== vendor) {
-      o.vendor = vendor;
-      o.panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'vendors', `${vendor}.svg`);
+    const badge = s.status === 'waiting' ? 'waiting' : s.status === 'working' ? 'working' : '';
+    const key = `${vendor}:${badge}`;
+    if (o.vendor !== key) {
+      o.vendor = key;
+      o.panel.iconPath = this.tabIcon(vendor, badge);
     }
     const all = this.sessions();
     const linked = s.sessionId ? (loadLinks()[s.sessionId] ?? []) : [];
