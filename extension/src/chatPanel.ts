@@ -569,7 +569,7 @@ export class Chats {
     if (!badge) return base;
     try {
       const dir = path.join(this.ctx.globalStorageUri.fsPath, 'tab-icons');
-      const file = path.join(dir, `${vendor}-${badge}-v2.svg`);
+      const file = path.join(dir, `${vendor}-${badge}-v3.svg`);
       if (!fs.existsSync(file)) {
         // the mark shrinks a little inside a ring: spinning while it works, pulsing amber while it waits
         const svg = fs.readFileSync(base.fsPath, 'utf8');
