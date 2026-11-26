@@ -750,12 +750,20 @@ export function activate(ctx: vscode.ExtensionContext) {
     // right-click a file: dragging onto a chat only works with Shift held (VS Code's rule for pages)
     vscode.commands.registerCommand('steerhouse.addToChat', async (x?: vscode.Uri | { path?: string }, selected?: unknown[]) => {
       const pathOf = (n: unknown) => (n instanceof vscode.Uri ? n.fsPath : (n as { path?: string } | undefined)?.path);
-      const paths = [...new Set((selected?.length ? selected : [x ?? vscode.window.activeTextEditor?.document.uri]).map(pathOf).filter((p): p is string => !!p))];
+      let paths = [...new Set((selected?.length ? selected : [x ?? vscode.window.activeTextEditor?.document.uri]).map(pathOf).filter((p): p is string => !!p))];
+      // from the editor with text selected: the lines too (path#L5-10), resolved to those lines on send
+      const ed = vscode.window.activeTextEditor;
+      if (ed && !ed.selection.isEmpty && paths.length === 1 && paths[0] === ed.document.uri.fsPath) {
+        const s = ed.selection;
+        const end = s.end.character === 0 && s.end.line > s.start.line ? s.end.line : s.end.line + 1;
+        paths = [`${paths[0]}#L${s.start.line + 1}${end > s.start.line + 1 ? `-${end}` : ''}`];
+      }
       if (!paths.length) return;
       if (chats.insertPaths(paths)) return;
       const open = vscode.l10n.t('New Chat');
       if ((await vscode.window.showInformationMessage(vscode.l10n.t('Open a chat first, then add the file to it.'), open)) === open) vscode.commands.executeCommand('steerhouse.newChat');
     }),
+    vscode.commands.registerCommand('steerhouse.addSelectionToChat', () => vscode.commands.executeCommand('steerhouse.addToChat')),
     // the active terminal's selection, as an attachment in the chat in front
     vscode.commands.registerCommand('steerhouse.sendTerminalSelection', async () => {
       const before = await vscode.env.clipboard.readText();

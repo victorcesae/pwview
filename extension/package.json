@@ -269,6 +269,11 @@
         "category": "Steerhouse"
       },
       {
+        "command": "steerhouse.addSelectionToChat",
+        "title": "%cmd.add.selection.to.chat%",
+        "category": "Steerhouse"
+      },
+      {
         "command": "steerhouse.addToChat",
         "title": "%cmd.add.to.chat%",
         "category": "Steerhouse",
@@ -568,6 +573,13 @@
       }
     ],
     "menus": {
+      "editor/context": [
+        {
+          "command": "steerhouse.addSelectionToChat",
+          "when": "editorHasSelection",
+          "group": "steerhouse@0"
+        }
+      ],
       "view/title": [
         {
           "command": "steerhouse.newChat",
@@ -1378,6 +1390,11 @@
     ],
     "keybindings": [
       {
+        "command": "steerhouse.addSelectionToChat",
+        "key": "alt+k",
+        "when": "editorTextFocus && editorHasSelection"
+      },
+      {
         "command": "steerhouse.pasteImage",
         "key": "ctrl+alt+v",
         "mac": "cmd+alt+v",
@@ -1519,7 +1536,7 @@
     "build:webview": "vite build --config webview/vite.config.mts",
     "dev:webview": "vite --config webview/vite.config.mts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
-    "test": "node --test test/uploads.test.cjs test/relay.test.cjs test/codeCompletion.test.cjs test/shell.test.cjs test/pwview.test.cjs test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs test/scm.test.cjs",
+    "test": "node --test test/uploads.test.cjs test/relay.test.cjs test/codeCompletion.test.cjs test/shell.test.cjs test/pwview.test.cjs test/engine.test.cjs test/unit.test.cjs test/markdown.test.cjs test/i18n-accounts.test.cjs test/chat-ui.test.cjs test/usage.test.cjs test/providers.test.cjs test/limits.test.cjs test/prs.test.cjs test/mcp.test.cjs test/worktree.test.cjs test/remote.test.cjs test/migrate.test.cjs test/bgtasks.test.cjs test/scm.test.cjs test/mentions.test.cjs",
     "test:e2e": "node --test test/e2e-relay.test.cjs test/e2e.test.cjs test/e2e-steer.test.cjs test/e2e-context.test.cjs test/e2e-mcp.test.cjs test/e2e-fork.test.cjs test/e2e-bg.test.cjs",
     "package": "vsce package --no-dependencies",
     "test:editor": "npm run build && node test/editor/run.cjs",

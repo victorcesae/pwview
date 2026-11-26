@@ -176,6 +176,16 @@ function PlusMenu({ chat, onFiles, onSlash }: { chat: ChatState; onFiles: () => 
   );
 }
 
+/** What a special @ suggestion attaches (they are resolved by the host when the message is sent). */
+function mentionHint(s: string) {
+  if (s === '@problems') return t('Errors and warnings in this folder');
+  if (s === '@diff') return t('Uncommitted changes (git diff)');
+  if (s.startsWith('@diff:')) return t('Changes since this branch');
+  if (s.startsWith('@chat:')) return t('Summary of another chat');
+  if (s.startsWith('@url:')) return t('Page text, fetched on send');
+  return undefined;
+}
+
 /** For window-wide shortcuts (Chat.tsx): the box's state without reaching into the editor. */
 export const composerApi = { isEmpty: () => true, focus: () => {}, slash: (_c: string) => {} };
 
@@ -416,6 +426,7 @@ export function Composer({ chat }: { chat: ChatState }) {
               className={cn('cursor-pointer truncate px-2.5 py-1 text-left font-mono text-[12px]', i === sel ? 'bg-accent' : 'hover:bg-accent')}
             >
               {f}
+              {mentionHint(f) && <span className="text-muted-foreground ml-2 font-sans">{mentionHint(f)}</span>}
             </button>
           ))}
         </div>
