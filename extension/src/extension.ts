@@ -137,7 +137,10 @@ export function activate(ctx: vscode.ExtensionContext) {
         iconPath: vscode.Uri.joinPath(media, `${a.provider ? vendorOf(a.provider.model) : 'anthropic'}.svg`),
         a,
       })),
-      ...runtimes.map((c): Item => ({ label: c.name, description: vscode.l10n.t('Steerhouse chat'), detail: c.exe, iconPath: vscode.Uri.joinPath(media, `${c.vendor}.svg`), runtime: c.id })),
+      ...runtimes.flatMap((c): Item[] => {
+        const row = (cursor?: CursorAccount): Item => ({ label: cursor ? `${c.name} · ${cursor.name}` : c.name, description: vscode.l10n.t('Steerhouse chat'), detail: c.exe, iconPath: vscode.Uri.joinPath(media, `${c.vendor}.svg`), runtime: c.id, cursor });
+        return [row(), ...(c.id === 'cursor' ? listCursorAccounts().map(row) : [])];
+      }),
       ...clis.flatMap((c): Item[] => {
         const row = (cursor?: CursorAccount): Item => ({ label: cursor ? `${c.name} · ${cursor.name}` : c.name, description: vscode.l10n.t('opens in a terminal'), detail: c.exe, iconPath: vscode.Uri.joinPath(media, `${c.vendor}.svg`), cli: c, cursor });
         return [row(), ...(c.id === 'cursor' ? listCursorAccounts().map(row) : [])];
@@ -147,7 +150,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       { label: '$(add) ' + vscode.l10n.t('Add a Cursor account…'), add: 'steerhouse.addCursorAccount' },
       { label: '$(server) ' + vscode.l10n.t('Add a model provider (Ollama, OpenRouter…)…'), add: 'steerhouse.addProvider' },
     ];
-    const key = (i: Item) => i.a?.id ?? (i.runtime ? 'runtime:' + i.runtime : i.cli ? 'cli:' + (i.cursor?.id ?? i.cli.id) : '');
+    const key = (i: Item) => i.a?.id ?? (i.runtime ? 'runtime:' + i.runtime + (i.cursor ? ':' + i.cursor.id : '') : i.cli ? 'cli:' + (i.cursor?.id ?? i.cli.id) : '');
     items.sort((x, y) => Number(key(y) === last) - Number(key(x) === last));
     const pick = await vscode.window.showQuickPick(items, { title: vscode.l10n.t('New chat in {0}', path.basename(cwd)), placeHolder: vscode.l10n.t('Which agent should work here?'), ignoreFocusOut: true });
     if (!pick) return undefined;
@@ -157,7 +160,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
     ctx.globalState.update('steerhouse.lastAgent', key(pick));
     if (pick.runtime) {
-      chats.start({ cwd, runtime: pick.runtime, prompt: then.prompt, title: then.title });
+      chats.start({ cwd, runtime: pick.runtime, prompt: then.prompt, title: then.title, ...(pick.cursor ? { env: cursorAccountEnv(pick.cursor), runtimeAccount: pick.cursor.name } : {}) });
       return undefined;
     }
     if (pick.cli) {
@@ -614,7 +617,11 @@ export function activate(ctx: vscode.ExtensionContext) {
       try {
         if (!state?.cwd) return panel.dispose();
         // another agent (Codex…): its thread id reopens it (thread/resume)
-        if (state.runtime) return void chats.start({ cwd: state.cwd, runtime: state.runtime, resume: state.sessionId, title: state.title, panel });
+        if (state.runtime) {
+          // a chat that ran as a Cursor account reopens as that account
+          const cursor = state.runtime === 'cursor' ? listCursorAccounts().find((c) => c.name === state.account) : undefined;
+          return void chats.start({ cwd: state.cwd, runtime: state.runtime, resume: state.sessionId, title: state.title, panel, ...(cursor ? { env: cursorAccountEnv(cursor), runtimeAccount: cursor.name } : {}) });
+        }
         if (!state.sessionId) {
           // a chat that had no message yet: open it again, fresh, in the same folder
           const account = listAccounts().find((a) => a.name === state.account) ?? listAccounts()[0];
@@ -849,6 +856,15 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!(await RUNTIMES.codex.detect()).exe) return vscode.window.showWarningMessage(vscode.l10n.t('Codex was not found. Install it (npm i -g @openai/codex) and log in with `codex login`.'));
       ctx.globalState.update('steerhouse.lastAgent', 'runtime:codex');
       chats.start({ cwd, runtime: 'codex' });
+    }),
+    // from a folder, or from a Cursor account row (runs as that account)
+    vscode.commands.registerCommand('steerhouse.newCursorChat', async (n?: { path?: string; c?: CursorAccount } | vscode.Uri) => {
+      const account = n instanceof vscode.Uri ? undefined : n?.c;
+      const cwd = n instanceof vscode.Uri ? n.fsPath : ((account ? undefined : n?.path) ?? (await pickFolder(ctx)));
+      if (!cwd) return;
+      if (!(await RUNTIMES.cursor.detect()).exe) return vscode.window.showWarningMessage(vscode.l10n.t('Cursor Agent is not installed on this machine. Install it, then add the account: {0}', 'https://cursor.com/cli'));
+      ctx.globalState.update('steerhouse.lastAgent', 'runtime:cursor' + (account ? ':' + account.id : ''));
+      chats.start({ cwd, runtime: 'cursor', ...(account ? { env: cursorAccountEnv(account), runtimeAccount: account.name } : {}) });
     }),
     vscode.commands.registerCommand('steerhouse.newChat', () => {
       void (async () => {

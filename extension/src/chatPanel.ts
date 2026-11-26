@@ -20,10 +20,11 @@ import { addLink, briefing, loadLinks, removeLink, sameConnection } from './link
 import { agentExecutable, which } from './util';
 import { RuntimeChat, asRuntimeChat, isRuntimeChat } from './runtimeChat';
 import { codexRuntime } from './runtimes/codex';
+import { cursorRuntime } from './runtimes/cursor';
 import type { AgentRuntime } from './runtimes/types';
 
 /** Agents other than Claude Code that run in the Steerhouse chat (found on PATH). */
-export const RUNTIMES: Record<string, AgentRuntime> = { codex: codexRuntime(() => which('codex')) };
+export const RUNTIMES: Record<string, AgentRuntime> = { codex: codexRuntime(() => which('codex')), cursor: cursorRuntime(() => which('cursor-agent')) };
 import { LOCAL_COMMANDS, runLocalCommand, type LocalCommand } from './localCommands';
 import { accountEnv, type Account } from './accounts';
 import { checkoutWorktree, git, repoRoot } from './worktree';
@@ -525,7 +526,7 @@ export class Chats {
     this.ctx.globalState.update(Chats.PREFS, Object.fromEntries(keep));
   }
 
-  start(opts: { cwd: string; resume?: string; title?: string; prompt?: string; model?: string; account?: Account; env?: Record<string, string>; panel?: vscode.WebviewPanel; /** another agent than Claude Code (RUNTIMES) */ runtime?: string }) {
+  start(opts: { cwd: string; resume?: string; title?: string; prompt?: string; model?: string; account?: Account; env?: Record<string, string>; panel?: vscode.WebviewPanel; /** another agent than Claude Code (RUNTIMES) */ runtime?: string; /** shown as the chat's account (a Cursor account) */ runtimeAccount?: string }) {
     if (opts.resume) {
       const existing = this.find(opts.resume);
       if (existing) {
@@ -556,7 +557,7 @@ export class Chats {
     const transcript = opts.resume && !runtime ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
     const history = transcript ? cachedHistory(transcript, path.join(this.ctx.globalStorageUri.fsPath, 'history-cache')) : undefined;
     const chat = runtime
-      ? (new RuntimeChat({ runtime, cwd: opts.cwd, resume: opts.resume, title: opts.title, model: opts.model, host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName) }, () => this.schedule(entry)) as unknown as ChatSession)
+      ? (new RuntimeChat({ runtime, cwd: opts.cwd, resume: opts.resume, title: opts.title, model: opts.model, env: opts.env, accountName: opts.runtimeAccount, host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName) }, () => this.schedule(entry)) as unknown as ChatSession)
       : new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), relayScript: this.relayScript(), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.model ?? opts.account?.provider?.model }, () => this.schedule(entry));
     const entry: Open = { chat, panel, accountId: opts.account?.id };
     this.attachVerifier(entry);

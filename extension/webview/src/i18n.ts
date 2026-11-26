@@ -276,6 +276,7 @@ const PT: Record<string, string> = {
   '1 step': '1 etapa',
   '{0} steps': '{0} etapas',
   'Details': 'Detalhes',
+  "Cursor's CLI cannot ask for approval in a chat: it edits files directly, and commands it would ask about are refused (Steerhouse does not pass --force).": 'A CLI do Cursor não consegue pedir aprovação no chat: ela edita arquivos diretamente, e os comandos que pediriam aprovação são recusados (o Steerhouse não usa --force).',
   'Stopped. The conversation is kept: send a message to go on.': 'Parado. A conversa foi mantida: envie uma mensagem para continuar.',
   'The run stopped with an error (error_during_execution). The conversation is kept: send a message to go on, or Try again.': 'A execução parou com um erro (error_during_execution). A conversa foi mantida: envie uma mensagem para continuar, ou Tentar de novo.',
   'Resumed: earlier conversation above': 'Retomado: conversa anterior acima',
