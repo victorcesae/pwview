@@ -54,6 +54,8 @@ export function followPty(file: string, label: string): vscode.Pseudoterminal {
     open() {
       if (label) write.fire(`\x1b[2m${crlf(label)}\x1b[0m\r\n\r\n`);
       read();
+      // a command that prints nothing (yet) would leave an empty screen: say so
+      if (!seen || at === 0) write.fire(`\x1b[2m${vscode.l10n.t('Running… its output appears here as it is written (Ctrl+C closes this view, the command keeps running).')}\x1b[0m\r\n`);
       timer = setInterval(read, POLL_MS);
     },
     close() {

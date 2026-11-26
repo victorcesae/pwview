@@ -193,7 +193,7 @@ async function run() {
     await wait(500);
     assert.strictEqual(vscode.window.terminals.length, before + 1, 'following twice reuses the terminal');
     const term = vscode.window.terminals.at(-1);
-    assert.match(term.name, /My chat/);
+    assert.match(term.name, /test/);
     assert.ok(term.creationOptions.pty, 'no shell for other extensions to type into');
     term.dispose();
   });

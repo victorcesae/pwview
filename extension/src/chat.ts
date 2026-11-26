@@ -8,7 +8,6 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { findRelay, RelayProcess, startRelay } from './relayClient';
 import { ShellRun, shellContext, shellSpec, withoutShellContext } from './shell';
-import { userShell } from './util';
 import { query, type PermissionMode, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -442,6 +441,8 @@ export interface ChatOptions {
   prefs?: ChatPrefs;
   /** run a copy of the resumed session cut at this transcript entry (edit an earlier prompt) */
   fork?: { at: string };
+  /** the user's shell for "!" commands (from settings / the default terminal profile) */
+  shell?: () => string | undefined;
   /** path of dist/relay.js: Claude Code then keeps running when VS Code reloads or closes */
   relayScript?: string;
 }
@@ -859,7 +860,7 @@ export class ChatSession {
     const run = new ShellRun(
       command,
       { cwd: this.opts.cwd, env: { ...process.env, ...(this.opts.account?.env ?? {}) }, shell: (() => {
-        const exe = userShell();
+        const exe = this.opts.shell?.();
         return exe ? shellSpec(exe) : undefined;
       })() },
       () => {

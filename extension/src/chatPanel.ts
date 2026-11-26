@@ -17,7 +17,7 @@ import { isShuttingDown } from './relayClient';
 import { vendorOf } from './providers';
 import type { Session } from './engine';
 import { addLink, briefing, loadLinks, removeLink, sameConnection } from './links';
-import { agentExecutable, which } from './util';
+import { agentExecutable, userShell, which } from './util';
 import { RuntimeChat, asRuntimeChat, isRuntimeChat } from './runtimeChat';
 import { codexRuntime } from './runtimes/codex';
 import { cursorRuntime } from './runtimes/cursor';
@@ -558,7 +558,7 @@ export class Chats {
     const history = transcript ? cachedHistory(transcript, path.join(this.ctx.globalStorageUri.fsPath, 'history-cache')) : undefined;
     const chat = runtime
       ? (new RuntimeChat({ runtime, cwd: opts.cwd, resume: opts.resume, title: opts.title, model: opts.model, env: opts.env, accountName: opts.runtimeAccount, host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName) }, () => this.schedule(entry)) as unknown as ChatSession)
-      : new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), relayScript: this.relayScript(), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.model ?? opts.account?.provider?.model }, () => this.schedule(entry));
+      : new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), relayScript: this.relayScript(), shell: userShell, host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.model ?? opts.account?.provider?.model }, () => this.schedule(entry));
     const entry: Open = { chat, panel, accountId: opts.account?.id };
     this.attachVerifier(entry);
     this.open.push(entry);

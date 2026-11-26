@@ -207,7 +207,10 @@ export async function sizeTerminalSplit(term: vscode.Terminal) {
 /** Where Steerhouse opens terminals: beside the chat (an editor tab on the right, the default) or in the bottom panel. */
 export function terminalLocation(): vscode.TerminalEditorLocationOptions | vscode.TerminalLocation {
   const where = vscode.workspace.getConfiguration('steerhouse').get<string>('terminalLocation', 'right');
-  return where === 'bottom' ? vscode.TerminalLocation.Panel : { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false };
+  if (where === 'bottom') return vscode.TerminalLocation.Panel;
+  // next to the terminals already open on the right (as another tab), not in yet another column
+  const group = vscode.window.tabGroups.all.find((g) => g.tabs.some((t) => t.input instanceof vscode.TabInputTerminal));
+  return { viewColumn: group?.viewColumn ?? vscode.ViewColumn.Beside, preserveFocus: false };
 }
 
 /**

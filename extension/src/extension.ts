@@ -832,8 +832,11 @@ export function activate(ctx: vscode.ExtensionContext) {
       const open = following.get(t.outputFile);
       if (open && open.exitStatus === undefined) return open.show();
       const what = clip(t.description || t.command || 'output', 30);
-      const label = `${t.chatTitle ? clip(t.chatTitle, 60) + ': ' : ''}${t.description || t.command || ''}`;
-      const term = vscode.window.createTerminal({ name: `▶ ${t.chatTitle ? clip(t.chatTitle, 20) + ' · ' : ''}${what}`, pty: followPty(t.outputFile, label), location: terminalLocation(), iconPath: new vscode.ThemeIcon('debug-console') });
+      // the same command as in the chat's Background commands list: what it is, the command line, where it runs from
+      const label = [t.description && t.command && t.description !== t.command ? t.description : '', t.command ? `$ ${t.command}` : '', t.chatTitle ? vscode.l10n.t('from the chat "{0}"', clip(t.chatTitle, 60)) : '']
+        .filter(Boolean)
+        .join('\n');
+      const term = vscode.window.createTerminal({ name: `▶ ${what}`, pty: followPty(t.outputFile, label), location: terminalLocation(), iconPath: new vscode.ThemeIcon('debug-console') });
       following.set(t.outputFile, term);
       term.show();
       void sizeTerminalSplit(term);
