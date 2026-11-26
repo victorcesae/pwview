@@ -304,5 +304,9 @@
   "Open a chat first, then send the selection to it.": "Abra um chat primeiro e depois envie a seleção para ele.",
   "Switch anyway": "Trocar mesmo assim",
   "{0} has uncommitted changes. Git carries them over to {1}, or refuses if they conflict.": "{0} tem alterações não commitadas. O git as leva para {1}, ou recusa se houver conflito.",
-  "Could not switch to {0}: {1}": "Não foi possível trocar para {0}: {1}"
+  "Could not switch to {0}: {1}": "Não foi possível trocar para {0}: {1}",
+  "The file changed since, so the change no longer applies.": "O arquivo mudou desde então, e a alteração não se aplica mais.",
+  "Could not stage the hunk: {0}": "Não foi possível preparar o trecho: {0}",
+  "Could not revert the hunk: {0}": "Não foi possível reverter o trecho: {0}",
+  "Could not undo the edit to {0}: {1}": "Não foi possível desfazer a edição em {0}: {1}"
 }
