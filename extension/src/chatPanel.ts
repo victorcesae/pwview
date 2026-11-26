@@ -12,6 +12,7 @@ import { completeFiles } from './folders';
 import { defaultBranch, mentionCompletions, resolveMentions, transcriptSummary, CAP } from './mentions';
 import { saveUpload } from './uploads';
 import { openFileAt } from './fileActions';
+import { fileInfos, mediaAction, mediaRoots, openMedia } from './mediaFiles';
 import { isShuttingDown } from './relayClient';
 import { vendorOf } from './providers';
 import type { Session } from './engine';
@@ -75,6 +76,9 @@ export type FromChat =
   | { type: 'setUltracode'; on: boolean }
   | { type: 'setMode'; mode: 'default' | 'acceptEdits' | 'plan' | 'auto' | 'bypassPermissions' }
   | { type: 'openFile'; path: string }
+  | { type: 'fileInfo'; paths: string[] }
+  | { type: 'mediaAction'; path: string; action: 'open' | 'reveal' | 'external' }
+  | { type: 'openMedia'; path?: string; data?: string }
   | { type: 'openChange'; changeId: string }
   | { type: 'link' }
   | { type: 'unlink'; id: string }
@@ -521,9 +525,10 @@ export class Chats {
       vscode.window.createWebviewPanel('steerhouse.chat', opts.title ?? 'Steerhouse chat', vscode.ViewColumn.Active, {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [root],
+        localResourceRoots: [root, ...mediaRoots(opts.cwd)],
       });
-    if (opts.panel) panel.webview.options = { enableScripts: true, localResourceRoots: [root] };
+    // the chat folder, workspace folders and the temp folder: previews of files the agent mentions
+    if (opts.panel) panel.webview.options = { enableScripts: true, localResourceRoots: [root, ...mediaRoots(opts.cwd)] };
     panel.iconPath = { light: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-light.svg'), dark: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-dark.svg') };
     const transcript = opts.resume ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
     const history = transcript ? historyFromTranscript(transcript) : undefined;
@@ -825,6 +830,12 @@ export class Chats {
         return openUrl(m.url);
       case 'openFile':
         return openFileAt(m.path, c.state.cwd);
+      case 'fileInfo':
+        return this.send(o, { type: 'fileInfo', files: await fileInfos(m.paths, c.state.cwd, o.panel.webview) });
+      case 'mediaAction':
+        return mediaAction(m.path, m.action);
+      case 'openMedia':
+        return openMedia(m.path, m.data);
       case 'openChange':
         return c.state.sessionId && vscode.commands.executeCommand('steerhouse.openChange', c.state.sessionId, m.changeId);
       case 'openSession':
@@ -890,7 +901,7 @@ function html(webview: vscode.Webview, root: vscode.Uri) {
   const css = webview.asWebviewUri(vscode.Uri.joinPath(root, 'index.css'));
   return `<!doctype html>
 <html lang="${vscode.env.language}"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' ${webview.cspSource}; img-src ${webview.cspSource} data:; font-src ${webview.cspSource};">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' ${webview.cspSource}; img-src ${webview.cspSource} data:; media-src ${webview.cspSource}; frame-src ${webview.cspSource}; font-src ${webview.cspSource};">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="${css}"></head>
 <body><div id="root"></div><script type="module" nonce="${nonce}" src="${js}"></script></body></html>`;
