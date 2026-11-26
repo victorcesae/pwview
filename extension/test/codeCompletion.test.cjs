@@ -127,7 +127,7 @@ test('a subscription answers through its account, waits for a real pause, and is
     return { text: '```js\nreturn 42;\n```', cut: false };
   });
   const t0 = Date.now();
-  const items = await ask(e, doc('function f() {'), 14);
+  const items = await ask(e, doc('const answer'), 12);
   assert.ok(Date.now() - t0 >= C.SUBSCRIPTION_MIN_DELAY_MS - 20, 'waits even when the setting says 0');
   assert.strictEqual(items[0].insertText, 'return 42;');
   assert.strictEqual(asked[0].account, 'default');
@@ -141,6 +141,10 @@ test('a subscription answers through its account, waits for a real pause, and is
   // a sensitive file never reaches it
   assert.strictEqual(await ask(e, doc('TOKEN=', '/w/.env'), 6), undefined);
   assert.strictEqual(asked.length, 1);
+  // right after an opening brace a suggestion is wanted now: much shorter pause
+  const t1 = Date.now();
+  await ask(e, doc('function g() {'), 14);
+  assert.ok(Date.now() - t1 < C.SUBSCRIPTION_MIN_DELAY_MS - 50, 'asks sooner after {');
 });
 
 test('typing through a suggestion keeps the rest of it', () => {
@@ -198,4 +202,15 @@ test('length: a block after an opening brace, about a line elsewhere', () => {
   assert.strictEqual(C.maxLinesAt('function f() {\n  '), 8);
   assert.strictEqual(C.maxLinesAt('const a = foo'), 3);
   assert.strictEqual(C.cleanCompletion('a\nb\nc\nd\ne', 'x', '', false, 3), 'a\nb\nc');
+});
+
+test('a streamed reply stops once it has more lines than will be shown', async () => {
+  const events = ['a\n', 'b\n', 'c\n', 'd\n', 'e\n', 'never read'].map((t) => `data: ${JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text: t } })}\n\n`);
+  let pulled = 0;
+  const body = new ReadableStream({ pull(c) { if (pulled < events.length) c.enqueue(new TextEncoder().encode(events[pulled++])); else c.close(); } });
+  const r = await C.readStream(body, 3);
+  assert.ok(r.cut);
+  assert.ok(pulled < events.length, 'stopped early');
+  assert.strictEqual(C.cleanCompletion(r.text, 'x', '', r.cut, 3), 'a\nb\nc');
+  assert.ok(C.askAtOnce('foo(') && C.askAtOnce('a.\n  ') && !C.askAtOnce('const answ'));
 });

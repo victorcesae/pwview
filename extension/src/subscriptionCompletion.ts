@@ -47,7 +47,7 @@ export class SubscriptionCompleter {
     this.idle = setTimeout(() => this.dispose(), IDLE_MS);
   }
 
-  async complete(model: string, user: string, signal: AbortSignal): Promise<CompletionReply> {
+  async complete(model: string, user: string, signal: AbortSignal, maxLines = 8): Promise<CompletionReply> {
     clearTimeout(this.idle);
     const warm = await (this.spare ?? this.warmUp(model));
     this.spare = undefined;
@@ -69,7 +69,8 @@ export class SubscriptionCompleter {
           if (e.type === 'content_block_start') kinds.set(e.index, e.content_block?.type);
           if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta') {
             text += e.delta.text;
-            if (text.length >= MAX_CHARS) {
+            // enough whole lines for what will be shown: stop now instead of waiting for the rest
+            if (text.length >= MAX_CHARS || text.split('\n').length > maxLines) {
               cut = true;
               break;
             }

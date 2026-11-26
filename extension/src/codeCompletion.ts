@@ -130,19 +130,60 @@ export function cleanCompletion(reply: string, prefix: string, suffix: string, c
 }
 
 /** One completion from an Anthropic-compatible endpoint (what every provider preset speaks). */
-export async function requestCompletion(p: Provider, key: string | undefined, model: string, system: string, user: string, signal: AbortSignal): Promise<CompletionReply> {
+export async function requestCompletion(p: Provider, key: string | undefined, model: string, system: string, user: string, signal: AbortSignal, maxLines = MAX_LINES): Promise<CompletionReply> {
   const token = key ?? PRESETS.find((x) => x.id === p.preset)?.localToken ?? '';
+  // streamed, so the request ends as soon as enough lines came (a short suggestion needs few tokens)
   const res = await fetch(`${p.baseUrl.replace(/\/+$/, '')}/v1/messages`, {
     method: 'POST',
     signal,
     headers: { 'content-type': 'application/json', 'anthropic-version': '2023-06-01', 'x-api-key': token, authorization: `Bearer ${token}` },
-    body: JSON.stringify({ model: model || p.model, max_tokens: MAX_TOKENS, temperature: 0, system, messages: [{ role: 'user', content: user }] }),
+    body: JSON.stringify({ model: model || p.model, max_tokens: maxLines < MAX_LINES ? 96 : MAX_TOKENS, temperature: 0, stream: true, system, messages: [{ role: 'user', content: user }] }),
   });
   if (!res.ok) throw new Error(`${p.name}: HTTP ${res.status}`);
+  if (/event-stream/.test(res.headers.get('content-type') ?? '') && res.body) return readStream(res.body, maxLines);
   const body: any = await res.json();
   const text = (body.content ?? []).filter((c: any) => c?.type === 'text').map((c: any) => c.text).join('');
   return { text, cut: body.stop_reason === 'max_tokens' };
 }
+
+/** Reads a streamed reply, and stops as soon as it has more lines than will be shown. */
+export async function readStream(body: ReadableStream<Uint8Array>, maxLines: number): Promise<CompletionReply> {
+  const reader = body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  let text = '';
+  let cut = false;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (!line.startsWith('data:')) continue;
+        let e: any;
+        try {
+          e = JSON.parse(line.slice(5));
+        } catch {
+          continue;
+        }
+        if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta') text += e.delta.text;
+        if (e.type === 'message_delta' && e.delta?.stop_reason === 'max_tokens') cut = true;
+        if (e.type === 'error') throw new Error(e.error?.message ?? 'stream error');
+      }
+      // enough whole lines: the rest would be cut anyway
+      if (text.split('\n').length > maxLines) return { text, cut: true };
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+  return { text, cut };
+}
+
+/** Typing one of these means a suggestion is likely wanted right now: no pause needed. */
+export const askAtOnce = (prefix: string) => /(\n\s*|[.({\[=,:]\s?)$/.test(prefix.slice(-3));
 
 /** A suggestion still fits after more typing when the new characters are its start: the rest of it,
  *  shown right away with no new request (what Cursor and Copilot do while you type through one). */
@@ -201,7 +242,7 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
     private settings: () => CompletionSettings,
     private providers: () => CompletionSource[],
     private secret: (id: string) => Thenable<string | undefined>,
-    private subscription?: (account: string, model: string, user: string, signal: AbortSignal) => Promise<CompletionReply>,
+    private subscription?: (account: string, model: string, user: string, signal: AbortSignal, maxLines: number) => Promise<CompletionReply>,
   ) {}
 
   async provideInlineCompletionItems(doc: vscode.TextDocument, pos: vscode.Position, context: vscode.InlineCompletionContext, token: vscode.CancellationToken): Promise<vscode.InlineCompletionItem[] | undefined> {
@@ -219,7 +260,7 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
     const where = `${s.provider}\0${s.model}\0${doc.languageId}\0${suffix}`;
     const cacheKey = `${where}\0${prefix.slice(-400)}`;
     const cached = this.cache.get(cacheKey);
-    if (cached) return [new vscode.InlineCompletionItem(cached, new vscode.Range(pos, pos))];
+    if (cached) return [this.item(cached, pos)];
     let asked = this.asked?.where === where && prefix.startsWith(this.asked.prefix) ? this.asked : undefined;
     // typed through the suggestion on screen: the rest of it at once
     let text = asked && typedThrough(asked.prefix, asked.text, prefix);
@@ -232,7 +273,11 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
       if (asked?.done && asked.prefix === prefix) return; // asked for exactly this already: nothing fits here
       // wait for a pause in typing: VS Code cancels this request on the next key, so nothing is sent
       this.onTyping?.(provider, s.model);
-      await new Promise((r) => setTimeout(r, Math.max(isSubscription(provider) ? SUBSCRIPTION_MIN_DELAY_MS : 0, s.delayMs)));
+      // right after a suggestion was accepted, or after typing ( . { = , : or Enter: ask at once
+      const quick = this.skipDelayOnce || askAtOnce(prefix);
+      this.skipDelayOnce = false;
+      const wait = Math.max(isSubscription(provider) ? (quick ? 60 : SUBSCRIPTION_MIN_DELAY_MS) : 0, quick ? Math.min(s.delayMs, 40) : s.delayMs);
+      if (wait) await new Promise((r) => setTimeout(r, wait));
       if (token.isCancellationRequested) return;
       this.asked?.abort.abort(); // somewhere else now: its answer is no use
       const abort = new AbortController();
@@ -241,7 +286,7 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
       const started = Date.now();
       const now: Asked = { where, prefix, done: false, abort, reply: Promise.resolve(undefined) };
       // not tied to this request's cancellation: the next key cancels it, and the answer may still fit
-      now.reply = this.ask(provider, s.model, user, abort).then((r) => {
+      now.reply = this.ask(provider, s.model, user, abort, lines).then((r) => {
         now.text = r && cleanCompletion(r.text, prefix, suffix, r.cut, lines);
         if (r) this.onLatency?.(Date.now() - started);
         if (now.text) this.cache.set(cacheKey, now.text);
@@ -252,15 +297,24 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
       text = await now.reply;
     }
     if (!text || token.isCancellationRequested) return;
-    return [new vscode.InlineCompletionItem(text, new vscode.Range(pos, pos))];
+    return [this.item(text, pos)];
   }
 
-  private async ask(provider: CompletionSource, model: string, user: string, abort: AbortController): Promise<CompletionReply | undefined> {
+  /** set when a suggestion was just accepted: the next one is asked for at once */
+  skipDelayOnce = false;
+  private item(text: string, pos: vscode.Position) {
+    const it = new vscode.InlineCompletionItem(text, new vscode.Range(pos, pos));
+    // after Tab, the next suggestion is fetched right away (chained suggestions feel instant)
+    it.command = { command: 'steerhouse.codeCompletion.accepted', title: '' };
+    return it;
+  }
+
+  private async ask(provider: CompletionSource, model: string, user: string, abort: AbortController, maxLines = MAX_LINES): Promise<CompletionReply | undefined> {
     const timer = setTimeout(() => abort.abort(TIMED_OUT), TIMEOUT_MS);
     try {
       const reply = isSubscription(provider)
-        ? await this.subscription!(provider.account, model, user, abort.signal)
-        : await requestCompletion(provider, provider.hasKey ? await this.secret(provider.id) : undefined, model, SYSTEM, user, abort.signal);
+        ? await this.subscription!(provider.account, model, user, abort.signal, maxLines)
+        : await requestCompletion(provider, provider.hasKey ? await this.secret(provider.id) : undefined, model, SYSTEM, user, abort.signal, maxLines);
       this.onStatus?.();
       return reply;
     } catch (e) {
@@ -299,9 +353,9 @@ export function registerCodeCompletion(ctx: vscode.ExtensionContext) {
     for (const c of completers.values()) c.dispose();
     completers.clear();
   };
-  const engine = new CodeCompletion(settings, providers, (id) => ctx.secrets.get(secretKey(id)), (account, model, user, signal) => {
+  const engine = new CodeCompletion(settings, providers, (id) => ctx.secrets.get(secretKey(id)), (account, model, user, signal, maxLines) => {
     require('fs').mkdirSync(ctx.globalStorageUri.fsPath, { recursive: true });
-    return completerFor(account).complete(model, user, signal);
+    return completerFor(account).complete(model, user, signal, maxLines);
   });
 
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 49);
@@ -397,6 +451,10 @@ export function registerCodeCompletion(ctx: vscode.ExtensionContext) {
     item,
     vscode.languages.registerInlineCompletionItemProvider({ scheme: 'file' }, engine),
     vscode.commands.registerCommand('steerhouse.codeCompletion.toggle', toggle),
+    vscode.commands.registerCommand('steerhouse.codeCompletion.accepted', () => {
+      engine.skipDelayOnce = true;
+      setTimeout(() => vscode.commands.executeCommand('editor.action.inlineSuggest.trigger'), 0);
+    }),
     vscode.window.onDidChangeActiveTextEditor((e) => e?.document.uri.scheme === 'file' && prewarm()),
     // the user's own small edits (not whole-file changes, not secrets): what they are doing right now
     vscode.workspace.onDidChangeTextDocument((e) => {
