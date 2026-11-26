@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { ChatSession, historyFromTranscript, Priority, type ChatItem, type ChatPrefs } from './chat';
+import { ChatSession, cachedHistory, Priority, type ChatItem, type ChatPrefs } from './chat';
 import { hostIcon } from './hostIcon';
 import { blockedByPolicy, ciFixPrompt, failedCheckLog, findPrUrls, mergePr, prFiles, PrTracker, setFileViewed, type MergeMethod, type PrCheck, type PrStatus } from './prs';
 import { openUrl } from './browser';
@@ -531,7 +531,7 @@ export class Chats {
     if (opts.panel) panel.webview.options = { enableScripts: true, localResourceRoots: [root, ...mediaRoots(opts.cwd)] };
     panel.iconPath = { light: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-light.svg'), dark: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-dark.svg') };
     const transcript = opts.resume ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
-    const history = transcript ? historyFromTranscript(transcript) : undefined;
+    const history = transcript ? cachedHistory(transcript, path.join(this.ctx.globalStorageUri.fsPath, 'history-cache')) : undefined;
     const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), relayScript: this.relayScript(), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.model ?? opts.account?.provider?.model }, () => this.schedule(entry));
     const entry: Open = { chat, panel, accountId: opts.account?.id };
     this.attachVerifier(entry);

@@ -293,7 +293,44 @@ export function autoModeBlock(t: Extract<ChatItem, { kind: 'tool' }>, result: st
 const NOISE = ['<system-reminder>', '<local-command', '<command-', 'Caveat:', '[Request interrupted'];
 
 /** Rebuild the conversation from a session transcript (JSONL) so resumed chats show their history. */
-export function historyFromTranscript(file: string): { items: ChatItem[]; todos: Todo[]; title?: string; model?: string; tasks?: BgTask[] } {
+type History = { items: ChatItem[]; todos: Todo[]; title?: string; model?: string; tasks?: BgTask[] };
+
+/**
+ * historyFromTranscript, remembered on disk by the file's size and time: reopening VS Code restores
+ * its chat tabs without parsing every transcript again (0.5–1 s each for big ones).
+ */
+export function cachedHistory(file: string, cacheDir: string): History {
+  let key = '';
+  try {
+    const st = fs.statSync(file);
+    key = `${st.size}:${st.mtimeMs}`;
+  } catch {
+    return historyFromTranscript(file);
+  }
+  const v8 = require('v8') as typeof import('v8');
+  const name = path.join(cacheDir, require('crypto').createHash('sha1').update(file).digest('hex').slice(0, 20) + '.v8');
+  try {
+    const hit = v8.deserialize(fs.readFileSync(name)) as { key: string; h: History };
+    if (hit?.key === key) return hit.h;
+  } catch {
+    /* not cached yet */
+  }
+  const h = historyFromTranscript(file);
+  try {
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(name, v8.serialize({ key, h }));
+    // chats not reopened for two weeks drop out of the cache
+    for (const f of fs.readdirSync(cacheDir)) {
+      const p = path.join(cacheDir, f);
+      if (Date.now() - fs.statSync(p).atimeMs > 14 * 86_400_000) fs.rmSync(p, { force: true });
+    }
+  } catch {
+    /* best effort */
+  }
+  return h;
+}
+
+export function historyFromTranscript(file: string): History {
   const bg = new BgTaskTracker();
   const items: ChatItem[] = [];
   let todos: Todo[] = [];

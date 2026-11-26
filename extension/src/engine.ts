@@ -124,10 +124,38 @@ const clip = (s: string, n: number) => {
 };
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
-function* records(file: string): Generator<any> {
+/** Where an incremental read stopped: the byte after the last complete line. */
+export interface ReadPos {
+  offset: number;
+}
+
+function* records(file: string, pos?: ReadPos): Generator<any> {
   let text: string;
   try {
-    text = fs.readFileSync(file, 'utf8');
+    if (!pos) text = fs.readFileSync(file, 'utf8');
+    else {
+      // only what was appended since the last read, up to the last complete line
+      const fd = fs.openSync(file, 'r');
+      try {
+        const size = fs.fstatSync(fd).size;
+        const buf = Buffer.alloc(Math.max(0, size - pos.offset));
+        const n = buf.length ? fs.readSync(fd, buf, 0, buf.length, pos.offset) : 0;
+        let end = buf.lastIndexOf(0x0a, n - 1) + 1;
+        // a last line without its newline counts once it is complete JSON (else it is still being written)
+        if (end < n) {
+          try {
+            JSON.parse(buf.subarray(end, n).toString('utf8'));
+            end = n;
+          } catch {
+            /* half-written: read next time */
+          }
+        }
+        text = buf.subarray(0, end).toString('utf8');
+        pos.offset += end;
+      } finally {
+        fs.closeSync(fd);
+      }
+    }
   } catch {
     return;
   }
@@ -201,15 +229,29 @@ function changeFrom(r: any, id: string, sid: string, aid: string | undefined, ts
   return { id, sessionId: sid, agentId: aid, timestamp: ts, file: r.filePath, kind, added, removed, why: clip(why, 1200), hunks };
 }
 
-export function parse(file: string, sid: string, aid?: string): Transcript {
-  const t: Transcript = { events: [], changes: [], pending: new Set(), toolCount: 0, usage: [], tasks: [] };
-  const bg = new BgTaskTracker();
-  const whyByTool = new Map<string, string>();
-  // one reply is written as several records that repeat the same usage: count each reply once
-  const usageById = new Map<string, UsageRow>();
-  let lastText = '';
+/** A parse that can go on: the transcript so far and the parser's own state (kept in memory only). */
+export interface ParseState {
+  t: Transcript;
+  bg: BgTaskTracker;
+  whyByTool: Map<string, string>;
+  usageById: Map<string, UsageRow>;
+  lastText: string;
+  pos: ReadPos;
+}
 
-  for (const rec of records(file)) {
+export function parse(file: string, sid: string, aid?: string): Transcript {
+  return parseFrom(file, sid, aid).t;
+}
+
+/** Parses a transcript, or only what was appended since `state` (a live session's file grows all the time). */
+export function parseFrom(file: string, sid: string, aid?: string, state?: ParseState): ParseState {
+  const st: ParseState = state ?? { t: { events: [], changes: [], pending: new Set(), toolCount: 0, usage: [], tasks: [] }, bg: new BgTaskTracker(), whyByTool: new Map(), usageById: new Map(), lastText: '', pos: { offset: 0 } };
+  const { t, bg, whyByTool } = st;
+  // one reply is written as several records that repeat the same usage: count each reply once
+  const usageById = st.usageById;
+  let lastText = st.lastText;
+
+  for (const rec of records(file, st.pos)) {
     const ts = str(rec.timestamp);
     if (ts) {
       t.started ??= ts;
@@ -299,7 +341,8 @@ export function parse(file: string, sid: string, aid?: string): Transcript {
     }
   }
   t.tasks = bg.tasks;
-  return t;
+  st.lastText = lastText;
+  return st;
 }
 
 /** Full-file before/after for one change, re-read on demand to keep memory small. */
@@ -385,9 +428,15 @@ export class Engine {
    */
   restoreCache(file: string, version: string) {
     try {
-      const saved = require('v8').deserialize(fs.readFileSync(file)) as { version: string; entries: [string, { key: string; t: Transcript }][] };
+      const saved = require('v8').deserialize(fs.readFileSync(file)) as { version: string; entries: [string, { key: string; t: Transcript }][]; live?: [string, ParseState][] };
       if (saved?.version !== version || !Array.isArray(saved.entries)) return;
       for (const [k, v] of saved.entries) if (!this.cache.has(k)) this.cache.set(k, v);
+      // where reading stopped in sessions that were still being written: after a restart they go on from there
+      for (const [k, st] of saved.live ?? []) {
+        if (this.live.has(k)) continue;
+        Object.setPrototypeOf(st.bg, BgTaskTracker.prototype);
+        this.live.set(k, st);
+      }
     } catch {
       /* none yet, or unreadable: parsed again */
     }
@@ -399,9 +448,18 @@ export class Engine {
     this.dirty = false;
     try {
       const entries = [...this.cache.entries()].filter(([k]) => fs.existsSync(k));
+      // only sessions written in the last two days: those are the ones that keep growing
+      const recent = Date.now() - 2 * 86_400_000;
+      const live = [...this.live.entries()].filter(([k]) => {
+        try {
+          return fs.statSync(k).mtimeMs > recent;
+        } catch {
+          return false;
+        }
+      });
       fs.mkdirSync(path.dirname(file), { recursive: true });
       const tmp = `${file}.${process.pid}.tmp`;
-      fs.writeFileSync(tmp, require('v8').serialize({ version, entries }));
+      fs.writeFileSync(tmp, require('v8').serialize({ version, entries, live }));
       fs.renameSync(tmp, file);
     } catch {
       /* best effort: next start parses again */
@@ -421,11 +479,17 @@ export class Engine {
     const key = `${st.mtimeMs}:${st.size}`;
     const hit = this.cache.get(file);
     if (hit && hit.key === key) return { mtime: st.mtimeMs, t: hit.t };
-    const t = parse(file, sid, aid);
+    // grown since the last read (a session being written right now): parse only the new lines
+    const prev = this.live.get(file);
+    const state = prev && st.size >= prev.pos.offset ? parseFrom(file, sid, aid, prev) : parseFrom(file, sid, aid);
+    this.live.set(file, state);
+    const t = state.t;
     this.cache.set(file, { key, t });
     this.dirty = true;
     return { mtime: st.mtimeMs, t };
   }
+  /** parser state of transcripts read in this session, to go on from where they were read */
+  private live = new Map<string, ParseState>();
 
   scan(days: number): Session[] {
     const cutoff = Date.now() - days * 86_400_000;

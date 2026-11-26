@@ -32,26 +32,29 @@ const V: Record<Vendor, { name: string; bg: string; fg: string; text?: string }>
 
 export const vendorName = (v: Vendor) => V[v].name;
 
-/** Rounded square mark for a model vendor. */
+/** A model vendor's mark in its color, without a tile (like the official Claude Code tab icon). */
 export function VendorMark({ vendor, className, title }: { vendor: Vendor; className?: string; title?: string }) {
   const v = V[vendor];
+  const color = vendor === 'cursor' || vendor === 'xai' || vendor === 'other' ? 'var(--muted-foreground)' : v.bg;
   return (
-    <span
-      className={cn('inline-grid size-4 shrink-0 place-items-center rounded-[4px] text-[7.5px] leading-none font-bold', className)}
-      style={{ background: v.bg, color: v.fg }}
-      title={title ?? v.name}
-      aria-label={title ?? v.name}
-      role="img"
-    >
+    <span className={cn('inline-grid size-4 shrink-0 place-items-center text-[9px] leading-none font-extrabold', className)} style={{ color }} title={title ?? v.name} aria-label={title ?? v.name} role="img">
       {vendor === 'anthropic' ? (
-        // generic 8-point spark
-        <svg viewBox="0 0 16 16" className="size-[72%]" fill="currentColor" aria-hidden>
-          <path d="M8 1.2 9 6.1l3.6-3.4L10.4 7l4.9.9-4.9 1 2.2 4.4L9 9.9 8 14.8 7 9.9l-3.6 3.4L5.6 9 .7 8l4.9-1-2.2-4.3L7 6.1z" />
+        // the Claude starburst: rounded rays
+        <svg viewBox="0 0 16 16" className="size-full" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" aria-hidden>
+          {[7, 5.6, 6.6, 5.2, 7, 5.8, 6.4, 5.4, 6.9, 5.5, 6.5, 5.3].map((len, i) => {
+            const a = ((i * 30 - 90 + 7 * (i % 2)) * Math.PI) / 180;
+            return <line key={i} x1={8 + 1.2 * Math.cos(a)} y1={8 + 1.2 * Math.sin(a)} x2={8 + len * Math.cos(a)} y2={8 + len * Math.sin(a)} />;
+          })}
         </svg>
       ) : vendor === 'google' ? (
-        // generic 4-point star
-        <svg viewBox="0 0 16 16" className="size-[78%]" fill="currentColor" aria-hidden>
-          <path d="M8 1c.6 3.6 3.4 6.4 7 7-3.6.6-6.4 3.4-7 7-.6-3.6-3.4-6.4-7-7 3.6-.6 6.4-3.4 7-7z" />
+        <svg viewBox="0 0 16 16" className="size-full" fill="currentColor" aria-hidden>
+          <path d="M8 .8c.6 3.8 3.4 6.6 7.2 7.2-3.8.6-6.6 3.4-7.2 7.2C7.4 11.4 4.6 8.6.8 8 4.6 7.4 7.4 4.6 8 .8z" />
+        </svg>
+      ) : vendor === 'cursor' ? (
+        <svg viewBox="0 0 16 16" className="size-full" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round" aria-hidden>
+          <path d="M8 1.2 14.2 4.8v6.4L8 14.8 1.8 11.2V4.8z" />
+          <path d="M1.8 4.8 8 8.4l6.2-3.6M8 8.4v6.4" />
+          <path d="M8 1.2 14.2 4.8 8 8.4z" fill="currentColor" />
         </svg>
       ) : (
         v.text

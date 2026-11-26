@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.31
+- Turns read like t3code: "Working for 9s" over the running turn's steps, then "Worked for 19s ›" folded with only the answer showing. Steps have one compact row each with an icon by type (›_ commands, search, file, edit with +/−, browser), under "Ran 4 commands and searched code 1 time".
+- The running command shows in the timeline with its own timer; the line above the box is just "Working · 1m 35s", or "Waiting on 3 subagents: … · Stop". Background commands get a row: "Running · Start dev server · 25s · Details · Stop".
+- Sub-agents: a row each with their model's mark, Running / Done and time; several at once under "3 subagents · 3 working".
+- Files attach like images: dropped (with Shift) or pasted files show as cards in the box and on your message, open in a new tab on click, and the agent gets their paths; Backspace in an empty box removes the last attachment.
+- Sidebar: each chat says Working 14s / Waiting for you / Done or its age; one row per conversation (a chat continued after compacting is no longer nested inside itself); sub-agents say Working · what they are doing, Stopped or Done; one "Add account or provider…" row.
+- Icons: plain brand marks without tiles (Claude starburst, Cursor cube, Gemini sparkle…), in tabs, the sidebar and the chat; the tab icon spins while working and pulses amber while waiting for you. Fewer icons in the chat header.
+- Faster: a session that is still being written is read incrementally (only new lines), also across restarts, and restored chat tabs load their history from a cache. On real data the longest freeze at startup went from ~0.9 s to ~0.2 s.
+- Fixed: "Thinking" blocks could show twice; "Thought" and step rows were small and faint.
+
 ## 1.0.30
 - Images open in a gallery: ← / → (or the buttons) go through every image in the chat, with a counter, wheel zoom and "Open in editor".
 - Files the agent writes or mentions get a preview under the message: images, video and audio players, and a card with Open / Reveal / Open externally for PDFs, Word, Excel, zips and other files.

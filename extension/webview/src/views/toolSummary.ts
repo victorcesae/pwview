@@ -12,40 +12,61 @@ export const stat = (it: ToolItem) => {
 };
 export const fileOf = (it: ToolItem) => (it.file ? base(it.file) : '');
 export const inp = (it: ToolItem) => (it.input ?? {}) as Record<string, unknown>;
+const BROWSER = /^mcp__.*(browser|playwright|puppeteer|chrome|pwview)/i;
 export const KIND = (n: string) =>
-  n === 'Read' ? 'read' : n === 'Edit' || n === 'MultiEdit' || n === 'Write' || n === 'NotebookEdit' ? 'edit' : n === 'Bash' || n === 'PowerShell' ? 'run' : n === 'Grep' || n === 'Glob' || n === 'WebSearch' ? 'search' : n === 'WebFetch' ? 'fetch' : 'other';
+  n === 'Read'
+    ? 'read'
+    : n === 'Edit' || n === 'MultiEdit' || n === 'Write' || n === 'NotebookEdit'
+      ? 'edit'
+      : n === 'Bash' || n === 'PowerShell'
+        ? 'run'
+        : n === 'Grep' || n === 'Glob' || n === 'WebSearch'
+          ? 'search'
+          : n === 'WebFetch' || BROWSER.test(n)
+            ? 'browser'
+            : n.startsWith('mcp__')
+              ? 'mcp'
+              : 'other';
 
-/** One sentence for a run of tool calls, e.g. "Read and edited chat.ts, ran 1 command". */
+/** One sentence for a run of tool calls, e.g. "Ran 4 commands and searched code 1 time". */
 export function summarizeTools(items: ToolItem[]): string {
-  const files = (k: string) => [...new Set(items.filter((i) => KIND(i.name) === k).map(fileOf).filter(Boolean))];
   const count = (k: string) => items.filter((i) => KIND(i.name) === k).length;
-  const read = files('read');
-  const edited = files('edit');
   const parts: string[] = [];
-  const one = (list: string[], single: string, many: string) => (list.length === 1 ? t(single, list[0]) : t(many, list.length));
-  if (read.length === 1 && edited.length === 1 && read[0] === edited[0]) parts.push(t('read and edited {0}', read[0]));
-  else {
-    if (read.length) parts.push(one(read, 'read {0}', 'read {0} files'));
-    if (edited.length) parts.push(one(edited, 'edited {0}', 'edited {0} files'));
-  }
-  const n = (k: string, s: string, p: string) => count(k) && parts.push(count(k) === 1 ? t(s) : t(p, count(k)));
+  const n = (k: string, one: string, many: string) => {
+    const c = count(k);
+    if (c) parts.push(c === 1 ? t(one) : t(many, c));
+  };
   n('run', 'ran 1 command', 'ran {0} commands');
-  n('search', 'searched once', 'searched {0} times');
-  n('fetch', 'fetched 1 page', 'fetched {0} pages');
-  n('other', 'used 1 tool', 'used {0} tools');
-  const s = parts.join(', ');
+  n('read', 'read 1 file', 'read {0} files');
+  n('edit', 'edited 1 file', 'edited {0} files');
+  n('search', 'searched code 1 time', 'searched code {0} times');
+  n('browser', 'used browser 1 time', 'used browser {0} times');
+  n('mcp', 'used 1 tool', 'used {0} tools');
+  n('other', 'performed 1 other action', 'performed {0} other actions');
+  const s = parts.length > 1 ? t('{0} and {1}', parts.slice(0, -1).join(', '), parts.at(-1)!) : (parts[0] ?? '');
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** Consecutive plain tool calls become one group; sub-agents keep their own row (they nest their steps). */
+const AGENT = (n: string) => n === 'Agent' || n === 'Task';
+export const isAgentCall = (it: ChatItem): it is ToolItem => it.kind === 'tool' && AGENT(it.name);
+
+/**
+ * Consecutive plain tool calls become one group. Sub-agents keep their own row (they nest their steps);
+ * several launched back to back (running side by side) become one agents group.
+ */
 export function groupTools(items: ChatItem[]): (ChatItem | ToolItem[])[] {
   const out: (ChatItem | ToolItem[])[] = [];
   for (const it of items) {
-    const groupable = it.kind === 'tool' && it.name !== 'Agent' && it.name !== 'Task' && it.name !== 'TodoWrite';
+    if (it.kind === 'tool' && it.name === 'TodoWrite') continue; // the plan card already shows TodoWrite
     const last = out.at(-1);
-    if (groupable && Array.isArray(last)) last.push(it as ToolItem);
-    else if (groupable) out.push([it as ToolItem]);
-    else if (!(it.kind === 'tool' && it.name === 'TodoWrite')) out.push(it); // the plan card already shows TodoWrite
+    if (it.kind === 'tool' && AGENT(it.name)) {
+      if (Array.isArray(last) && isAgentCall(last[0])) last.push(it as ToolItem);
+      else if (last && !Array.isArray(last) && isAgentCall(last)) out[out.length - 1] = [last as ToolItem, it as ToolItem];
+      else out.push(it);
+    } else if (it.kind === 'tool') {
+      if (Array.isArray(last) && !isAgentCall(last[0])) last.push(it as ToolItem);
+      else out.push([it as ToolItem]);
+    } else out.push(it);
   }
   return out;
 }

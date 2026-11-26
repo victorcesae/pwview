@@ -141,3 +141,20 @@ test("records which terminal runs the session", () => {
   assert.equal(rec.cwd, "/repo");
   assert.ok(Array.isArray(rec.pids) && rec.pids.length > 0, "parent pids recorded");
 });
+
+test('engine: a growing transcript is read incrementally and ends up the same as a full parse', () => {
+  const fs2 = require('fs'), os2 = require('os'), path2 = require('path');
+  const E2 = require(path2.join(out, 'engine.js'));
+  const dir = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'sh-inc-'));
+  const f = path2.join(dir, 's.jsonl');
+  const rec = (i) => JSON.stringify({ type: 'user', timestamp: `2026-01-01T00:00:${String(i).padStart(2, '0')}Z`, cwd: '/w', message: { role: 'user', content: `prompt number ${i}` } }) + '\n';
+  fs2.writeFileSync(f, rec(1) + rec(2));
+  const st = E2.parseFrom(f, 's');
+  fs2.appendFileSync(f, rec(3) + rec(4).slice(0, 20)); // a half-written line stays for the next read
+  E2.parseFrom(f, 's', undefined, st);
+  fs2.writeFileSync(f, rec(1) + rec(2) + rec(3) + rec(4));
+  E2.parseFrom(f, 's', undefined, st);
+  const full = E2.parse(f, 's');
+  assert.deepStrictEqual(st.t.events, full.events);
+  assert.equal(st.t.events.filter((e) => e.kind === 'prompt').length, 4);
+});
