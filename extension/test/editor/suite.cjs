@@ -5,6 +5,7 @@ const vscode = require('vscode');
 const ID = 'victorcesae.steerhouse';
 const results = [];
 async function check(name, fn) {
+  console.log(`… ${name}`); // as it goes: a hang shows where it is
   try {
     await fn();
     results.push(`✔ ${name}`);

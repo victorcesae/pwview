@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.26
+- Side questions: `/btw <question>` asks about the chat while it keeps working. A copy of the conversation answers with what is running right now; the agent doing the work never sees it.
+- Steer is more reliable: a steer sent while the final answer is being written keeps the chat working until it is answered (it no longer looks ignored), and a waiting message you are editing when the turn ends is sent with your edit.
+- Best of N: the same prompt in 2–4 worktrees at once (a model per run), compared side by side with diffs, time and cost; ask a judge, apply the winner, clean up.
+- Verify after each turn: your test/typecheck command runs after a turn that changed files, with a ✓/✗ on the turn; on failure the agent gets the output and tries to fix it (2 tries by default).
+- Timeline: scrub or play back a session, with the time between prompts.
+- CI: "Fix with agent" on a failed check sends the failing log to a chat; a notification when a check on your PR fails.
+- Secret scan before Commit, Push and Create PR: keys, tokens and .env/private key files are flagged before they leave your machine.
+
 ## 1.0.25
 - Long chats are easier to get around: long messages fold with "Show more", a rail on the right has one mark per prompt (hover to preview, click to jump), and Alt+↑ / Alt+↓ go to the previous / next prompt.
 - Scrolling up while the agent is writing stays where you put it; following resumes only when you come back to the bottom.
