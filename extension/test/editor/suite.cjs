@@ -76,6 +76,9 @@ async function run() {
     const term = vscode.window.terminals.at(-1);
     const cwd = term.creationOptions.cwd;
     assert.strictEqual(String(cwd?.fsPath ?? cwd).toLowerCase(), dir.toLowerCase());
+    // the default: beside the chat, as an editor tab (not the bottom panel)
+    const loc = term.creationOptions.location;
+    assert.ok(loc && typeof loc === 'object' && loc.viewColumn === vscode.ViewColumn.Beside, 'opens on the right: ' + JSON.stringify(loc));
     term.dispose();
   });
   await check('source control: VS Code Git reports a repo branch and changed files the way Steerhouse reads them', async () => {

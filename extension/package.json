@@ -2,7 +2,7 @@
   "name": "steerhouse",
   "displayName": "Steerhouse",
   "description": "%ext.see.every.ai.coding.agent.session.sub.agent.and.change.revie%",
-  "version": "1.0.28",
+  "version": "1.0.29",
   "publisher": "victorcesae",
   "license": "UNLICENSED",
   "private": true,
@@ -1356,6 +1356,13 @@
           "items": { "type": "string" },
           "default": [],
           "description": "%setting.code.completion.disabledLanguages%"
+        },
+        "steerhouse.terminalLocation": {
+          "type": "string",
+          "enum": ["right", "bottom"],
+          "enumDescriptions": ["%setting.terminal.location.right%", "%setting.terminal.location.bottom%"],
+          "default": "right",
+          "description": "%setting.terminal.location%"
         },
         "steerhouse.keepChatsRunning": {
           "type": "boolean",

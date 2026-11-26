@@ -33,7 +33,7 @@ import { addLink, briefing, sameConnection } from './links';
 import { PRESETS, listModels, secretKey, vendorOf } from './providers';
 import { addAccount, addProvider, listAccounts, preferredAccount, removeAccount, setPreferred, accountEnv, type Account, addCursorAccount, cursorAccountEnv, listCursorAccounts, removeCursorAccount, renameAccount, type CursorAccount } from './accounts';
 import { Node, SessionsTree, registerChatMarks, setMediaRoot } from './tree';
-import { agentExecutable, ago, clip, runAgent } from './util';
+import { agentExecutable, ago, clip, runAgent, terminalLocation } from './util';
 
 const SCHEME = 'steerhouse';
 
@@ -811,7 +811,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (open && open.exitStatus === undefined) return open.show();
       const what = clip(t.description || t.command || 'output', 30);
       const label = `${t.chatTitle ? clip(t.chatTitle, 60) + ': ' : ''}${t.description || t.command || ''}`;
-      const term = vscode.window.createTerminal({ name: `▶ ${t.chatTitle ? clip(t.chatTitle, 20) + ' · ' : ''}${what}`, pty: followPty(t.outputFile, label), iconPath: new vscode.ThemeIcon('debug-console') });
+      const term = vscode.window.createTerminal({ name: `▶ ${t.chatTitle ? clip(t.chatTitle, 20) + ' · ' : ''}${what}`, pty: followPty(t.outputFile, label), location: terminalLocation(), iconPath: new vscode.ThemeIcon('debug-console') });
       following.set(t.outputFile, term);
       term.show();
     }),
@@ -820,7 +820,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       const dir = typeof n === 'string' ? n : n instanceof vscode.Uri ? n.fsPath : (n?.path ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
       if (!dir) return vscode.window.showWarningMessage(vscode.l10n.t('Open a folder first.'));
       const cwd = fs.existsSync(dir) && fs.statSync(dir).isDirectory() ? dir : path.dirname(dir);
-      vscode.window.createTerminal({ name: path.basename(cwd), cwd }).show();
+      vscode.window.createTerminal({ name: path.basename(cwd), cwd, location: terminalLocation() }).show();
     }),
     vscode.commands.registerCommand('steerhouse.newChatHere', (n?: { kind?: string; path?: string } | vscode.Uri) => {
       const cwd = n instanceof vscode.Uri ? n.fsPath : n?.path;

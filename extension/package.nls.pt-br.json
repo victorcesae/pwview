@@ -138,5 +138,8 @@
   "setting.code.completion.disabledLanguages": "Linguagens em que a conclusão de código fica desligada, como [\"markdown\", \"plaintext\"].",
   "setting.verify.command": "Comando que verifica o projeto após cada turno do agente que alterou arquivos (por exemplo `npm run typecheck && npm test`). Roda na pasta do chat. Vazio: o Steerhouse propõe um a partir dos arquivos do projeto e pergunta antes.",
   "setting.verify.timeout": "Segundos que o comando de verificação pode rodar antes de ser interrompido.",
-  "setting.verify.max.fixes": "Quando a verificação falha, quantas vezes por prompt o agente é chamado automaticamente para corrigir (0: nunca)."
+  "setting.verify.max.fixes": "Quando a verificação falha, quantas vezes por prompt o agente é chamado automaticamente para corrigir (0: nunca).",
+  "setting.terminal.location": "Onde o Steerhouse abre terminais (Abrir terminal, /terminal, acompanhar a saída de um comando).",
+  "setting.terminal.location.right": "Ao lado do chat, como uma aba à direita",
+  "setting.terminal.location.bottom": "No painel inferior, como os terminais do próprio VS Code"
 }

@@ -150,6 +150,7 @@ export function runAgent(name: string, cwd: string, args: string[], extraEnv: Re
   const term = vscode.window.createTerminal({
     name,
     cwd,
+    location: terminalLocation(),
     shellPath: isScript ? 'cmd.exe' : exe,
     shellArgs: isScript ? ['/c', exe, ...all] : all,
     iconPath: new vscode.ThemeIcon('sparkle'),
@@ -157,4 +158,10 @@ export function runAgent(name: string, cwd: string, args: string[], extraEnv: Re
   });
   launched.set(token, term);
   term.show();
+}
+
+/** Where Steerhouse opens terminals: beside the chat (an editor tab on the right, the default) or in the bottom panel. */
+export function terminalLocation(): vscode.TerminalEditorLocationOptions | vscode.TerminalLocation {
+  const where = vscode.workspace.getConfiguration('steerhouse').get<string>('terminalLocation', 'right');
+  return where === 'bottom' ? vscode.TerminalLocation.Panel : { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false };
 }

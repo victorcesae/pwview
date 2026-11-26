@@ -41,6 +41,8 @@ module.exports = {
   EventEmitter,
   TreeItem,
   ThemeIcon,
+  TerminalLocation: { Panel: 1, Editor: 2 },
+  ViewColumn: { Active: -1, Beside: -2, One: 1, Two: 2 },
   ThemeColor,
   MarkdownString,
   TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },

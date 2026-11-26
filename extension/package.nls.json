@@ -138,5 +138,8 @@
   "setting.code.completion.disabledLanguages": "Languages where code completion stays off, like [\"markdown\", \"plaintext\"].",
   "setting.verify.command": "Command that checks the project after each agent turn that changed files (for example `npm run typecheck && npm test`). Runs in the chat's folder. Empty: Steerhouse proposes one from the project files and asks first.",
   "setting.verify.timeout": "Seconds the verify command may run before it is stopped.",
-  "setting.verify.max.fixes": "When verify fails, how many times per prompt the agent is automatically asked to fix it (0: never)."
+  "setting.verify.max.fixes": "When verify fails, how many times per prompt the agent is automatically asked to fix it (0: never).",
+  "setting.terminal.location": "Where Steerhouse opens terminals (Open terminal, /terminal, following a command's output).",
+  "setting.terminal.location.right": "Beside the chat, as a tab on the right",
+  "setting.terminal.location.bottom": "In the bottom panel, like VS Code's own terminals"
 }

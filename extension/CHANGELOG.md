@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.29
+- Terminals open beside the chat, as a tab on the right (Open terminal, /terminal, following a command's output). Set steerhouse.terminalLocation to "bottom" for the bottom panel.
+
 ## 1.0.28
 - Much faster start: the parsed sessions are kept on disk between VS Code sessions (about 0.2 s instead of 10 s or more to list them), and the list fills in after the views and chats appear instead of holding up startup.
 - Stopping a chat shows "Stopped. The conversation is kept" instead of a red error_during_execution; a real error says the conversation is kept and how to go on.
