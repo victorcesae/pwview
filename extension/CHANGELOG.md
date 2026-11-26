@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.33
+- Fixed: in a Cursor chat, a reply written right after a tool call could replace the previous reply instead of showing as its own message.
+
 ## 1.0.32
 - Other agents in the Steerhouse chat, like t3code: Codex (codex app-server: steer, approvals, plans, diffs), Gemini CLI and other ACP agents (Kiro, Copilot CLI, Grok, or your own in steerhouse.acpAgents), OpenCode (opencode serve) and Cursor (cursor-agent). Pick the agent when you start a chat, or use New Codex / Gemini / OpenCode / Cursor Chat. Controls an agent doesn't support are hidden. Each agent needs its own login (codex login, gemini, opencode auth login, cursor-agent login).
 - /steerhouse in the chat opens Steerhouse's settings (terminal position, shell, sidebar, notifications, Tab completion, verify command, where chats open), each with its value, changed right there.

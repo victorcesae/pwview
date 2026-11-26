@@ -65,6 +65,8 @@ export class CursorSession implements RuntimeSession {
   private killed = false;
   private closed = false;
   private turn = 0;
+  /** unique ids for text blocks: two in the same millisecond must not share one */
+  private seq = 0;
   private textId?: string;
   private text = '';
   private thinkId?: string;
@@ -163,7 +165,7 @@ export class CursorSession implements RuntimeSession {
         return;
       case 'thinking':
         if (m.subtype === 'delta' && m.text) {
-          this.thinkId ??= `think-${this.turn}-${Date.now()}`;
+          this.thinkId ??= `think-${this.turn}-${++this.seq}`;
           this.events.push({ type: 'thinkingDelta', id: this.thinkId, delta: m.text });
         } else if (m.subtype === 'completed' && this.thinkId) {
           this.events.push({ type: 'thinkingDone', id: this.thinkId });
@@ -179,7 +181,7 @@ export class CursorSession implements RuntimeSession {
           this.events.push({ type: 'thinkingDone', id: this.thinkId });
           this.thinkId = undefined;
         }
-        this.textId ??= `text-${this.turn}-${Date.now()}`;
+        this.textId ??= `text-${this.turn}-${++this.seq}`;
         this.text += t;
         this.events.push({ type: 'textDelta', id: this.textId, delta: t });
         return;
