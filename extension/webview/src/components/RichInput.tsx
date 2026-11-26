@@ -16,6 +16,8 @@ export interface RichInputHandle {
   getMarkdown(): string;
   /** adds text at the cursor, as text */
   insertText(text: string): void;
+  /** adds text as an attachment chip (like a long paste) */
+  insertChip(text: string): void;
   /** the text exactly as typed, without Markdown escapes */
   getText(): string;
   setMarkdown(md: string): void;
@@ -138,6 +140,9 @@ export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput({
   useImperativeHandle(ref, () => ({
     getMarkdown: () => (editor ? md(editor).trim() : ''),
     insertText: (text: string) => editor?.chain().focus().insertContent({ type: 'text', text }).run(),
+    insertChip: (text: string) => {
+      if (editor) insertChip(editor, text);
+    },
     getText: () => editor?.getText({ blockSeparator: '\n' }) ?? '',
     setMarkdown: (m: string) => editor?.commands.setContent(m),
     clear: () => editor?.commands.clearContent(true),

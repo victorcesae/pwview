@@ -119,5 +119,7 @@
   "cmd.scm-pull": "Pull",
   "cmd.scm-openView": "Open Source Control",
   "cmd.scm-openFile": "Open File",
-  "cmd.scm-openChange": "Open Changes"
+  "cmd.scm-openChange": "Open Changes",
+  "cmd.send.terminal.selection": "Send Terminal Selection to Chat",
+  "cmd.chat.palette": "Command Palette of the Chat"
 }

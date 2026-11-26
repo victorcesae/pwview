@@ -119,5 +119,7 @@
   "cmd.scm-pull": "Pull",
   "cmd.scm-openView": "Abrir Controle do Código-Fonte",
   "cmd.scm-openFile": "Abrir Arquivo",
-  "cmd.scm-openChange": "Abrir Alterações"
+  "cmd.scm-openChange": "Abrir Alterações",
+  "cmd.send.terminal.selection": "Enviar seleção do terminal para o chat",
+  "cmd.chat.palette": "Paleta de comandos do chat"
 }

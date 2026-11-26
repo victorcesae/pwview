@@ -17,7 +17,7 @@ export type Todo = { content: string; status: 'pending' | 'in_progress' | 'compl
 
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; images: string[]; priority?: Priority; ts: string; /** transcript entry just before this message: fork here to run it again */ forkAt?: string }
-  | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string }
+  | { kind: 'assistant'; id: string; text: string; streaming?: boolean; parent?: string; msg?: string; /** set on the turn's last answer: how long the turn took */ durationMs?: number }
   | { kind: 'tool'; id: string; name: string; summary: string; input: unknown; status: 'running' | 'done' | 'error'; result?: string; images?: string[]; file?: string; patch?: Hunk[]; parent?: string; elapsed?: number }
   | { kind: 'shell'; id: string; command: string; output: string; status: 'running' | 'done' | 'error'; exitCode?: number | null; error?: string }
   | { kind: 'permission'; id: string; tool: string; summary: string; input: unknown; canAlways: boolean; status: 'pending' | 'allowed' | 'denied'; reason?: string }
@@ -45,6 +45,8 @@ export interface ChatState {
   ultracode: boolean;
   status: 'starting' | 'idle' | 'working' | 'waiting' | 'closed' | 'error';
   activity?: string;
+  /** when the current turn started (ms since epoch), while working */
+  turnStarted?: number;
   todos: Todo[];
   items: ChatItem[];
   queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[];
@@ -455,6 +457,9 @@ export class ChatSession {
   }
 
   private changed() {
+    const busy = this.state.status === 'working' || this.state.status === 'waiting';
+    if (busy && !this.state.turnStarted) this.state.turnStarted = Date.now();
+    if (!busy) this.state.turnStarted = undefined;
     this.state.queue = this.queued.map((m) => ({ id: m.id, text: m.text, images: m.images.length, priority: m.priority }));
     this.onChange(this.state);
   }
@@ -1153,6 +1158,10 @@ export class ChatSession {
         if (r.subtype !== 'success' || r.is_error)
           this.state.items.push({ kind: 'result', id: uid(), text: str(r.result) || r.subtype, isError: true, durationMs: r.duration_ms });
         for (const it of this.state.items) if (it.kind === 'assistant') it.streaming = false;
+        const items = this.state.items;
+        const lastUser = items.map((x) => x.kind).lastIndexOf('user');
+        const last = items.slice(lastUser + 1).reverse().find((x) => x.kind === 'assistant' && !x.parent);
+        if (last?.kind === 'assistant' && typeof r.duration_ms === 'number') last.durationMs = r.duration_ms;
         for (const it of this.state.items) if (it.kind === 'tool' && it.status === 'running' && !it.parent) it.status = 'done';
         this.state.status = 'idle';
         this.state.activity = undefined;
