@@ -900,7 +900,7 @@ const AgentCtx = createContext<{ model?: string; host?: string; hostIcon?: strin
 /** The model's mark (Claude, GPT, Llama…) with a small editor badge (Cursor, VS Code…). */
 function AgentAvatar() {
   const { model, host, hostIcon, runtime } = useContext(AgentCtx);
-  const vendor = vendorOf(model ?? runtime);
+  const vendor = runtime === 'cursor' ? 'cursor' : vendorOf(model ?? runtime);
   return (
     <span className="relative mt-0.5 inline-flex h-5 shrink-0 self-start" title={`${vendorName(vendor)}${model ? ' · ' + model : ''}${host ? ' · ' + hostName(host) : ''}`}>
       <VendorMark vendor={vendor} className="size-5 rounded-md text-[9px]" />

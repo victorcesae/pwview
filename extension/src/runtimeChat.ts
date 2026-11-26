@@ -23,6 +23,8 @@ export interface RuntimeChatOptions {
   model?: string;
   executable?: string;
   env?: Record<string, string | undefined>;
+  /** the account the chat runs as (a Cursor account), else the runtime's name */
+  accountName?: string;
   host?: string;
   hostIcon?: string;
   /** earlier turns to show (a reopened chat) */
@@ -73,7 +75,7 @@ export class RuntimeChat implements ChatSurface {
       slashCommands: [],
       mcp: [],
       costUsd: 0,
-      account: { name: r.label, provider: r.id },
+      account: { name: opts.accountName ?? r.label, provider: r.id },
       host: opts.host,
       hostIcon: opts.hostIcon,
       runtime: r.id,

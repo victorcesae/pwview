@@ -147,5 +147,6 @@
   "setting.terminal.location.right": "Beside the chat, as a tab on the right",
   "setting.terminal.location.bottom": "In the bottom panel, like VS Code's own terminals",
   "cmd.add.account.or.provider": "Add Account or Provider…",
-  "setting.shell": "Shell for commands you run from the chat box with !. \"auto\" uses your default VS Code terminal profile (PowerShell on Windows unless you chose another). Or a name (powershell, pwsh, cmd, git bash, bash, zsh) or a full path."
+  "setting.shell": "Shell for commands you run from the chat box with !. \"auto\" uses your default VS Code terminal profile (PowerShell on Windows unless you chose another). Or a name (powershell, pwsh, cmd, git bash, bash, zsh) or a full path.",
+  "cmd.new.cursor.chat": "New Cursor Chat"
 }
