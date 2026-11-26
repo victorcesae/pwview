@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.34
+- The message box lines up with the messages: both are centred in the same space, left of the side rail.
+
 ## 1.0.33
 - Fixed: in a Cursor chat, a reply written right after a tool call could replace the previous reply instead of showing as its own message.
 

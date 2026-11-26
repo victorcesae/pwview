@@ -1251,7 +1251,9 @@ export function ChatView({ data }: { data: ChatData }) {
       <SideRail chat={chat} />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-[min(72rem,100%)] flex-col gap-1.5 px-5 pt-0.5 pb-3">
+      {/* centered in the same space as the messages (left of the side rail), so their edges line up */}
+      <div className="flex pr-9">
+      <div className="relative mx-auto flex w-full max-w-[min(72rem,100%)] min-w-0 flex-col gap-1.5 px-5 pt-0.5 pb-3">
         {!atBottom && (
           <button
             onClick={() => {
@@ -1325,6 +1327,7 @@ export function ChatView({ data }: { data: ChatData }) {
           </div>
         )}
         <Composer chat={chat} />
+      </div>
       </div>
       {paletteOpen && <CommandPalette chat={chat} onClose={() => setPaletteOpen(false)} />}
     </div>
