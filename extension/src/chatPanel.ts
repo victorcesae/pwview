@@ -84,7 +84,8 @@ export type FromChat =
   | { type: 'newChat' }
   | { type: 'gitInfo' }
   | { type: 'switchBranch'; branch: string }
-  | { type: 'newWorktree' };
+  | { type: 'newWorktree' }
+  | { type: 'bestOfN'; prompt?: string };
 
 /** The chat folder's git state, for the branch picker. */
 async function gitInfo(cwd: string) {
@@ -228,6 +229,16 @@ export class Chats {
   /** The folder of the chat in front, if any is open. */
   frontCwd() {
     return this.front()?.chat.state.cwd;
+  }
+
+  /** The chat in front, if any is open. */
+  frontChat() {
+    return this.front()?.chat;
+  }
+
+  /** Brings the tab of an open chat to the front. */
+  reveal(chat: ChatSession) {
+    this.open.find((o) => o.chat === chat)?.panel.reveal();
   }
 
   /** Puts files in the prompt of the chat in front, or else the last one opened. False if none is open. */
@@ -489,12 +500,13 @@ export class Chats {
     this.ctx.globalState.update(Chats.PREFS, Object.fromEntries(keep));
   }
 
-  start(opts: { cwd: string; resume?: string; title?: string; prompt?: string; account?: Account; env?: Record<string, string>; panel?: vscode.WebviewPanel }) {
+  start(opts: { cwd: string; resume?: string; title?: string; prompt?: string; model?: string; account?: Account; env?: Record<string, string>; panel?: vscode.WebviewPanel }) {
     if (opts.resume) {
       const existing = this.find(opts.resume);
       if (existing) {
         opts.panel?.dispose();
-        return existing.panel.reveal();
+        existing.panel.reveal();
+        return existing.chat;
       }
     }
     const exe = agentExecutable();
@@ -515,7 +527,7 @@ export class Chats {
     panel.iconPath = { light: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-light.svg'), dark: vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'steerhouse-dark.svg') };
     const transcript = opts.resume ? this.sessions().find((s) => s.info.id === opts.resume)?.path : undefined;
     const history = transcript ? historyFromTranscript(transcript) : undefined;
-    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), relayScript: this.relayScript(), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.account?.provider?.model }, () => this.schedule(entry));
+    const chat = new ChatSession({ cwd: opts.cwd, resume: opts.resume, title: opts.title, executable: exe, history, account: opts.account && { name: opts.account.name, env: opts.env ?? accountEnv(opts.account), provider: opts.account.provider?.preset }, prefs: this.prefsOf(opts.resume), relayScript: this.relayScript(), host: vscode.env.appName, hostIcon: hostIcon(vscode.env.appRoot, vscode.env.appName), model: opts.model ?? opts.account?.provider?.model }, () => this.schedule(entry));
     const entry: Open = { chat, panel, accountId: opts.account?.id };
     this.attachVerifier(entry);
     this.open.push(entry);
@@ -530,6 +542,7 @@ export class Chats {
     chat.start();
     this.onStart?.(opts.cwd, chat);
     if (opts.prompt) chat.send(opts.prompt, [], 'later');
+    return chat;
   }
 
   /** Re-post linked-session info (titles/states change as sessions progress). */
@@ -820,6 +833,8 @@ export class Chats {
         if (!r.ok) vscode.window.showErrorMessage(vscode.l10n.t('Could not switch to {0}: {1}', m.branch, r.out.slice(0, 300)));
         return this.send(o, await gitInfo(c.state.cwd));
       }
+      case 'bestOfN':
+        return vscode.commands.executeCommand('steerhouse.bestOfN', { cwd: c.state.cwd, prompt: m.prompt, model: c.state.model, models: c.state.models });
       case 'newWorktree':
         return vscode.commands.executeCommand('steerhouse.newChatInWorktree', { path: c.state.cwd });
       case 'link': {

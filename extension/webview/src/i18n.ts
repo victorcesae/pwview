@@ -437,6 +437,24 @@ const PT: Record<string, string> = {
   'Agent answer': 'Resposta do agente',
   'File edit': 'Edição de arquivo',
   'Tool call': 'Chamada de ferramenta',
+  // Best of N
+  "Run {0}": "Execução {0}",
+  "default model": "modelo padrão",
+  "Applied": "Aplicada",
+  "Open chat": "Abrir chat",
+  "Apply this one": "Aplicar esta",
+  "No changes yet.": "Nenhuma mudança ainda.",
+  "Best of N · {0} runs": "Melhor de N · {0} execuções",
+  "Some runs are still working": "Algumas execuções ainda estão trabalhando",
+  "Ask a judge": "Pedir a um juiz",
+  "Clean up": "Limpar",
+  "The worktrees and branches were removed.": "As worktrees e branches foram removidas.",
+  "Best of N…": "Melhor de N…",
+  "Starting": "Iniciando",
+  "Needs you": "Precisa de você",
+  "Done": "Concluída",
+  "Error": "Erro",
+  "Removed": "Removida",
 };
 
 const TABLES: Record<string, Record<string, string>> = { pt: PT, 'pt-br': PT };

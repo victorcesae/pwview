@@ -7,6 +7,7 @@ import type { ChatItem, Data } from './types';
 import { Overview } from './views/Overview';
 import { SessionView } from './views/Session';
 import { ChatView } from './views/Chat';
+import { CompareView } from './views/Compare';
 
 export function App() {
   const [data, setData] = useState<Data | undefined>(inVsCode ? undefined : location.hash === '#multi' ? mock.multiChat() : location.hash === '#long' ? mock.longChat() : location.hash === '#chat' ? mock.chat : mock.overview);
@@ -94,7 +95,7 @@ export function App() {
   return (
     <TooltipProvider>
       <div className="mx-auto max-w-[1180px] px-4 py-4 sm:px-6">
-        {data.view === 'overview' ? <Overview data={data.overview} /> : <SessionView data={data.session} focusAgent={data.focusAgent} />}
+        {data.view === 'compare' ? <CompareView data={data.compare} /> : data.view === 'overview' ? <Overview data={data.overview} /> : <SessionView data={data.session} focusAgent={data.focusAgent} />}
       </div>
       {toast && (
         <div role="status" className="bg-popover text-popover-foreground animate-in fade-in-0 slide-in-from-bottom-2 fixed right-4 bottom-4 z-50 rounded-lg border px-3.5 py-2 text-[12px] shadow-lg">

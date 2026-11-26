@@ -648,7 +648,7 @@ export function Composer({ chat }: { chat: ChatState }) {
           <Bot className="size-4" />
         </button>
 
-        <BranchPicker />
+        <BranchPicker prompt={text} />
 
         <div className="ml-auto flex items-center gap-1.5">
           <TokenChip chat={chat} />

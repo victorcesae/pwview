@@ -93,6 +93,7 @@
   "cmd.delete.session": "Excluir sessão…",
   "cmd.delete.project.chats": "Excluir todos os chats…",
   "setting.notifications": "Avisar quando um chat que você não está vendo terminar ou esperar uma aprovação ou resposta.",
+  "cmd.best.of.n": "Melhor de N…",
   "cmd.new.chat.worktree": "Novo chat em um worktree…",
   "cmd.remove.worktree": "Remover worktree…",
   "cmd.pin.project": "Fixar no topo",
