@@ -1056,6 +1056,34 @@ export function ChatView({ data }: { data: ChatData }) {
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [playRow, setPlayRow] = useState<number | undefined>();
   const toolRunning = useMemo(() => chat.items.some((i) => i.kind === 'tool' && i.status === 'running' && !i.parent), [chat.items]);
+  // the message box takes the exact place and width of the message column (its scrollbar and the
+  // side rail make "both centered" land a few pixels apart)
+  const column = useRef<HTMLDivElement>(null);
+  const composerRow = useRef<HTMLDivElement>(null);
+  const [columnBox, setColumnBox] = useState<{ left: number; width: number }>();
+  const measureRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    const measure = () => {
+      const c = column.current?.getBoundingClientRect();
+      const row = composerRow.current?.getBoundingClientRect();
+      if (!c || !row || !c.width) return;
+      const next = { left: Math.round(c.left - row.left), width: Math.round(c.width) };
+      setColumnBox((old) => (old && old.left === next.left && old.width === next.width ? old : next));
+    };
+    measureRef.current = measure;
+    measure();
+    window.addEventListener('resize', measure);
+    const ro = new ResizeObserver(measure);
+    if (column.current) ro.observe(column.current);
+    if (composerRow.current) ro.observe(composerRow.current);
+    if (scroller.current) ro.observe(scroller.current);
+    return () => (ro.disconnect(), window.removeEventListener('resize', measure));
+  }, []);
+  // a scrollbar appearing as the chat grows moves the column without resizing it
+  useEffect(() => {
+    const f = requestAnimationFrame(() => measureRef.current());
+    return () => cancelAnimationFrame(f);
+  }, [rows.length, virtualizer.getTotalSize()]);
   const release = () => {
     if (!stick.current) return;
     stick.current = false;
@@ -1188,7 +1216,7 @@ export function ChatView({ data }: { data: ChatData }) {
           setTopRow(rowAtTop());
         }}
       >
-        <div className="mx-auto flex w-full max-w-[min(72rem,100%)] flex-col gap-1.5 px-5 pt-5 pb-2">
+        <div ref={column} className="mx-auto flex w-full max-w-[min(72rem,100%)] flex-col gap-1.5 px-5 pt-5 pb-2">
           {!top.length && (
             <div className="text-muted-foreground py-16 text-center">
               <Bot className="mx-auto mb-3 size-8 opacity-60" />
@@ -1252,8 +1280,8 @@ export function ChatView({ data }: { data: ChatData }) {
       </div>
 
       {/* centered in the same space as the messages (left of the side rail), so their edges line up */}
-      <div className="flex pr-9">
-      <div className="relative mx-auto flex w-full max-w-[min(72rem,100%)] min-w-0 flex-col gap-1.5 px-5 pt-0.5 pb-3">
+      <div ref={composerRow} className="flex">
+      <div className="relative flex min-w-0 flex-col gap-1.5 px-5 pt-0.5 pb-3" style={columnBox ? { marginLeft: columnBox.left, width: columnBox.width } : { margin: '0 auto', width: '100%', maxWidth: 'min(72rem, 100%)' }}>
         {!atBottom && (
           <button
             onClick={() => {

@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.35
+- The message box takes the exact position and width of the message column (measured live), so it lines up with the messages also when the chat has a scrollbar.
+
 ## 1.0.34
 - The message box lines up with the messages: both are centred in the same space, left of the side rail.
 
