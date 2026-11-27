@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.37
+- Code completion with a Claude subscription is better and steadier: it uses Sonnet by default (8 of 8 correct on real test cases, where Haiku got about half right, at about the same speed; set steerhouse.codeCompletion.model to change it), and keeps two Claude Code processes ready so a quick next suggestion doesn't wait for one to start (about 1.1–1.4 s instead of 1.1–2.3 s).
+- Suggestions are cleaned up: code taken out of fences, a sentence of prose or a stray label dropped, repeated indentation and tokens removed; a reply that would break the line (a new statement right after `return ` or `= `) is not shown.
+
 ## 1.0.36
 - Background sub-agents are visible: after the chat's own turn ends, a block above the box lists each sub-agent still working, what it is doing, for how long, with Stop; the tab icon keeps spinning and the sidebar shows the chat as working.
 - Less repetition while a command runs: no "Working…" line (the time is in the turn's "Working for" heading) and no "Running" row for the command the timeline already shows live; background command rows drop the word "Running".

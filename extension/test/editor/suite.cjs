@@ -123,12 +123,15 @@ async function run() {
   await check('code completion: a suggestion from the provider is accepted into the file', async () => {
     const fsx = require('fs'), pathx = require('path'), osx = require('os'), http = require('http');
     let asked = 0;
+    // a sensible answer per place (after "=" a value; in a body a statement): Steerhouse drops replies that would break the line
     const server = http.createServer((req, res) => {
-      req.resume();
+      let body = '';
+      req.on('data', (d) => (body += d));
       req.on('end', () => {
         asked++;
+        const text = /const answer = ?<CURSOR>/.test(body) ? '42;' : 'return 42;';
         res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ content: [{ type: 'text', text: 'return 42;' }], stop_reason: 'end_turn' }));
+        res.end(JSON.stringify({ content: [{ type: 'text', text }], stop_reason: 'end_turn' }));
       });
     });
     await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -147,7 +150,7 @@ async function run() {
       editor.selection = new vscode.Selection(end, end);
       // typing is what asks again: VS Code keeps its answer while the text and cursor stay the same
       await vscode.commands.executeCommand('type', { text: ' ' });
-      for (let i = 0; i < 24 && !off.getText().includes('return 42;'); i++) {
+      for (let i = 0; i < 24 && !off.getText().includes('42;'); i++) {
         await wait(500);
         await vscode.commands.executeCommand('editor.action.inlineSuggest.commit');
         // about 1 run in 8, the first answer never shows, cause unknown: the next key brings it, as for a person
@@ -171,7 +174,7 @@ async function run() {
       for (const start of ['const answer =', 'function f() {\n  ']) {
         const before = asked;
         const d = await accept(start);
-        results.push(`${JSON.stringify(start)}: asked ${asked - before}x, accepted ${d.getText().endsWith('return 42;')}, text ${JSON.stringify(d.getText())}`);
+        results.push(`${JSON.stringify(start)}: asked ${asked - before}x, accepted ${d.getText().endsWith(start.includes('answer') ? 'answer = 42;' : 'return 42;')}, text ${JSON.stringify(d.getText())}`);
       }
       console.log('COMPLETION ' + results.join(' | '));
       assert.ok(results.every((r) => r.includes('accepted true')), results.join(' | '));

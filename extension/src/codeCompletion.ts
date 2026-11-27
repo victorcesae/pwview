@@ -67,6 +67,23 @@ export function userPrompt(language: string, fileName: string, prefix: string, s
   return `${context}Language: ${language}\nFile: ${fileName}\n\n${prefix.slice(-PREFIX_CHARS)}<CURSOR>${suffix.slice(0, SUFFIX_CHARS)}`;
 }
 
+/** After `return ` or `= `, a reply starting with a stray `name: ` label (models do that) loses the label. */
+export function withoutLabel(prefix: string, text: string): string {
+  const line = prefix.slice(prefix.lastIndexOf('\n') + 1);
+  if (!/(\breturn|=)\s*$/.test(line) || /[{,]\s*$/.test(line)) return text;
+  return text.replace(/^\s*[A-Za-z_$][\w$]*:\s+(?=\S)/, '');
+}
+
+/**
+ * A suggestion that would break the line being typed: after `return `, `= `, `(` or a binary
+ * operator, a reply that opens a new statement (`const x…`, `return …`) is not a continuation.
+ */
+export function breaksLine(prefix: string, text: string): boolean {
+  const line = prefix.slice(prefix.lastIndexOf('\n') + 1);
+  if (!/(\breturn|\byield|\bawait|[=(,+\-*/&|?:!<>]|=>)\s*$/.test(line)) return false;
+  return /^\s*(const|let|var|return|function|class|import|export|if|for|while|def|async def)\b/.test(text) || /^\s*\n/.test(text);
+}
+
 const CONTEXT_CHARS = 3000;
 const SNIPPET_CHARS = 1200;
 /** Words of the code near the cursor, to find the parts of other files that matter here. */
@@ -111,14 +128,33 @@ export const maxLinesAt = (prefix: string) => (/[{:(\[]\s*\n?\s*$/.test(prefix.s
 /** The model's reply as text to insert: no fences, nothing the file already has, not too long. */
 export function cleanCompletion(reply: string, prefix: string, suffix: string, cut = false, maxLines = MAX_LINES): string | undefined {
   let text = reply.replace(/<\/?CURSOR>/g, '');
-  const fence = /^\s*```[^\n]*\n([\s\S]*?)(?:\n?```\s*)?$/.exec(text);
+  // a fenced block anywhere (often after a sentence of prose): only its code
+  const fence = /```[^\n]*\n([\s\S]*?)(?:\n?```|$)/.exec(text);
   if (fence) text = fence[1];
+  // a whole one-line reply wrapped in backticks
+  else if (/^\s*`[^`\n]+`\s*$/.test(text)) text = text.trim().slice(1, -1);
+  // a leading sentence of prose ("Filling in the body:") before the code
+  const first = text.split('\n')[0];
+  if (text.includes('\n') && /^[A-Za-z][\w ,'’`-]{12,}[:.]\s*$/.test(first) && !/[;(){}=]/.test(first)) text = text.slice(first.length + 1).replace(/^\n+/, '');
+  // a stray `Label: ` in front of code (not an object key: the line before the cursor doesn't open one)
+  const lineBefore = prefix.slice(prefix.lastIndexOf('\n') + 1);
+  if (!/[{,]\s*$/.test(lineBefore)) text = text.replace(/^\s*[A-Z][A-Za-z]{0,15}:\s+(?=[`<(\w])/, '').replace(/^`([^`\n]+)`/, '$1');
   let lines = text.split('\n');
   if (cut && lines.length > 1) lines = lines.slice(0, -1); // the reply stopped mid-line
   text = lines.slice(0, maxLines).join('\n');
   // repeated what is already typed on this line
   const typed = prefix.slice(prefix.lastIndexOf('\n') + 1);
   if (typed.trim() && text.startsWith(typed)) text = text.slice(typed.length);
+  else if (typed.trim() && text.trimStart().startsWith(typed.trim())) text = text.trimStart().slice(typed.trim().length);
+  // the line so far is only indentation: the reply's own indentation would double it
+  if (!typed.trim()) text = text.replace(/^[ \t]+/, '');
+  // the reply starts with the last token already typed (`=> =>`, `( (`): drop the repeat
+  else {
+    const last = /(\S+)\s*$/.exec(typed)?.[1];
+    if (last && last.length >= 2 && text.trimStart().startsWith(last + ' ')) text = text.trimStart().slice(last.length);
+  }
+  // the line already ends with a space: no second one
+  if (/[ \t]$/.test(typed)) text = text.replace(/^[ \t]+/, '');
   // ran into what comes after the cursor
   for (let k = Math.min(text.length, suffix.length); k > 0; k--) {
     if (text.endsWith(suffix.slice(0, k))) {
@@ -288,6 +324,8 @@ export class CodeCompletion implements vscode.InlineCompletionItemProvider {
       // not tied to this request's cancellation: the next key cancels it, and the answer may still fit
       now.reply = this.ask(provider, s.model, user, abort, lines).then((r) => {
         now.text = r && cleanCompletion(r.text, prefix, suffix, r.cut, lines);
+        if (now.text) now.text = withoutLabel(prefix, now.text);
+        if (now.text && breaksLine(prefix, now.text)) now.text = undefined;
         if (r) this.onLatency?.(Date.now() - started);
         if (now.text) this.cache.set(cacheKey, now.text);
         now.done = !!r; // stopped or failed: asked again next time

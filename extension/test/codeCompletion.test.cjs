@@ -214,3 +214,20 @@ test('a streamed reply stops once it has more lines than will be shown', async (
   assert.strictEqual(C.cleanCompletion(r.text, 'x', '', r.cut, 3), 'a\nb\nc');
   assert.ok(C.askAtOnce('foo(') && C.askAtOnce('a.\n  ') && !C.askAtOnce('const answ'));
 });
+
+test('quality guards: a reply that would break the line is dropped, a stray label is removed', () => {
+  assert.ok(C.breaksLine('function f() {\n  return ', ' const sum = 0;\n  return 1;'), 'new statement after return');
+  assert.ok(!C.breaksLine('function f() {\n  return ', 'a + b;'));
+  assert.ok(!C.breaksLine('function f() {\n  ', 'const x = 1;'), 'a new statement on an empty line is fine');
+  assert.strictEqual(C.withoutLabel('  return ', 'ratio: items.length;'), 'items.length;');
+  assert.strictEqual(C.withoutLabel('const o = {', 'a: 1 }'), 'a: 1 }', 'object keys stay');
+});
+
+test('cleanup: prose, fences, backticks, labels and repeats around real replies', () => {
+  assert.strictEqual(C.cleanCompletion('working through `displayName` now, filling in its body:\n\n```\nreturn u.name?.trim() || u.email;\n```', 'export function displayName(u) {\n  ', '\n}'), 'return u.name?.trim() || u.email;');
+  assert.strictEqual(C.cleanCompletion('   return sum(values) / len(values)', 'def mean(values):\n    ', '\n'), 'return sum(values) / len(values)');
+  assert.strictEqual(C.cleanCompletion('=> Math.min(hi, Math.max(lo, v));', 'export const clamp = (v, lo, hi) => ', '\n'), 'Math.min(hi, Math.max(lo, v));');
+  assert.strictEqual(C.cleanCompletion('VL: `<li key={it}>{it}</li>)}`', '      {items.map((it) => ', '\n'), '<li key={it}>{it}</li>)}');
+  assert.strictEqual(C.cleanCompletion('`res.json({ ok: true });`', '  ', '\n'), 'res.json({ ok: true });');
+  assert.strictEqual(C.cleanCompletion('a: 1 }', 'const o = {', ''), 'a: 1 }', 'an object key after { stays');
+});

@@ -3,7 +3,8 @@
 import { startup, type Query } from '@anthropic-ai/claude-agent-sdk';
 import { SYSTEM, type CompletionReply } from './codeCompletion';
 
-const MODEL = 'haiku';
+// Sonnet: measured on real cases it got 8/8 right where Haiku got about half, at about the same speed
+const MODEL = 'sonnet';
 const IDLE_MS = 2 * 60_000;
 // Claude Code's own cap is kept well above this: when it hits its cap it retries the reply several
 // times and then reports an "API Error", which is slow. The suggestion is cut here instead.
@@ -12,7 +13,17 @@ type Warm = Awaited<ReturnType<typeof startup>>;
 
 /** One account: a process kept warm for the next suggestion, gone after a while without any. */
 export class SubscriptionCompleter {
-  private spare?: Promise<Warm>;
+  /** Claude Code processes started ahead, ready for the next suggestions: two, so a quick next one
+   *  doesn't wait for a process that is still starting (about 1 s) */
+  private spares: Promise<Warm>[] = [];
+  static POOL = 2;
+  private fill(model: string) {
+    while (this.spares.length < SubscriptionCompleter.POOL) {
+      const w = this.warmUp(model);
+      this.spares.push(w);
+      w.catch(() => (this.spares = this.spares.filter((x) => x !== w)));
+    }
+  }
   private idle?: ReturnType<typeof setTimeout>;
 
   constructor(private executable: string | undefined, private env: Record<string, string | undefined>, private cwd: string) {}
@@ -40,17 +51,17 @@ export class SubscriptionCompleter {
 
   /** Starts Claude Code before the first suggestion is wanted (it takes about half a second). */
   prewarm(model: string) {
-    if (this.spare) return;
-    this.spare = this.warmUp(model);
-    this.spare.catch(() => (this.spare = undefined));
+    this.fill(model);
     clearTimeout(this.idle);
     this.idle = setTimeout(() => this.dispose(), IDLE_MS);
   }
 
   async complete(model: string, user: string, signal: AbortSignal, maxLines = 8): Promise<CompletionReply> {
     clearTimeout(this.idle);
-    const warm = await (this.spare ?? this.warmUp(model));
-    this.spare = undefined;
+    // the oldest spare has had the most time to start
+    const next = this.spares.shift();
+    this.fill(model);
+    const warm = await (next ?? this.warmUp(model));
     if (signal.aborted) {
       warm.close();
       return { text: '', cut: false };
@@ -98,15 +109,14 @@ export class SubscriptionCompleter {
       q.close();
     }
     // ready for the next one, unless it doesn't come
-    this.spare = this.warmUp(model);
-    this.spare.catch(() => (this.spare = undefined));
+    this.fill(model);
     this.idle = setTimeout(() => this.dispose(), IDLE_MS);
     return { text, cut };
   }
 
   dispose() {
     clearTimeout(this.idle);
-    this.spare?.then((w) => w.close()).catch(() => {});
-    this.spare = undefined;
+    for (const w of this.spares) w.then((x) => x.close()).catch(() => {});
+    this.spares = [];
   }
 }
