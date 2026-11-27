@@ -54,6 +54,8 @@ export interface ChatState {
   todos: Todo[];
   items: ChatItem[];
   queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[];
+  /** sub-agents of this chat still working (also after the chat's own turn ended: background ones) */
+  subagents?: { id: string; description: string; type?: string; started: number; doing?: string; tools?: number }[];
   slashCommands: string[];
   /** connectors (MCP servers) available in this session */
   mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[];
@@ -703,7 +705,29 @@ export class ChatSession {
   }
 
   /** task_started / task_updated / task_notification: exact status for shell tasks of this run. */
+  /** Sub-agents (task types other than shell commands): who is still working, and on what. */
+  private onAgentTask(m: any) {
+    const list = (this.state.subagents ??= []);
+    const i = list.findIndex((a) => a.id === m.task_id);
+    if (m.subtype === 'task_started') {
+      if (i < 0) list.push({ id: m.task_id, description: String(m.description ?? m.subagent_type ?? 'Sub-agent'), type: m.subagent_type, started: Date.now() });
+    } else if (m.subtype === 'task_progress') {
+      if (i >= 0) {
+        list[i].doing = m.summary || (m.last_tool_name ? `${m.last_tool_name}` : list[i].doing);
+        list[i].tools = m.usage?.tool_uses ?? list[i].tools;
+      }
+    } else {
+      const st = m.subtype === 'task_updated' ? m.patch?.status : m.status;
+      if (i >= 0 && st && !['running', 'pending', 'paused'].includes(st)) list.splice(i, 1);
+    }
+    this.changed();
+  }
+
+  private agentTaskIds?: Set<string>;
   private onTaskEvent(m: any) {
+    const agentTypes = (this.agentTaskIds ??= new Set());
+    if (m.subtype === 'task_started' && m.task_type && m.task_type !== 'local_bash') agentTypes.add(m.task_id);
+    if (agentTypes.has(m.task_id)) return this.onAgentTask(m);
     let t = this.state.tasks.find((x) => x.id === m.task_id);
     if (m.subtype === 'task_started') {
       if (m.task_type && m.task_type !== 'local_bash') return; // sub-agents are shown elsewhere
@@ -1257,7 +1281,7 @@ ${question}`;
           const init: any = m;
           if (init.effort) this.state.effort = init.effort;
           if (init.fast_mode_state) this.state.fastMode = init.fast_mode_state === 'on';
-        } else if ((m.subtype as string) === 'task_started' || (m.subtype as string) === 'task_updated' || (m.subtype as string) === 'task_notification') {
+        } else if ((m.subtype as string) === 'task_started' || (m.subtype as string) === 'task_updated' || (m.subtype as string) === 'task_notification' || (m.subtype as string) === 'task_progress') {
           this.onTaskEvent(m as any);
         } else if (m.subtype === 'status') {
           if (m.status === 'compacting') this.state.activity = 'Compacting the conversation…';

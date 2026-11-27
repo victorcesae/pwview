@@ -166,7 +166,7 @@ export class SessionsTree implements vscode.TreeDataProvider<Node> {
 
   private status(i: Session['info']): { kind: RowKind; label: string } {
     return rowStatus(
-      { state: i.state, waiting: this.liveStatus?.(i.id) === 'waiting', workingSince: this.since.get(i.id), finishedAt: this.finished.get(i.id), seenAt: this.seen.get(i.id), updated: i.updated, now: Date.now() },
+      { state: this.liveStatus?.(i.id) === 'working' ? 'working' : i.state, waiting: this.liveStatus?.(i.id) === 'waiting', workingSince: this.since.get(i.id), finishedAt: this.finished.get(i.id), seenAt: this.seen.get(i.id), updated: i.updated, now: Date.now() },
       (s, ...a) => vscode.l10n.t(s, ...a),
     );
   }

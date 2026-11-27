@@ -1296,12 +1296,35 @@ export function ChatView({ data }: { data: ChatData }) {
             <ChevronDown className="size-3.5" /> {t('Jump to latest')}
           </button>
         )}
+        {/* sub-agents still working after the chat's own turn ended (background ones): say so, and what they do */}
+        {!working && !!chat.subagents?.length && (
+          <div className="text-muted-foreground flex flex-col gap-0.5 px-1 text-[12.5px]" role="status" data-bg-agents>
+            <div className="flex items-center gap-1.5">
+              <Loader2 className="text-working size-3.5 shrink-0 animate-spin" />
+              <span>{chat.subagents.length === 1 ? t('1 sub-agent is working in the background') : t('{0} sub-agents are working in the background', chat.subagents.length)}</span>
+            </div>
+            {chat.subagents.slice(0, 5).map((a) => (
+              <div key={a.id} className="flex min-w-0 items-center gap-2 pl-5">
+                <span className="text-foreground/85 min-w-0 truncate">{a.description}</span>
+                {a.doing && <span className="min-w-0 truncate opacity-70">· {a.doing}</span>}
+                <span className="ml-auto shrink-0 tabular-nums opacity-70">
+                  <Elapsed since={a.started} />
+                </span>
+                {chat.status !== 'closed' && (
+                  <button className="hover:text-removed shrink-0 cursor-pointer font-medium" onClick={() => post({ type: 'stopTask', id: a.id })}>
+                    {t('Stop')}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         {/* commands the agent left running (dev servers, watchers): one line each, like t3code */}
-        {(chat.tasks ?? []).filter((x) => x.status === 'running').slice(-3).map((x) => (
+        {/* (not one the timeline already shows running live) */}
+        {(chat.tasks ?? []).filter((x) => x.status === 'running' && !(x.toolUseId && chat.items.some((i) => i.kind === 'tool' && i.id === x.toolUseId && i.status === 'running'))).slice(-3).map((x) => (
           <div key={x.id} className="text-muted-foreground flex min-w-0 items-center gap-2 px-1 text-[12.5px]" data-bg-row>
             <SquareTerminal className="size-3.5 shrink-0" />
-            <span className="shrink-0">{t('Running')}</span>
-            <span className="text-foreground/80 min-w-0 truncate">· {x.description || x.command}</span>
+            <span className="text-foreground/80 min-w-0 truncate">{x.description || x.command}</span>
             {x.started && (
               <span className="shrink-0 tabular-nums opacity-70">
                 <Elapsed since={Date.parse(x.started)} />
@@ -1328,18 +1351,7 @@ export function ChatView({ data }: { data: ChatData }) {
               {t('Stop')}
             </button>
           </div>
-        ) : working && chat.activity && (
-          // one compact line, like t3code's status line: the running command itself is shown in the timeline
-          <div className="text-muted-foreground flex items-center gap-1.5 px-1 text-[11.5px]" role="status" title={t('Esc to stop')}>
-            <Loader2 className="text-working size-3 animate-spin" />
-            <span className="min-w-0 truncate">{toolRunning ? t('Working…') : t(chat.activity)}</span>
-            {chat.turnStarted && (
-              <span className="shrink-0 tabular-nums opacity-80" data-elapsed>
-                · <Elapsed since={chat.turnStarted} />
-              </span>
-            )}
-          </div>
-        )}
+        ) : null}
         {!working && chat.verify?.running && (
           <div className="text-muted-foreground flex items-center gap-2 px-1 text-[12px]" role="status" data-verifying>
             <Loader2 className="size-3.5 animate-spin" />

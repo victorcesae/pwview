@@ -90,6 +90,7 @@ export interface ChatState {
   permissionMode: PermissionMode; effort?: Effort; fastMode: boolean; ultracode: boolean; status: 'starting' | 'idle' | 'working' | 'waiting' | 'closed' | 'error'; activity?: string; turnStarted?: number;
   tabCompletion?: boolean;
   verify?: VerifyState;
+  subagents?: { id: string; description: string; type?: string; started: number; doing?: string; tools?: number }[];
   todos: Todo[]; items: ChatItem[]; queue: { id: string; text: string; images: number; priority: 'later' | 'next' }[]; tokens?: number; context?: { used: number; max: number; percentage: number; detailed?: boolean; categories?: { id?: string; name: string; tokens: number; kind: 'used' | 'free' | 'buffer' | 'deferred' }[] }; earlier: number; slashCommands: string[]; mcp: { name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'; tools: number; error?: string }[]; costUsd: number; account: { name: string; email?: string; organization?: string; plan?: string; provider?: string; gateway?: string }; host?: string; hostIcon?: string; limits?: Limits; suggestion?: string; stash?: string[]; tasks?: BgTaskView[]; prs?: Record<string, { state: 'open' | 'draft' | 'merged' | 'closed' | 'unknown'; title?: string; tasks?: { done: number; total: number }; checks?: PrCheckView[]; review?: 'approved' | 'changes_requested' | 'required' }>; error?: string;
   /** another agent than Claude Code ('codex'…) and what it supports: unsupported controls are hidden */
   runtime?: string; caps?: RuntimeCaps;
@@ -203,4 +204,4 @@ export interface Limits { available: boolean; plan?: string; windows: LimitWindo
 
 export interface PrCheckView { name: string; workflow?: string; state: 'pass' | 'fail' | 'pending' | 'skipped'; url?: string }
 
-export interface BgTaskView { id: string; command: string; description?: string; outputFile?: string; status: 'running' | 'completed' | 'failed' | 'stopped' | 'unknown'; started?: string; ended?: string }
+export interface BgTaskView { id: string; toolUseId?: string; command: string; description?: string; outputFile?: string; status: 'running' | 'completed' | 'failed' | 'stopped' | 'unknown'; started?: string; ended?: string }

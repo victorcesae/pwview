@@ -150,7 +150,11 @@ function PlusMenu({ chat, onFiles, onSlash }: { chat: ChatState; onFiles: () => 
           <Paperclip /> {t('Attach files…')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => post({ type: 'setTabCompletion', on: chat.tabCompletion === false })} title={t('Tab completes @files, /commands and the suggested prompt')}>
-          <CornerDownRight /> {chat.tabCompletion === false ? t('Turn Tab completion on') : t('Turn Tab completion off')}
+          <CornerDownRight /> {chat.tabCompletion === false ? t('Turn Tab in this box on') : t('Turn Tab in this box off')}
+        </DropdownMenuItem>
+        {/* the gray suggestions in the code editor (not this box): on/off, provider, snooze, per language */}
+        <DropdownMenuItem onSelect={() => post({ type: 'codeCompletion' } as any)} title={t('Gray code suggestions in the editor, accepted with Tab')}>
+          <Sparkles /> {t('Code completion in the editor…')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => post({ type: 'setVerify', on: !verifyOn(chat) })} title={chat.verify?.command ? t('Runs {0} after each turn that changes files', chat.verify.command) : t('Runs the project checks after each turn that changes files (asks first)')} data-verify-toggle>
           <ShieldCheck /> {verifyOn(chat) ? t('Stop verifying after each turn') : t('Verify after each turn')}

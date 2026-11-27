@@ -40,6 +40,7 @@ export type FromChat =
   | { type: 'cancelQueued'; id: string }
   | { type: 'editQueued'; id: string; text: string }
   | { type: 'holdQueued'; id: string; hold: boolean }
+  | { type: 'codeCompletion' }
   | { type: 'aside'; text: string }
   | { type: 'dismissAside'; id: string }
   | { type: 'interrupt' }
@@ -623,7 +624,8 @@ export class Chats {
     // tab icon: the model's vendor mark (Claude, GPT, Llama…), with a dot while it works or waits for you
     // (a dot in the title text sits off-center next to VS Code's own tab icons)
     const vendor = s.runtime ? (RUNTIMES[s.runtime]?.vendor ?? 'other') : s.model ? vendorOf(s.model) : s.account.gateway ? 'other' : 'anthropic';
-    const badge = s.status === 'waiting' ? 'waiting' : s.status === 'working' ? 'working' : '';
+    // background sub-agents keep the tab busy after the chat's own turn ended
+    const badge = s.status === 'waiting' ? 'waiting' : s.status === 'working' || s.subagents?.length ? 'working' : '';
     const key = `${vendor}:${badge}`;
     if (o.vendor !== key) {
       o.vendor = key;
@@ -848,6 +850,8 @@ export class Chats {
         const files = [...(await completeFiles(c.state.cwd, m.query).catch(() => [])), ...mentionCompletions(m.query, others, branch)];
         return this.send(o, { type: 'fileCompletions', query: m.query, files });
       }
+      case 'codeCompletion':
+        return vscode.commands.executeCommand('steerhouse.codeCompletion.toggle');
       case 'setTabCompletion':
         return vscode.workspace.getConfiguration('steerhouse').update('tabCompletion', m.on, vscode.ConfigurationTarget.Global);
       case 'openBrowser':

@@ -213,7 +213,11 @@ export function activate(ctx: vscode.ExtensionContext) {
   const dashboard = new Dashboard(ctx, () => sessions, hooksOk, () => attachedSessions(), (m) => onWebview(m), (days) => usageReport(engine.scan(Math.max(days, cfg().get<number>('days', 3))), days));
   const chats = new Chats(ctx, () => sessions, (id) => dashboard.show(id));
   registerAcpRuntimes();
-  tree.liveStatus = (id) => chats.find(id)?.chat.state.status;
+  // an open chat whose background sub-agents still work counts as working, though its own turn ended
+  tree.liveStatus = (id) => {
+    const st = chats.find(id)?.chat.state;
+    return st?.status === 'idle' && st.subagents?.length ? 'working' : st?.status;
+  };
   ctx.subscriptions.push({ dispose: () => tree.dispose() });
   ctx.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('steerhouse.tabCompletion') && chats.refresh()));
   registerCodeCompletion(ctx);

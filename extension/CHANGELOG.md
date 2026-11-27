@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.36
+- Background sub-agents are visible: after the chat's own turn ends, a block above the box lists each sub-agent still working, what it is doing, for how long, with Stop; the tab icon keeps spinning and the sidebar shows the chat as working.
+- Less repetition while a command runs: no "Working…" line (the time is in the turn's "Working for" heading) and no "Running" row for the command the timeline already shows live; background command rows drop the word "Running".
+- The + menu says "Tab in this box" for the chat box, and has "Code completion in the editor…" for the gray suggestions in code.
+
 ## 1.0.35
 - The message box takes the exact position and width of the message column (measured live), so it lines up with the messages also when the chat has a scrollbar.
 

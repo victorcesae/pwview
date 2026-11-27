@@ -520,3 +520,19 @@ test('chat: a retried request streaming the same thinking again shows it once', 
   }
   assert.equal(c.state.items.filter((i) => i.kind === 'thinking').length, 1);
 });
+
+test('chat: background sub-agents are tracked after the turn ends, with what they do', () => {
+  const c = newChat();
+  const sys = (o) => h(c, { type: 'system', session_id: 's', uuid: 'u', ...o });
+  sys({ subtype: 'task_started', task_id: 'a1', task_type: 'local_agent', description: 'Build the Drive module', subagent_type: 'general-purpose', is_backgrounded: true });
+  sys({ subtype: 'task_started', task_id: 'b1', task_type: 'local_bash', description: 'npm run dev' });
+  h(c, { type: 'result', subtype: 'success', total_cost_usd: 0, duration_ms: 5, usage: {} });
+  assert.equal(c.state.status, 'idle');
+  assert.deepEqual(c.state.subagents.map((a) => a.description), ['Build the Drive module'], 'agents, not shell commands');
+  assert.equal(c.state.tasks.length, 1, 'the shell command is still a background task');
+  sys({ subtype: 'task_progress', task_id: 'a1', description: 'Build the Drive module', usage: { total_tokens: 1, tool_uses: 7, duration_ms: 1 }, last_tool_name: 'Bash', summary: 'Running the type check' });
+  assert.equal(c.state.subagents[0].doing, 'Running the type check');
+  assert.equal(c.state.subagents[0].tools, 7);
+  sys({ subtype: 'task_notification', task_id: 'a1', status: 'completed', output_file: '', summary: 'done' });
+  assert.equal(c.state.subagents.length, 0);
+});
