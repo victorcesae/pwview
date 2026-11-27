@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.38
+- Terminals can open on the left of the chat: set steerhouse.terminalLocation to "left" (or choose "Left, beside the chat" in /steerhouse). The chat keeps its share of the width, and your resizing is remembered.
+
 ## 1.0.37
 - Code completion with a Claude subscription is better and steadier: it uses Sonnet by default (8 of 8 correct on real test cases, where Haiku got about half right, at about the same speed; set steerhouse.codeCompletion.model to change it), and keeps two Claude Code processes ready so a quick next suggestion doesn't wait for one to start (about 1.1–1.4 s instead of 1.1–2.3 s).
 - Suggestions are cleaned up: code taken out of fences, a sentence of prose or a stray label dropped, repeated indentation and tokens removed; a reply that would break the line (a new statement right after `return ` or `= `) is not shown.

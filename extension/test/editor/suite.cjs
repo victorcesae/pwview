@@ -90,6 +90,24 @@ async function run() {
     }
     term.dispose();
   });
+  await check('terminal position "left": the terminal opens to the left of the chat', async () => {
+    const config = vscode.workspace.getConfiguration('steerhouse');
+    await wait(800); // the right-hand terminal's group closes with it
+    await config.update('terminalLocation', 'left', vscode.ConfigurationTarget.Global);
+    try {
+      const dir = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'steerhouse-left-'));
+      await vscode.commands.executeCommand('steerhouse.openTerminalHere', { kind: 'project', path: dir });
+      await wait(1500);
+      const col = (pred) => vscode.window.tabGroups.all.find((g) => g.tabs.some(pred))?.viewColumn;
+      const termCol = col((t) => t.input instanceof vscode.TabInputTerminal);
+      const chatCol = col((t) => t.input?.viewType?.endsWith('steerhouse.chat'));
+      console.log(`LEFT terminal column ${termCol}, chat column ${chatCol}, layout ${JSON.stringify(await vscode.commands.executeCommand('vscode.getEditorLayout'))}`);
+      assert.ok(termCol !== undefined && chatCol !== undefined && termCol < chatCol, `terminal (${termCol}) left of the chat (${chatCol})`);
+      vscode.window.terminals.at(-1).dispose();
+    } finally {
+      await config.update('terminalLocation', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
   await check('source control: VS Code Git reports a repo branch and changed files the way Steerhouse reads them', async () => {
     const cp = require('child_process'), fsx = require('fs'), pathx = require('path'), osx = require('os');
     const dir = fsx.realpathSync.native(fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'steerhouse-scm-')));

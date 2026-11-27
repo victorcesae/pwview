@@ -150,5 +150,6 @@
   "setting.shell": "Shell for commands you run from the chat box with !. \"auto\" uses your default VS Code terminal profile (PowerShell on Windows unless you chose another). Or a name (powershell, pwsh, cmd, git bash, bash, zsh) or a full path.",
   "cmd.new.cursor.chat": "New Cursor Chat",
   "cmd.new.chat.from.editor": "New Steerhouse Chat (in this file's project)",
-  "cmd.new.opencode.chat": "New OpenCode Chat"
+  "cmd.new.opencode.chat": "New OpenCode Chat",
+  "setting.terminal.location.left": "Beside the chat, as a tab on the left"
 }

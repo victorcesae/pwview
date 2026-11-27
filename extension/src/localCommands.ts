@@ -126,7 +126,7 @@ export async function steerhouseSettings() {
   const cfg = () => vscode.workspace.getConfiguration('steerhouse');
   type Opt = { label: string; value: unknown; description?: string };
   const items: { key: string; label: string; options?: Opt[]; text?: boolean }[] = [
-    { key: 'terminalLocation', label: vscode.l10n.t('Terminal position'), options: [{ label: vscode.l10n.t('Right, beside the chat'), value: 'right' }, { label: vscode.l10n.t('Bottom panel'), value: 'bottom' }] },
+    { key: 'terminalLocation', label: vscode.l10n.t('Terminal position'), options: [{ label: vscode.l10n.t('Right, beside the chat'), value: 'right' }, { label: vscode.l10n.t('Left, beside the chat'), value: 'left' }, { label: vscode.l10n.t('Bottom panel'), value: 'bottom' }] },
     {
       key: 'shell',
       label: vscode.l10n.t('Shell for ! commands'),

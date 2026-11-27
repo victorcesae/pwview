@@ -186,17 +186,27 @@ let watching: ReturnType<typeof setInterval> | undefined;
  * user's resizing (read every few seconds while the pair is there).
  */
 export async function sizeTerminalSplit(term: vscode.Terminal) {
-  if (vscode.workspace.getConfiguration('steerhouse').get<string>('terminalLocation', 'right') === 'bottom') return;
+  const where = vscode.workspace.getConfiguration('steerhouse').get<string>('terminalLocation', 'right');
+  if (where === 'bottom') return;
   await new Promise((r) => setTimeout(r, 150)); // the new group exists once the terminal is shown
-  const l = await getLayout();
+  let l = await getLayout();
   if (leftShare(l) === undefined) return; // not a simple chat | terminal pair: leave the user's layout alone
+  const left = where === 'left';
+  // "left": the terminal opened as the second column; move its group to the other side of the chat
+  if (left && terminalColumn() === 2) {
+    await vscode.commands.executeCommand('workbench.action.moveActiveEditorGroupLeft').then(undefined, () => {});
+    l = await getLayout();
+  }
   const share = chatShare();
-  await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: share }, { size: 1 - share }] }).then(undefined, () => {});
+  // sizes go left to right: chat | terminal, or terminal | chat
+  const groups = left ? [{ size: 1 - share }, { size: share }] : [{ size: share }, { size: 1 - share }];
+  await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups }).then(undefined, () => {});
   clearInterval(watching);
   let last = share;
   watching = setInterval(async () => {
     if (term.exitStatus !== undefined || !vscode.window.terminals.includes(term)) return (clearInterval(watching), (watching = undefined));
-    const now = leftShare(await getLayout());
+    const first = leftShare(await getLayout());
+    const now = first === undefined ? undefined : left ? 1 - first : first; // always the chat's share
     if (now !== undefined && Math.abs(now - last) > 0.02) {
       last = now;
       layoutStore?.update(SPLIT_KEY, Math.round(now * 100) / 100);
@@ -204,7 +214,12 @@ export async function sizeTerminalSplit(term: vscode.Terminal) {
   }, 3000);
 }
 
-/** Where Steerhouse opens terminals: beside the chat (an editor tab on the right, the default) or in the bottom panel. */
+/** The column of the editor group that holds terminals, if one does. */
+function terminalColumn(): number | undefined {
+  return vscode.window.tabGroups.all.find((g) => g.tabs.some((t) => t.input instanceof vscode.TabInputTerminal))?.viewColumn;
+}
+
+/** Where Steerhouse opens terminals: beside the chat on the right (the default) or the left, or in the bottom panel. */
 export function terminalLocation(): vscode.TerminalEditorLocationOptions | vscode.TerminalLocation {
   const where = vscode.workspace.getConfiguration('steerhouse').get<string>('terminalLocation', 'right');
   if (where === 'bottom') return vscode.TerminalLocation.Panel;
